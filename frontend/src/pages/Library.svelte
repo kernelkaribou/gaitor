@@ -665,7 +665,6 @@
       {/if}
     {:else}
       <div class="text-center py-20">
-        <span class="text-6xl mb-4 block">&#x1F40A;</span>
         <h3 class="text-xl font-medium text-gray-300 mb-2">No models yet</h3>
         <p class="text-gray-500 max-w-md mx-auto mb-4">
           Add models to your library by uploading files, scanning your library directory,
