@@ -1,0 +1,38 @@
+services:
+  modelgaitor:
+    image: ghcr.io/kernelkaribou/model-gaitor:latest
+    container_name: model-gaitor
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      # - LOG_LEVEL=INFO
+      # - HUGGINGFACE_TOKEN=${HUGGINGFACE_TOKEN}
+      # - CIVITAI_API_KEY=${CIVITAI_API_KEY}
+    ports:
+      - "8487:8487"
+    volumes:
+      - /mnt/nas/models:/library                  # Library source (NAS)
+      - /mnt/local/ai-models:/dest/local-gpu      # Destination: local GPU machine
+      # Add more destinations as needed:
+      # - /mnt/other/models:/dest/laptop
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8487/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s

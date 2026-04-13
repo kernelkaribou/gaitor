@@ -1,0 +1,37 @@
+services:
+  modelgaitor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: model-gaitor:dev
+    container_name: model-gaitor-dev
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      - LOG_LEVEL=DEBUG
+    ports:
+      - "8487:8487"
+    volumes:
+      - ${PWD}/test-library:/library
+      - ${PWD}/test-dest:/dest/local
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8487/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s

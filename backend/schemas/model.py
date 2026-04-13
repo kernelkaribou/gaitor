@@ -1,0 +1,49 @@
+"""
+Pydantic schemas for model metadata.
+"""
+from pydantic import BaseModel, Field
+from typing import Optional
+from datetime import datetime
+import uuid
+
+
+class ModelSource(BaseModel):
+    """Where a model was originally obtained from."""
+    url: Optional[str] = None
+    provider: Optional[str] = None  # "huggingface", "civitai", "upload", "manual"
+    downloaded_at: Optional[str] = None
+
+
+class ModelHistoryEntry(BaseModel):
+    """A single history event for a model."""
+    action: str  # "added", "renamed", "metadata_updated", "synced"
+    timestamp: str
+    details: dict = Field(default_factory=dict)
+
+
+class ModelMetadata(BaseModel):
+    """Full metadata for a library model. Stored as {uuid}.json."""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    filename: str
+    category: str = "other"
+    relative_path: str  # Path relative to library root
+    size: int = 0
+    hash: Optional[dict] = None  # {"sha256": "abc123..."}
+    source: ModelSource = Field(default_factory=ModelSource)
+    description: str = ""
+    tags: list[str] = Field(default_factory=list)
+    preview_image: Optional[str] = None
+    history: list[ModelHistoryEntry] = Field(default_factory=list)
+    created_at: str = ""
+    updated_at: str = ""
+
+
+class SyncMetadata(BaseModel):
+    """Sidecar metadata placed alongside a model on a destination."""
+    library_model_id: str
+    library_name: str
+    current_filename: str
+    synced_at: str
+    hash: Optional[str] = None
+    rename_history: list[dict] = Field(default_factory=list)
