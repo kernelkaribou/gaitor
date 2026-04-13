@@ -1,5 +1,13 @@
 <script>
+  import { onMount, onDestroy } from 'svelte';
+
   let { title, message, warningText, confirmValue, confirmLabel = 'Confirm', danger = false, onConfirm, onCancel } = $props();
+
+  function handleKeydown(e) {
+    if (e.key === 'Escape') onCancel();
+  }
+  onMount(() => document.addEventListener('keydown', handleKeydown));
+  onDestroy(() => document.removeEventListener('keydown', handleKeydown));
 
   let inputValue = $state('');
   let error = $state(null);

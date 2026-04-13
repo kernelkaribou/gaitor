@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { api } from '../lib/api.js';
-  import { models, searchQuery, viewMode, selectedCategory } from '../lib/stores.js';
+  import { formatSize } from '../lib/utils.js';
   import ModelCard from '../components/ModelCard.svelte';
   import ModelDetail from '../components/ModelDetail.svelte';
   import UploadDialog from '../components/UploadDialog.svelte';
@@ -56,7 +56,7 @@
   }
 
   function toggleSelectAll() {
-    const visible = filteredModels().map(m => m.id);
+    const visible = filteredModels.map(m => m.id);
     if (visible.every(id => selectedIds.has(id))) {
       selectedIds = new Set();
     } else {
@@ -234,19 +234,7 @@
     }
   }
 
-  function formatSize(bytes) {
-    if (!bytes) return '-';
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    let i = 0;
-    let size = bytes;
-    while (size >= 1024 && i < units.length - 1) {
-      size /= 1024;
-      i++;
-    }
-    return `${size.toFixed(1)} ${units[i]}`;
-  }
-
-  let filteredModels = $derived(() => {
+  let filteredModels = $derived.by(() => {
     let result = modelList;
     if (activeCategory) {
       result = result.filter((m) => m.category === activeCategory);
@@ -264,8 +252,8 @@
   });
 
   // Group models by subfolder when viewing a specific category
-  let groupedModels = $derived(() => {
-    const models = filteredModels();
+  let groupedModels = $derived.by(() => {
+    const models = filteredModels;
     if (!activeCategory) return null;  // No grouping when viewing all
     const groups = {};
     for (const m of models) {
@@ -278,7 +266,7 @@
     return groups;
   });
 
-  let categoryCountMap = $derived(() => {
+  let categoryCountMap = $derived.by(() => {
     const map = {};
     for (const m of modelList) {
       map[m.category] = (map[m.category] || 0) + 1;
@@ -286,7 +274,7 @@
     return map;
   });
 
-  let duplicateIds = $derived(() => {
+  let duplicateIds = $derived.by(() => {
     return new Set(libraryStats?.duplicate_ids || []);
   });
 </script>
@@ -338,7 +326,7 @@
     </button>
 
     {#each categories as cat}
-      {@const count = categoryCountMap()[cat.id] || 0}
+      {@const count = categoryCountMap[cat.id] || 0}
       {#if renamingCat === cat.id}
         <div class="mb-1 p-2.5 bg-gray-800 border border-green-700/50 rounded-lg">
           {#if confirmingCatRename}
@@ -440,11 +428,13 @@
             class="px-2 py-1.5 text-sm transition-colors {currentView === 'grid' ? 'bg-gray-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}"
             onclick={() => currentView = 'grid'}
             title="Grid view"
+            aria-label="Grid view"
           >▦</button>
           <button
             class="px-2 py-1.5 text-sm transition-colors {currentView === 'list' ? 'bg-gray-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}"
             onclick={() => currentView = 'list'}
             title="List view"
+            aria-label="List view"
           >☰</button>
         </div>
         <button
@@ -483,7 +473,7 @@
           class="text-sm text-gray-400 hover:text-gray-200 underline"
           onclick={toggleSelectAll}
         >
-          {filteredModels().length > 0 && filteredModels().every(m => selectedIds.has(m.id)) ? 'Deselect all' : 'Select all'}
+          {filteredModels.length > 0 && filteredModels.every(m => selectedIds.has(m.id)) ? 'Deselect all' : 'Select all'}
         </button>
         <span class="text-sm text-gray-500">{selectedIds.size} selected</span>
         {#if selectedIds.size > 0}
@@ -561,8 +551,8 @@
     <!-- Model grid/list -->
     {#if loading}
       <div class="text-center py-20 text-gray-500">Loading...</div>
-    {:else if filteredModels().length > 0}
-      {#if activeCategory && groupedModels()}
+    {:else if filteredModels.length > 0}
+      {#if activeCategory && groupedModels}
         <!-- Subcategory add button -->
         <div class="flex items-center gap-2 mb-3">
           {#if showAddSubfolder}
@@ -585,7 +575,7 @@
           {/if}
         </div>
         <!-- Grouped by subfolder -->
-        {#each Object.entries(groupedModels()).sort(([a], [b]) => a === '' ? -1 : b === '' ? 1 : a.localeCompare(b)) as [subfolder, models] (subfolder)}
+        {#each Object.entries(groupedModels).sort(([a], [b]) => a === '' ? -1 : b === '' ? 1 : a.localeCompare(b)) as [subfolder, models] (subfolder)}
           {#if subfolder !== ''}
             <div class="mb-4">
               <button
@@ -600,7 +590,7 @@
                 {#if currentView === 'grid'}
                   <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 ml-4">
                     {#each models as model (model.id)}
-                      <div class="relative">{#if selectMode}<button class="absolute top-2 left-2 z-10 w-5 h-5 rounded border-2 flex items-center justify-center text-xs transition-colors {selectedIds.has(model.id) ? 'bg-green-600 border-green-500 text-white' : 'bg-gray-800/80 border-gray-500 text-transparent hover:border-gray-300'}" onclick={(e) => { e.stopPropagation(); toggleSelect(model.id); }}>{selectedIds.has(model.id) ? '\u2713' : ''}</button>{/if}<ModelCard {model} {formatSize} isDuplicate={duplicateIds().has(model.id)} onSelect={() => selectMode ? toggleSelect(model.id) : (selectedModel = model)} /></div>
+                      <div class="relative">{#if selectMode}<button class="absolute top-2 left-2 z-10 w-5 h-5 rounded border-2 flex items-center justify-center text-xs transition-colors {selectedIds.has(model.id) ? 'bg-green-600 border-green-500 text-white' : 'bg-gray-800/80 border-gray-500 text-transparent hover:border-gray-300'}" onclick={(e) => { e.stopPropagation(); toggleSelect(model.id); }}>{selectedIds.has(model.id) ? '\u2713' : ''}</button>{/if}<ModelCard {model} {formatSize} isDuplicate={duplicateIds.has(model.id)} onSelect={() => selectMode ? toggleSelect(model.id) : (selectedModel = model)} /></div>
                     {/each}
                   </div>
                 {:else}
@@ -624,7 +614,7 @@
             {#if currentView === 'grid'}
               <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-4">
                 {#each models as model (model.id)}
-                  <div class="relative">{#if selectMode}<button class="absolute top-2 left-2 z-10 w-5 h-5 rounded border-2 flex items-center justify-center text-xs transition-colors {selectedIds.has(model.id) ? 'bg-green-600 border-green-500 text-white' : 'bg-gray-800/80 border-gray-500 text-transparent hover:border-gray-300'}" onclick={(e) => { e.stopPropagation(); toggleSelect(model.id); }}>{selectedIds.has(model.id) ? '\u2713' : ''}</button>{/if}<ModelCard {model} {formatSize} isDuplicate={duplicateIds().has(model.id)} onSelect={() => selectMode ? toggleSelect(model.id) : (selectedModel = model)} /></div>
+                  <div class="relative">{#if selectMode}<button class="absolute top-2 left-2 z-10 w-5 h-5 rounded border-2 flex items-center justify-center text-xs transition-colors {selectedIds.has(model.id) ? 'bg-green-600 border-green-500 text-white' : 'bg-gray-800/80 border-gray-500 text-transparent hover:border-gray-300'}" onclick={(e) => { e.stopPropagation(); toggleSelect(model.id); }}>{selectedIds.has(model.id) ? '\u2713' : ''}</button>{/if}<ModelCard {model} {formatSize} isDuplicate={duplicateIds.has(model.id)} onSelect={() => selectMode ? toggleSelect(model.id) : (selectedModel = model)} /></div>
                 {/each}
               </div>
             {:else}
@@ -648,13 +638,13 @@
         <!-- Flat view (all categories or search) -->
         {#if currentView === 'grid'}
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {#each filteredModels() as model (model.id)}
-              <div class="relative">{#if selectMode}<button class="absolute top-2 left-2 z-10 w-5 h-5 rounded border-2 flex items-center justify-center text-xs transition-colors {selectedIds.has(model.id) ? 'bg-green-600 border-green-500 text-white' : 'bg-gray-800/80 border-gray-500 text-transparent hover:border-gray-300'}" onclick={(e) => { e.stopPropagation(); toggleSelect(model.id); }}>{selectedIds.has(model.id) ? '\u2713' : ''}</button>{/if}<ModelCard {model} {formatSize} isDuplicate={duplicateIds().has(model.id)} onSelect={() => selectMode ? toggleSelect(model.id) : (selectedModel = model)} /></div>
+            {#each filteredModels as model (model.id)}
+              <div class="relative">{#if selectMode}<button class="absolute top-2 left-2 z-10 w-5 h-5 rounded border-2 flex items-center justify-center text-xs transition-colors {selectedIds.has(model.id) ? 'bg-green-600 border-green-500 text-white' : 'bg-gray-800/80 border-gray-500 text-transparent hover:border-gray-300'}" onclick={(e) => { e.stopPropagation(); toggleSelect(model.id); }}>{selectedIds.has(model.id) ? '\u2713' : ''}</button>{/if}<ModelCard {model} {formatSize} isDuplicate={duplicateIds.has(model.id)} onSelect={() => selectMode ? toggleSelect(model.id) : (selectedModel = model)} /></div>
             {/each}
           </div>
         {:else}
           <div class="bg-gray-800 rounded-lg border border-gray-700 divide-y divide-gray-700">
-            {#each filteredModels() as model (model.id)}
+            {#each filteredModels as model (model.id)}
               <button
                 class="w-full text-left px-4 py-3 hover:bg-gray-750 transition-colors flex items-center gap-4"
                 onclick={() => selectedModel = model}

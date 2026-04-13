@@ -10,12 +10,13 @@ services:
       - PGID=1000
       - TZ=Etc/UTC
       - LOG_LEVEL=DEBUG
-      - HUGGINGFACE_TOKEN=SoMeThInG
+      # - HUGGINGFACE_TOKEN=your_token_here
+      # - CIVITAI_API_KEY=your_key_here
     ports:
       - "8487:8487"
     volumes:
-      - ${PWD}/test-library:/library
-      - ${PWD}/test-dest:/dest/local
+      - ./test-library:/library
+      - ./test-dest:/dest/local
     deploy:
       resources:
         limits:

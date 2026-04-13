@@ -1,20 +1,14 @@
 <script>
   import { toasts, removeToast } from '../lib/stores.js';
+  import { formatSize } from '../lib/utils.js';
+  import { onDestroy } from 'svelte';
   import { api } from '../lib/api.js';
 
   let toastList = $state([]);
   let cancelling = $state({});
   let confirmCancel = $state({});
-  toasts.subscribe(v => toastList = v);
-
-  function formatSize(bytes) {
-    if (!bytes) return '';
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    let i = 0;
-    let size = bytes;
-    while (size >= 1024 && i < units.length - 1) { size /= 1024; i++; }
-    return `${size.toFixed(1)} ${units[i]}`;
-  }
+  const unsubToasts = toasts.subscribe(v => toastList = v);
+  onDestroy(unsubToasts);
 
   function formatSpeed(bytesPerSec) {
     if (!bytesPerSec || bytesPerSec <= 0) return '';

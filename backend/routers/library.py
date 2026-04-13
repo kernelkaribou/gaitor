@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from pathlib import Path
+import asyncio
 import logging
 import os
 
@@ -62,7 +63,7 @@ async def initialize_library_endpoint(req: InitializeRequest):
     """Initialize the library metadata structure."""
     if is_library_initialized():
         raise HTTPException(status_code=409, detail="Library is already initialized")
-    lib_config = initialize_library(name=req.name, template=req.template)
+    lib_config = await asyncio.to_thread(initialize_library, name=req.name, template=req.template)
     return {"message": "Library initialized", "config": lib_config.model_dump()}
 
 
@@ -71,7 +72,7 @@ async def scan_library():
     """Scan library directory for untracked model files."""
     if not is_library_initialized():
         raise HTTPException(status_code=400, detail="Library not initialized. Call POST /api/library/initialize first.")
-    untracked = scan_for_untracked()
+    untracked = await asyncio.to_thread(scan_for_untracked)
     return {"untracked": untracked, "count": len(untracked)}
 
 

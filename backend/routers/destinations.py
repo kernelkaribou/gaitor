@@ -40,7 +40,7 @@ class RemoveRequest(BaseModel):
 @router.get("/")
 async def list_destinations_endpoint():
     """List all available destinations."""
-    dests = list_destinations()
+    dests = await asyncio.to_thread(list_destinations)
     return {"destinations": dests, "count": len(dests)}
 
 
@@ -48,7 +48,7 @@ async def list_destinations_endpoint():
 async def destination_models(dest_id: str):
     """List synced models on a destination."""
     try:
-        models = get_destination_models(dest_id)
+        models = await asyncio.to_thread(get_destination_models, dest_id)
         return {"models": models, "count": len(models)}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -58,7 +58,7 @@ async def destination_models(dest_id: str):
 async def destination_sync_status(dest_id: str):
     """Get sync status comparing library with a destination."""
     try:
-        status = get_sync_status(dest_id)
+        status = await asyncio.to_thread(get_sync_status, dest_id)
         return {"status": status, "count": len(status)}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -125,7 +125,7 @@ async def bulk_sync(dest_id: str, req: BulkSyncRequest):
 async def remove_model(dest_id: str, req: RemoveRequest):
     """Remove a synced model from a destination."""
     try:
-        result = remove_from_destination(req.model_id, dest_id)
+        result = await asyncio.to_thread(remove_from_destination, req.model_id, dest_id)
         return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -135,7 +135,7 @@ async def remove_model(dest_id: str, req: RemoveRequest):
 async def apply_rename(dest_id: str, req: SyncRequest):
     """Apply a pending library rename on a destination."""
     try:
-        result = apply_rename_on_destination(req.model_id, dest_id)
+        result = await asyncio.to_thread(apply_rename_on_destination, req.model_id, dest_id)
         return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))

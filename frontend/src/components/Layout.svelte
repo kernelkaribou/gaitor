@@ -34,6 +34,7 @@
       <button
         class="p-1.5 rounded-md transition-colors {currentPage === 'settings' ? 'bg-gray-700 text-gray-200' : 'hover:bg-gray-700 text-gray-400'}"
         title="Settings"
+        aria-label="Settings"
         onclick={() => currentPage = 'settings'}
       >
         <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">

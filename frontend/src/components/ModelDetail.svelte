@@ -1,7 +1,15 @@
 <script>
   import { api } from '../lib/api.js';
+  import { isSafeUrl } from '../lib/utils.js';
+  import { onMount, onDestroy } from 'svelte';
 
   let { model, categories, formatSize, onClose, onUpdated, onDelete } = $props();
+
+  function handleKeydown(e) {
+    if (e.key === 'Escape') onClose();
+  }
+  onMount(() => document.addEventListener('keydown', handleKeydown));
+  onDestroy(() => document.removeEventListener('keydown', handleKeydown));
 
   let editing = $state(false);
   let saving = $state(false);
@@ -479,7 +487,11 @@
                 <span class="text-gray-400">{model.source.provider}</span>
                 <span class="text-gray-600 mx-1">-</span>
               {/if}
-              <a href={model.source.url} target="_blank" rel="noopener" class="text-green-400 hover:text-green-300 underline break-all">{model.source.url}</a>
+              {#if isSafeUrl(model.source.url)}
+                <a href={model.source.url} target="_blank" rel="noopener noreferrer" class="text-green-400 hover:text-green-300 underline break-all">{model.source.url}</a>
+              {:else}
+                <span class="text-gray-300 break-all">{model.source.url}</span>
+              {/if}
             </p>
           {:else}
             <p class="text-gray-500 text-sm mt-0.5">Not specified</p>

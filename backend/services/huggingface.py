@@ -13,6 +13,16 @@ logger = logging.getLogger(__name__)
 
 HF_API_BASE = "https://huggingface.co/api"
 
+_client: httpx.AsyncClient | None = None
+
+
+def _get_client() -> httpx.AsyncClient:
+    """Get or create a shared httpx client for HuggingFace API calls."""
+    global _client
+    if _client is None:
+        _client = httpx.AsyncClient(timeout=15, headers=_get_headers())
+    return _client
+
 
 def _get_headers() -> dict:
     """Build auth headers if token is available."""
@@ -45,36 +55,36 @@ def parse_hf_url(url: str) -> Optional[dict]:
 
 async def get_repo_info(repo_id: str) -> dict:
     """Fetch repository metadata from HuggingFace."""
-    async with httpx.AsyncClient(timeout=15) as client:
-        resp = await client.get(
-            f"{HF_API_BASE}/models/{repo_id}",
-            headers=_get_headers(),
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        return {
-            "repo_id": data.get("modelId", repo_id),
-            "author": data.get("author", ""),
-            "description": data.get("description", ""),
-            "tags": data.get("tags", []),
-            "downloads": data.get("downloads", 0),
-            "likes": data.get("likes", 0),
-            "last_modified": data.get("lastModified", ""),
-            "private": data.get("private", False),
-            "gated": data.get("gated", False),
-        }
+    client = _get_client()
+    resp = await client.get(
+        f"{HF_API_BASE}/models/{repo_id}",
+        headers=_get_headers(),
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    return {
+        "repo_id": data.get("modelId", repo_id),
+        "author": data.get("author", ""),
+        "description": data.get("description", ""),
+        "tags": data.get("tags", []),
+        "downloads": data.get("downloads", 0),
+        "likes": data.get("likes", 0),
+        "last_modified": data.get("lastModified", ""),
+        "private": data.get("private", False),
+        "gated": data.get("gated", False),
+    }
 
 
 async def list_repo_files(repo_id: str) -> list[dict]:
     """List files in a HuggingFace repo, filtered to model-relevant extensions."""
-    async with httpx.AsyncClient(timeout=15) as client:
-        resp = await client.get(
-            f"{HF_API_BASE}/models/{repo_id}",
-            params={"blobs": True},
-            headers=_get_headers(),
-        )
-        resp.raise_for_status()
-        data = resp.json()
+    client = _get_client()
+    resp = await client.get(
+        f"{HF_API_BASE}/models/{repo_id}",
+        params={"blobs": True},
+        headers=_get_headers(),
+    )
+    resp.raise_for_status()
+    data = resp.json()
 
     siblings = data.get("siblings", [])
     files = []
@@ -101,14 +111,14 @@ def get_download_url(repo_id: str, filename: str) -> str:
 
 async def search_models(query: str, limit: int = 20) -> list[dict]:
     """Search HuggingFace models by keyword."""
-    async with httpx.AsyncClient(timeout=15) as client:
-        resp = await client.get(
-            f"{HF_API_BASE}/models",
-            params={"search": query, "limit": limit, "sort": "downloads", "direction": -1},
-            headers=_get_headers(),
-        )
-        resp.raise_for_status()
-        results = resp.json()
+    client = _get_client()
+    resp = await client.get(
+        f"{HF_API_BASE}/models",
+        params={"search": query, "limit": limit, "sort": "downloads", "direction": -1},
+        headers=_get_headers(),
+    )
+    resp.raise_for_status()
+    results = resp.json()
 
     return [
         {

@@ -45,6 +45,7 @@ class TaskManager:
         self._counter = 0
 
     def create_task(self, task_type: str, title: str) -> str:
+        self.cleanup_old()
         self._counter += 1
         task_id = f"{task_type}-{self._counter}-{int(time.time())}"
         task = TaskProgress(task_id=task_id, task_type=task_type, title=title)

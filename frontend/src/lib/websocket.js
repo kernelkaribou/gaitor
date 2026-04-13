@@ -89,14 +89,3 @@ function handleTaskUpdate(task) {
     }
   }
 }
-
-export function disconnectWebSocket() {
-  if (reconnectTimer) {
-    clearTimeout(reconnectTimer);
-    reconnectTimer = null;
-  }
-  if (ws) {
-    ws.close();
-    ws = null;
-  }
-}

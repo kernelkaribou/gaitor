@@ -13,6 +13,16 @@ logger = logging.getLogger(__name__)
 
 CIVITAI_API_BASE = "https://civitai.com/api/v1"
 
+_client: httpx.AsyncClient | None = None
+
+
+def _get_client() -> httpx.AsyncClient:
+    """Get or create a shared httpx client for CivitAI API calls."""
+    global _client
+    if _client is None:
+        _client = httpx.AsyncClient(timeout=15, headers=_get_headers())
+    return _client
+
 
 def _get_headers() -> dict:
     """Build auth headers if API key is available."""
@@ -45,13 +55,13 @@ def parse_civitai_url(url: str) -> Optional[dict]:
 
 async def get_model_info(model_id: str) -> dict:
     """Fetch model details from CivitAI."""
-    async with httpx.AsyncClient(timeout=15) as client:
-        resp = await client.get(
-            f"{CIVITAI_API_BASE}/models/{model_id}",
-            headers=_get_headers(),
-        )
-        resp.raise_for_status()
-        data = resp.json()
+    client = _get_client()
+    resp = await client.get(
+        f"{CIVITAI_API_BASE}/models/{model_id}",
+        headers=_get_headers(),
+    )
+    resp.raise_for_status()
+    data = resp.json()
 
     versions = data.get("modelVersions", [])
     return {
@@ -121,14 +131,14 @@ async def search_models(query: str, limit: int = 20, model_type: Optional[str] =
     if model_type:
         params["types"] = model_type
 
-    async with httpx.AsyncClient(timeout=15) as client:
-        resp = await client.get(
-            f"{CIVITAI_API_BASE}/models",
-            params=params,
-            headers=_get_headers(),
-        )
-        resp.raise_for_status()
-        data = resp.json()
+    client = _get_client()
+    resp = await client.get(
+        f"{CIVITAI_API_BASE}/models",
+        params=params,
+        headers=_get_headers(),
+    )
+    resp.raise_for_status()
+    data = resp.json()
 
     return [
         {

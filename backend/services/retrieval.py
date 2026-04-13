@@ -11,6 +11,8 @@ from typing import Optional, Callable
 import httpx
 from PIL import Image
 
+Image.MAX_IMAGE_PIXELS = 25_000_000  # ~5000x5000, prevent decompression bombs
+
 from .. import config
 from ..utils import get_now, to_iso, safe_resolve, sanitize_filename
 from ..schemas.model import ModelMetadata, ModelHistoryEntry, ModelSource
@@ -200,9 +202,12 @@ async def download_model(
     thumb_rel = None
     if thumbnail_url:
         try:
+            MAX_THUMB_DOWNLOAD = 10 * 1024 * 1024  # 10MB
             async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
                 resp = await client.get(thumbnail_url)
                 resp.raise_for_status()
+                if len(resp.content) > MAX_THUMB_DOWNLOAD:
+                    raise ValueError("Thumbnail response too large")
                 THUMBNAILS_DIR.mkdir(parents=True, exist_ok=True)
                 img = Image.open(BytesIO(resp.content))
                 img.thumbnail((400, 400), Image.LANCZOS)

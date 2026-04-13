@@ -4,9 +4,13 @@
 const BASE_URL = '/api';
 
 async function request(path, options = {}) {
+  const headers = { ...options.headers };
+  if (options.body) {
+    headers['Content-Type'] = 'application/json';
+  }
   const response = await fetch(`${BASE_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
     ...options,
+    headers,
   });
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: response.statusText }));
@@ -31,53 +35,53 @@ export const api = {
   createCategory: (data) =>
     request('/library/categories', { method: 'POST', body: JSON.stringify(data) }),
   updateCategory: (id, data) =>
-    request(`/library/categories/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    request(`/library/categories/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(data) }),
   renameCategory: (id, newId, newLabel) =>
-    request(`/library/categories/${id}/rename`, { method: 'POST', body: JSON.stringify({ new_id: newId, new_label: newLabel }) }),
+    request(`/library/categories/${encodeURIComponent(id)}/rename`, { method: 'POST', body: JSON.stringify({ new_id: newId, new_label: newLabel }) }),
   listSubfolders: (categoryId) =>
-    request(`/library/categories/${categoryId}/subfolders`),
+    request(`/library/categories/${encodeURIComponent(categoryId)}/subfolders`),
   createSubfolder: (categoryId, name) =>
-    request(`/library/categories/${categoryId}/subfolders`, { method: 'POST', body: JSON.stringify({ name }) }),
+    request(`/library/categories/${encodeURIComponent(categoryId)}/subfolders`, { method: 'POST', body: JSON.stringify({ name }) }),
   deleteCategory: (id) =>
-    request(`/library/categories/${id}`, { method: 'DELETE' }),
+    request(`/library/categories/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
   // Models
   listModels: () => request('/models/'),
   getModelStats: () => request('/models/stats'),
-  getModel: (id) => request(`/models/${id}`),
+  getModel: (id) => request(`/models/${encodeURIComponent(id)}`),
   catalogModel: (data) =>
     request('/models/catalog', { method: 'POST', body: JSON.stringify(data) }),
   bulkCatalog: (models) =>
     request('/models/catalog/bulk', { method: 'POST', body: JSON.stringify({ models }) }),
   updateModel: (id, data) =>
-    request(`/models/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    request(`/models/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(data) }),
   renameModel: (id, newName, renameFile = true) =>
-    request(`/models/${id}/rename`, {
+    request(`/models/${encodeURIComponent(id)}/rename`, {
       method: 'POST',
       body: JSON.stringify({ new_name: newName, rename_file: renameFile }),
     }),
   moveModel: (id, subfolder) =>
-    request(`/models/${id}/move`, {
+    request(`/models/${encodeURIComponent(id)}/move`, {
       method: 'POST',
       body: JSON.stringify({ subfolder }),
     }),
   deleteModel: (id, confirmText) =>
-    request(`/models/${id}`, {
+    request(`/models/${encodeURIComponent(id)}`, {
       method: 'DELETE',
       body: JSON.stringify({ confirm_text: confirmText }),
     }),
-  computeHash: (id) => request(`/models/${id}/hash`, { method: 'POST' }),
+  computeHash: (id) => request(`/models/${encodeURIComponent(id)}/hash`, { method: 'POST' }),
   bulkUpdateModels: (modelIds, updates) =>
     request('/models/bulk/update', { method: 'POST', body: JSON.stringify({ model_ids: modelIds, ...updates }) }),
   bulkDeleteModels: (modelIds, confirmText) =>
     request('/models/bulk/delete', { method: 'POST', body: JSON.stringify({ model_ids: modelIds, confirm_text: confirmText }) }),
-  getDownloadUrl: (id) => `${BASE_URL}/models/${id}/download`,
-  getThumbnailUrl: (id) => `${BASE_URL}/models/${id}/thumbnail`,
+  getDownloadUrl: (id) => `${BASE_URL}/models/${encodeURIComponent(id)}/download`,
+  getThumbnailUrl: (id) => `${BASE_URL}/models/${encodeURIComponent(id)}/thumbnail`,
 
   async uploadThumbnail(modelId, file) {
     const formData = new FormData();
     formData.append('file', file);
-    const response = await fetch(`${BASE_URL}/models/${modelId}/thumbnail`, {
+    const response = await fetch(`${BASE_URL}/models/${encodeURIComponent(modelId)}/thumbnail`, {
       method: 'POST',
       body: formData,
     });
@@ -88,7 +92,7 @@ export const api = {
     return response.json();
   },
 
-  deleteThumbnail: (id) => request(`/models/${id}/thumbnail`, { method: 'DELETE' }),
+  deleteThumbnail: (id) => request(`/models/${encodeURIComponent(id)}/thumbnail`, { method: 'DELETE' }),
 
   async uploadModel(file, name, category, description = '', tags = '', onProgress = null) {
     return new Promise((resolve, reject) => {
@@ -134,16 +138,16 @@ export const api = {
 
   // Destinations
   listDestinations: () => request('/destinations/'),
-  getDestinationModels: (destId) => request(`/destinations/${destId}/models`),
-  getDestinationSyncStatus: (destId) => request(`/destinations/${destId}/status`),
+  getDestinationModels: (destId) => request(`/destinations/${encodeURIComponent(destId)}/models`),
+  getDestinationSyncStatus: (destId) => request(`/destinations/${encodeURIComponent(destId)}/status`),
   syncModelToDestination: (destId, modelId) =>
-    request(`/destinations/${destId}/sync`, { method: 'POST', body: JSON.stringify({ model_id: modelId }) }),
+    request(`/destinations/${encodeURIComponent(destId)}/sync`, { method: 'POST', body: JSON.stringify({ model_id: modelId }) }),
   bulkSyncToDestination: (destId, modelIds) =>
-    request(`/destinations/${destId}/sync/bulk`, { method: 'POST', body: JSON.stringify({ model_ids: modelIds }) }),
+    request(`/destinations/${encodeURIComponent(destId)}/sync/bulk`, { method: 'POST', body: JSON.stringify({ model_ids: modelIds }) }),
   removeFromDestination: (destId, modelId) =>
-    request(`/destinations/${destId}/remove`, { method: 'POST', body: JSON.stringify({ model_id: modelId }) }),
+    request(`/destinations/${encodeURIComponent(destId)}/remove`, { method: 'POST', body: JSON.stringify({ model_id: modelId }) }),
   applyRenameOnDestination: (destId, modelId) =>
-    request(`/destinations/${destId}/apply-rename`, { method: 'POST', body: JSON.stringify({ model_id: modelId }) }),
+    request(`/destinations/${encodeURIComponent(destId)}/apply-rename`, { method: 'POST', body: JSON.stringify({ model_id: modelId }) }),
 
   // Download (formerly Retrieve)
   getProviders: () => request('/retrieve/providers'),
@@ -153,11 +157,11 @@ export const api = {
     request('/retrieve/download', { method: 'POST', body: JSON.stringify(params) }),
   searchModels: (query, provider = 'huggingface', limit = 20) =>
     request('/retrieve/search', { method: 'POST', body: JSON.stringify({ query, provider, limit }) }),
-  listHfFiles: (repoId) => request(`/retrieve/hf/${repoId}/files`),
-  getCivitaiModel: (modelId) => request(`/retrieve/civitai/${modelId}`),
+  listHfFiles: (repoId) => request(`/retrieve/hf/${encodeURIComponent(repoId)}/files`),
+  getCivitaiModel: (modelId) => request(`/retrieve/civitai/${encodeURIComponent(modelId)}`),
 
   // Tasks
   getActiveTasks: () => request('/tasks'),
   cancelTask: (taskId) =>
-    request(`/tasks/${taskId}/cancel`, { method: 'POST' }),
+    request(`/tasks/${encodeURIComponent(taskId)}/cancel`, { method: 'POST' }),
 };

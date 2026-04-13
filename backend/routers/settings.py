@@ -5,9 +5,10 @@ from fastapi import APIRouter, Request
 from fastapi.responses import Response
 import logging
 import os
-import urllib.request
 import json
 from pathlib import Path
+
+import httpx
 
 from .. import config
 from ..services.metadata import load_all_models, load_categories, get_library_config
@@ -23,12 +24,13 @@ async def get_version(request: Request):
     result = {"version": current, "latest": None, "update_available": False}
 
     try:
-        req = urllib.request.Request(
-            f"https://api.github.com/repos/{config.GITHUB_REPO}/releases/latest",
-            headers={"Accept": "application/vnd.github.v3+json", "User-Agent": "model-gaitor"},
-        )
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            data = json.loads(resp.read())
+        async with httpx.AsyncClient(timeout=5) as client:
+            resp = await client.get(
+                f"https://api.github.com/repos/{config.GITHUB_REPO}/releases/latest",
+                headers={"Accept": "application/vnd.github.v3+json", "User-Agent": "model-gaitor"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
             latest_tag = data.get("tag_name", "").lstrip("v")
             if latest_tag:
                 result["latest"] = latest_tag
@@ -91,9 +93,10 @@ def _is_newer(latest: str, current: str) -> bool:
 @router.get("/export")
 async def export_metadata():
     """Export all library metadata as a single JSON file for backup."""
-    lib_config = get_library_config()
-    all_models = load_all_models()
-    cats = load_categories()
+    import asyncio
+    lib_config = await asyncio.to_thread(get_library_config)
+    all_models = await asyncio.to_thread(load_all_models)
+    cats = await asyncio.to_thread(load_categories)
 
     export_data = {
         "export_version": 1,

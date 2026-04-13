@@ -11,6 +11,8 @@ import logging
 
 from PIL import Image
 
+Image.MAX_IMAGE_PIXELS = 25_000_000  # ~5000x5000, prevent decompression bombs
+
 from .. import config
 from ..services.library import (
     catalog_model,
@@ -164,11 +166,14 @@ async def bulk_catalog_endpoint(req: BulkCatalogRequest, background_tasks: Backg
                 description=item.description,
                 tags=item.tags,
                 target_subfolder=item.target_subfolder,
+                _defer_index=True,
             )
             background_tasks.add_task(compute_hash, model.id)
             results.append(model.model_dump())
         except Exception as e:
             errors.append({"relative_path": item.relative_path, "error": str(e)})
+    if results:
+        rebuild_index()
     return {"cataloged": results, "errors": errors, "count": len(results)}
 
 
@@ -277,6 +282,11 @@ async def update_model_endpoint(model_id: str, req: UpdateModelRequest):
     updates = {k: v for k, v in req.model_dump().items() if v is not None}
     if not updates:
         raise HTTPException(status_code=400, detail="No updates provided")
+    if "subfolder" in updates:
+        import re
+        sub = updates["subfolder"].strip()
+        if sub and not re.match(r'^[a-zA-Z0-9_\-/ ]+$', sub):
+            raise HTTPException(status_code=400, detail="Invalid subfolder name")
     try:
         model = update_model_metadata(model_id, updates)
         return model.model_dump()
@@ -366,11 +376,12 @@ async def delete_model_endpoint(model_id: str, req: DeleteConfirmation):
 @router.post("/{model_id}/hash")
 async def compute_hash_endpoint(model_id: str):
     """Compute or recompute SHA-256 hash for a model."""
+    import asyncio
     model = load_model(model_id)
     if not model:
         raise HTTPException(status_code=404, detail="Model not found")
 
-    hash_value = compute_hash(model_id)
+    hash_value = await asyncio.to_thread(compute_hash, model_id)
     if not hash_value:
         raise HTTPException(status_code=500, detail="Hash computation failed")
     return {"model_id": model_id, "hash": {"sha256": hash_value}}

@@ -1,21 +1,13 @@
 <script>
   import { onMount } from 'svelte';
   import { api } from '../lib/api.js';
+  import { formatSize } from '../lib/utils.js';
 
   let version = $state(null);
   let disk = $state(null);
   let auth = $state(null);
   let stats = $state(null);
   let loading = $state(true);
-
-  function formatSize(bytes) {
-    if (!bytes) return '-';
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    let i = 0;
-    let size = bytes;
-    while (size >= 1024 && i < units.length - 1) { size /= 1024; i++; }
-    return `${size.toFixed(1)} ${units[i]}`;
-  }
 
   function usagePercent(total, free) {
     if (!total) return 0;
@@ -281,7 +273,7 @@
           <a
             href={version.release_url}
             target="_blank"
-            rel="noopener"
+            rel="noopener noreferrer"
             class="text-green-400 hover:text-green-300 text-xs"
           >
             v{version.latest} available

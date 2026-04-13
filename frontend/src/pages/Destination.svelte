@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { api } from '../lib/api.js';
+  import { formatSize } from '../lib/utils.js';
   import ModelCard from '../components/ModelCard.svelte';
 
   let { onBack } = $props();
@@ -18,15 +19,6 @@
   let confirmRemove = $state(null);
   let selectedModels = $state(new Set());
   let confirmBulkAction = $state(false);
-
-  function formatSize(bytes) {
-    if (!bytes) return '-';
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    let i = 0;
-    let size = bytes;
-    while (size >= 1024 && i < units.length - 1) { size /= 1024; i++; }
-    return `${size.toFixed(1)} ${units[i]}`;
-  }
 
   function usagePercent(total, free) {
     if (!total) return 0;
@@ -112,7 +104,7 @@
   }
 
   function toggleSelectAll() {
-    const visible = filteredItems().map(i => i.model_id);
+    const visible = filteredItems.map(i => i.model_id);
     if (visible.every(id => selectedModels.has(id))) {
       selectedModels = new Set();
     } else {
@@ -120,7 +112,7 @@
     }
   }
 
-  let selectionInfo = $derived(() => {
+  let selectionInfo = $derived.by(() => {
     if (selectedModels.size === 0) return null;
     const items = syncStatus.filter(s => selectedModels.has(s.model_id));
     const hasUnsynced = items.some(s => s.status === 'not_synced' || s.status === 'outdated');
@@ -167,7 +159,7 @@
     orphaned: 'Orphaned',
   };
 
-  let filteredItems = $derived(() => {
+  let filteredItems = $derived.by(() => {
     let result = syncStatus;
     if (activeCategory) {
       result = result.filter((s) => s.category === activeCategory);
@@ -181,7 +173,7 @@
     return result;
   });
 
-  let categoryCountMap = $derived(() => {
+  let categoryCountMap = $derived.by(() => {
     const map = {};
     for (const s of syncStatus) {
       if (s.category) {
@@ -191,7 +183,7 @@
     return map;
   });
 
-  let syncSummary = $derived(() => {
+  let syncSummary = $derived.by(() => {
     const counts = { synced: 0, not_synced: 0, outdated: 0, rename_pending: 0, orphaned: 0 };
     for (const s of syncStatus) {
       if (counts[s.status] !== undefined) counts[s.status]++;
@@ -278,7 +270,7 @@
           <span class="text-xs text-gray-500 ml-1">({syncStatus.length})</span>
         </button>
         {#each categories as cat}
-          {@const count = categoryCountMap()[cat.id] || 0}
+          {@const count = categoryCountMap[cat.id] || 0}
           {#if count > 0}
             <button
               class="w-full text-left px-3 py-1.5 rounded text-sm transition-colors mb-0.5 {activeCategory === cat.id ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}"
@@ -295,17 +287,17 @@
           <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2 font-semibold">Summary</h3>
           <div class="space-y-1 text-xs">
             <p class="text-gray-300">{syncStatus.length} total models</p>
-            {#if syncSummary().synced > 0}
-              <p class="text-green-400">{syncSummary().synced} synced to this target</p>
+            {#if syncSummary.synced > 0}
+              <p class="text-green-400">{syncSummary.synced} synced to this target</p>
             {/if}
-            {#if syncSummary().outdated > 0}
-              <p class="text-yellow-400">{syncSummary().outdated} outdated</p>
+            {#if syncSummary.outdated > 0}
+              <p class="text-yellow-400">{syncSummary.outdated} outdated</p>
             {/if}
-            {#if syncSummary().rename_pending > 0}
-              <p class="text-blue-400">{syncSummary().rename_pending} rename pending</p>
+            {#if syncSummary.rename_pending > 0}
+              <p class="text-blue-400">{syncSummary.rename_pending} rename pending</p>
             {/if}
-            {#if syncSummary().orphaned > 0}
-              <p class="text-red-400">{syncSummary().orphaned} orphaned</p>
+            {#if syncSummary.orphaned > 0}
+              <p class="text-red-400">{syncSummary.orphaned} orphaned</p>
             {/if}
           </div>
         </div>
@@ -332,7 +324,7 @@
           <div class="flex items-center gap-3">
             <h2 class="text-lg font-semibold text-gray-200">{selectedDest.name}</h2>
             <span class="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-400">
-              {syncStatus.length} models | {syncSummary().synced} synced
+              {syncStatus.length} models | {syncSummary.synced} synced
             </span>
           </div>
           <div class="flex items-center gap-2">
@@ -366,7 +358,7 @@
             <label class="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer select-none" title="Select all visible">
               <input
                 type="checkbox"
-                checked={filteredItems().length > 0 && filteredItems().every(i => selectedModels.has(i.model_id))}
+                checked={filteredItems.length > 0 && filteredItems.every(i => selectedModels.has(i.model_id))}
                 onchange={toggleSelectAll}
                 class="rounded"
               />
@@ -376,25 +368,25 @@
         </div>
 
         <!-- Bulk action bar -->
-        {#if selectionInfo()}
+        {#if selectionInfo}
           <div class="flex items-center gap-3 mb-4 bg-gray-800 border border-gray-600 rounded-lg px-4 py-2">
-            <span class="text-sm text-gray-300">{selectionInfo().count} selected</span>
+            <span class="text-sm text-gray-300">{selectionInfo.count} selected</span>
             {#if confirmBulkAction}
               <span class="text-sm text-yellow-300">
-                {selectionInfo().hasUnsynced ? `Sync ${selectionInfo().count} models to target?` : `Remove ${selectionInfo().count} models from target?`}
+                {selectionInfo.hasUnsynced ? `Sync ${selectionInfo.count} models to target?` : `Remove ${selectionInfo.count} models from target?`}
               </span>
               <button
-                class="px-3 py-1 text-xs rounded {selectionInfo().hasUnsynced ? 'bg-green-600 hover:bg-green-500' : 'bg-red-700 hover:bg-red-600'} text-white"
-                onclick={() => selectionInfo().hasUnsynced ? bulkSyncSelected() : bulkRemoveSelected()}
+                class="px-3 py-1 text-xs rounded {selectionInfo.hasUnsynced ? 'bg-green-600 hover:bg-green-500' : 'bg-red-700 hover:bg-red-600'} text-white"
+                onclick={() => selectionInfo.hasUnsynced ? bulkSyncSelected() : bulkRemoveSelected()}
               >Yes</button>
               <button class="px-3 py-1 text-xs rounded bg-gray-700 text-gray-300" onclick={() => confirmBulkAction = false}>No</button>
             {:else}
-              {#if selectionInfo().hasUnsynced}
+              {#if selectionInfo.hasUnsynced}
                 <button
                   class="px-3 py-1 text-xs rounded bg-green-600 hover:bg-green-500 text-white"
                   onclick={() => confirmBulkAction = true}
                 >Sync Selected</button>
-              {:else if selectionInfo().allSynced}
+              {:else if selectionInfo.allSynced}
                 <button
                   class="px-3 py-1 text-xs rounded bg-red-900/50 hover:bg-red-800 text-red-300"
                   onclick={() => confirmBulkAction = true}
@@ -407,10 +399,10 @@
 
         {#if loading}
           <div class="text-center py-10 text-gray-500">Loading sync status...</div>
-        {:else if filteredItems().length > 0}
+        {:else if filteredItems.length > 0}
           {#if currentView === 'grid'}
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {#each filteredItems() as item (item.model_id)}
+              {#each filteredItems as item (item.model_id)}
                 <div class="bg-gray-800 rounded-lg border transition-colors overflow-hidden {selectedModels.has(item.model_id) ? 'border-green-500' : 'border-gray-700 hover:border-green-600/50'}">
                   <div class="p-4">
                     <div class="flex items-start justify-between mb-2">
@@ -477,7 +469,7 @@
           {:else}
             <!-- List view -->
             <div class="bg-gray-800 rounded-lg border border-gray-700 divide-y divide-gray-700">
-              {#each filteredItems() as item (item.model_id)}
+              {#each filteredItems as item (item.model_id)}
                 <div class="px-4 py-3 flex items-center gap-4 {selectedModels.has(item.model_id) ? 'bg-green-900/10' : ''}">
                   <input type="checkbox" checked={selectedModels.has(item.model_id)} onchange={() => toggleSelect(item.model_id)} class="rounded shrink-0" />
                   <div class="flex-1 min-w-0">

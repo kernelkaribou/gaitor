@@ -16,8 +16,7 @@ RUN apt-get update && \
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY VERSION ./VERSION
 COPY backend/ ./backend/
@@ -39,5 +38,8 @@ ENV PGID=1000
 
 EXPOSE ${PORT}
 
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=30s \
+  CMD curl -f http://localhost:${PORT}/health || exit 1
+
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["python", "-m", "uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "8487"]
+CMD ["sh", "-c", "exec python -m uvicorn backend.app:app --host 0.0.0.0 --port ${PORT}"]

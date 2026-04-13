@@ -1,5 +1,6 @@
 <script>
   import { api } from '../lib/api.js';
+  import { formatSize } from '../lib/utils.js';
 
   let { results, categories, onCataloged, onDismiss } = $props();
 
@@ -14,15 +15,6 @@
   );
   let cataloging = $state(false);
   let error = $state(null);
-
-  function formatSize(bytes) {
-    if (!bytes) return '-';
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    let i = 0;
-    let size = bytes;
-    while (size >= 1024 && i < units.length - 1) { size /= 1024; i++; }
-    return `${size.toFixed(1)} ${units[i]}`;
-  }
 
   function toggleAll(checked) {
     items = items.map((i) => ({ ...i, selected: checked }));

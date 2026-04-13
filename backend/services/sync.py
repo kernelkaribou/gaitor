@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import shutil
+import tempfile
 from pathlib import Path
 from typing import Optional, Callable
 
@@ -16,6 +17,22 @@ from .metadata import load_model, save_model, rebuild_index, load_all_models
 logger = logging.getLogger(__name__)
 
 SIDECAR_SUFFIX = ".gaitor.json"
+
+
+def _atomic_write_sidecar(path: Path, data: dict) -> None:
+    """Write sidecar JSON atomically: temp file + rename."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=2, default=str)
+        os.replace(tmp_path, str(path))
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 def list_destinations() -> list[dict]:
@@ -106,7 +123,10 @@ def get_destination_models(dest_id: str) -> list[dict]:
                     sidecar_data = json.load(f)
 
                 model_filename = sidecar_data.get("current_filename", "")
-                model_path = Path(root) / model_filename
+                model_path = (Path(root) / model_filename).resolve()
+                if not model_path.is_relative_to(dest_path.resolve()):
+                    logger.warning(f"Sidecar references path outside destination: {sidecar_path}")
+                    continue
                 file_exists = model_path.exists()
 
                 models.append({
@@ -238,8 +258,7 @@ def sync_model_to_destination(
         rename_history=[],
     )
     sidecar_path = dest_model_dir / f".{model.filename}{SIDECAR_SUFFIX}"
-    with open(sidecar_path, "w") as f:
-        json.dump(sidecar.model_dump(), f, indent=2, default=str)
+    _atomic_write_sidecar(sidecar_path, sidecar.model_dump())
 
     # Record sync in model history
     model.history.append(
@@ -280,7 +299,11 @@ def remove_from_destination(model_id: str, dest_id: str) -> dict:
                 with open(sidecar_path) as f:
                     data = json.load(f)
                 if data.get("library_model_id") == model_id:
-                    model_file = Path(root) / data.get("current_filename", "")
+                    current_filename = data.get("current_filename", "")
+                    model_file = (Path(root) / current_filename).resolve()
+                    if not model_file.is_relative_to(dest_path.resolve()):
+                        logger.warning(f"Sidecar references path outside destination: {sidecar_path}")
+                        continue
                     result = {"model_id": model_id, "destination": dest_id, "file_deleted": False, "sidecar_deleted": False}
                     if model_file.exists():
                         model_file.unlink()
@@ -318,9 +341,13 @@ def apply_rename_on_destination(model_id: str, dest_id: str) -> dict:
                     continue
 
                 old_filename = data["current_filename"]
-                old_path = Path(root) / old_filename
+                old_path = (Path(root) / old_filename).resolve()
                 new_filename = model.filename
-                new_path = Path(root) / new_filename
+                new_path = (Path(root) / new_filename).resolve()
+
+                if not old_path.is_relative_to(dest_path.resolve()) or not new_path.is_relative_to(dest_path.resolve()):
+                    logger.warning(f"Sidecar references path outside destination: {sidecar_path}")
+                    continue
 
                 now = to_iso(get_now())
 
@@ -341,8 +368,7 @@ def apply_rename_on_destination(model_id: str, dest_id: str) -> dict:
                 # Write updated sidecar with new name
                 sidecar_path.unlink()
                 new_sidecar_path = Path(root) / f".{new_filename}{SIDECAR_SUFFIX}"
-                with open(new_sidecar_path, "w") as f:
-                    json.dump(data, f, indent=2, default=str)
+                _atomic_write_sidecar(new_sidecar_path, data)
 
                 logger.info(f"Applied rename {old_filename} → {new_filename} on {dest_id}")
                 return {

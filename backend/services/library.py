@@ -133,6 +133,7 @@ def catalog_model(
     tags: Optional[list[str]] = None,
     source_provider: str = "manual",
     target_subfolder: str = "",
+    _defer_index: bool = False,
 ) -> ModelMetadata:
     """Create a metadata entry for an existing file in the library.
     If category differs from current folder or target_subfolder is set, moves the file."""
@@ -186,7 +187,8 @@ def catalog_model(
     )
 
     save_model(model)
-    rebuild_index()
+    if not _defer_index:
+        rebuild_index()
     logger.info(f"Cataloged model: {name} ({relative_path})")
     return model
 

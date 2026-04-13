@@ -1,9 +1,9 @@
 #!/bin/bash
 set -e
 
-# Default PUID and PGID to 0 (root) if not set
-PUID=${PUID:-0}
-PGID=${PGID:-0}
+# Default PUID and PGID to 1000 if not set (non-root)
+PUID=${PUID:-1000}
+PGID=${PGID:-1000}
 
 # If running as root, skip user creation
 if [ "$PUID" = "0" ] && [ "$PGID" = "0" ]; then
@@ -25,8 +25,10 @@ if [ "$CURRENT_UID" != "$PUID" ] || [ "$CURRENT_GID" != "$PGID" ]; then
     usermod -u "$PUID" -g "$PGID" appuser 2>/dev/null || true
 fi
 
-# Set ownership of app data (ignore errors for read-only mounts)
-chown -R "$PUID:$PGID" /app 2>/dev/null || true
+# Set ownership of app data only if needed (ignore errors for read-only mounts)
+if [ "$(stat -c %u /app 2>/dev/null)" != "$PUID" ]; then
+    chown -R "$PUID:$PGID" /app 2>/dev/null || true
+fi
 
 # Switch to app user and execute the command
 exec gosu appuser "$@"

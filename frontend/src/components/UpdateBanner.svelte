@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { api } from '../lib/api.js';
   import { updateInfo } from '../lib/stores.js';
 
@@ -14,8 +14,9 @@
     }
   });
 
-  let info = $derived(null);
-  updateInfo.subscribe((v) => (info = v));
+  let info = $state(null);
+  const unsubUpdate = updateInfo.subscribe((v) => (info = v));
+  onDestroy(unsubUpdate);
 </script>
 
 {#if info}

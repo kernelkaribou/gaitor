@@ -1,7 +1,15 @@
 <script>
   import { api } from '../lib/api.js';
+  import { formatSize } from '../lib/utils.js';
+  import { onMount, onDestroy } from 'svelte';
 
   let { categories, onUploaded, onClose } = $props();
+
+  function handleKeydown(e) {
+    if (e.key === 'Escape') onClose();
+  }
+  onMount(() => document.addEventListener('keydown', handleKeydown));
+  onDestroy(() => document.removeEventListener('keydown', handleKeydown));
 
   let file = $state(null);
   let name = $state('');
@@ -45,15 +53,6 @@
       error = err.message;
     }
     uploading = false;
-  }
-
-  function formatSize(bytes) {
-    if (!bytes) return '';
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    let i = 0;
-    let size = bytes;
-    while (size >= 1024 && i < units.length - 1) { size /= 1024; i++; }
-    return `${size.toFixed(1)} ${units[i]}`;
   }
 </script>
 
