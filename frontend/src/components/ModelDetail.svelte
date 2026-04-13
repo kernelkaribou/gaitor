@@ -8,6 +8,7 @@
   let editDescription = $state(model.description || '');
   let editCategory = $state(model.category);
   let editTags = $state((model.tags || []).join(', '));
+  let editSourceUrl = $state(model.source?.url || '');
   let renaming = $state(false);
   let renameNewName = $state(model.name);
   let renameFile = $state(true);
@@ -41,6 +42,7 @@
         description: editDescription,
         category: editCategory,
         tags,
+        source_url: editSourceUrl || null,
       });
       editing = false;
       onUpdated();
@@ -203,6 +205,10 @@
         <div>
           <label class="block text-sm text-gray-400 mb-1">Tags (comma-separated)</label>
           <input bind:value={editTags} class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500" />
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">Source URL</label>
+          <input bind:value={editSourceUrl} class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500" placeholder="https://..." />
         </div>
         <div class="flex gap-2">
           <button class="px-4 py-2 text-sm rounded bg-green-600 hover:bg-green-500 text-white" onclick={saveEdits} disabled={saving}>
@@ -376,16 +382,20 @@
             </p>
           {/if}
         </div>
-        {#if model.source?.provider}
-          <div>
-            <span class="text-xs text-gray-500 uppercase tracking-wider">Source</span>
-            <p class="text-gray-300 text-sm mt-0.5">{model.source.provider}
-              {#if model.source.url}
-                - <a href={model.source.url} target="_blank" rel="noopener" class="text-green-400 underline">{model.source.url}</a>
+        <div>
+          <span class="text-xs text-gray-500 uppercase tracking-wider">Source</span>
+          {#if model.source?.url}
+            <p class="text-sm mt-0.5">
+              {#if model.source.provider}
+                <span class="text-gray-400">{model.source.provider}</span>
+                <span class="text-gray-600 mx-1">-</span>
               {/if}
+              <a href={model.source.url} target="_blank" rel="noopener" class="text-green-400 hover:text-green-300 underline break-all">{model.source.url}</a>
             </p>
-          </div>
-        {/if}
+          {:else}
+            <p class="text-gray-500 text-sm mt-0.5">Not specified</p>
+          {/if}
+        </div>
         <div>
           <span class="text-xs text-gray-500 uppercase tracking-wider">Path</span>
           <p class="text-gray-500 text-xs mt-0.5 font-mono">{model.relative_path}</p>

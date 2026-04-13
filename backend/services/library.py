@@ -28,6 +28,20 @@ from .metadata import (
 logger = logging.getLogger(__name__)
 
 
+def cleanup_empty_parents(filepath: Path, stop_at: Path) -> None:
+    """Remove empty parent directories from filepath up to (not including) stop_at."""
+    parent = filepath.parent
+    while parent != stop_at and parent.is_relative_to(stop_at):
+        try:
+            if parent.is_dir() and not any(parent.iterdir()):
+                parent.rmdir()
+                parent = parent.parent
+            else:
+                break
+        except OSError:
+            break
+
+
 def get_library_status() -> dict:
     """Get current library status."""
     lib_path = config.LIBRARY_PATH
@@ -255,6 +269,24 @@ def update_model_metadata(
             }
             setattr(model, field, updates[field])
 
+    # Handle source_url
+    if "source_url" in updates:
+        old_url = model.source.url if model.source else None
+        new_url = updates["source_url"] or None
+        if old_url != new_url:
+            if not model.source:
+                model.source = ModelSource()
+            model.source.url = new_url
+            if new_url and not model.source.provider:
+                # Auto-detect provider from URL
+                if "huggingface.co" in new_url or "hf.co" in new_url:
+                    model.source.provider = "huggingface"
+                elif "civitai.com" in new_url:
+                    model.source.provider = "civitai"
+                else:
+                    model.source.provider = "manual"
+            changed_fields["source_url"] = {"from": old_url, "to": new_url}
+
     # Handle thumbnail separately (no history entry needed)
     if "thumbnail" in updates:
         model.thumbnail = updates["thumbnail"]
@@ -282,6 +314,8 @@ def update_model_metadata(
                 raise ValueError(f"A file named '{model.filename}' already exists in {new_category}")
             shutil.move(str(old_path), str(new_path))
             model.relative_path = str(new_path.relative_to(config.LIBRARY_PATH))
+            # Clean up empty parent directories from old location
+            cleanup_empty_parents(old_path, config.LIBRARY_PATH)
 
     if changed_fields:
         model.updated_at = now
@@ -369,6 +403,7 @@ def delete_library_model(model_id: str, delete_file: bool = True) -> dict:
             filepath.unlink()
             result["file_deleted"] = True
             logger.info(f"Deleted model file: {filepath}")
+            cleanup_empty_parents(filepath, config.LIBRARY_PATH)
 
     result["metadata_deleted"] = delete_model_metadata(model_id)
     rebuild_index()

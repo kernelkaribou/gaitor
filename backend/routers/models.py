@@ -52,6 +52,7 @@ class UpdateModelRequest(BaseModel):
     description: Optional[str] = None
     category: Optional[str] = None
     tags: Optional[list[str]] = None
+    source_url: Optional[str] = None
 
 
 class RenameRequest(BaseModel):
@@ -219,6 +220,9 @@ async def move_model_endpoint(model_id: str, req: MoveRequest):
         ))
         save_model(model)
         rebuild_index()
+        # Clean up empty parent directories from old location
+        from ..services.library import cleanup_empty_parents
+        cleanup_empty_parents(old_path, config.LIBRARY_PATH)
 
     return model.model_dump()
 
