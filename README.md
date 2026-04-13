@@ -36,10 +36,10 @@ services:
       - "8487:8487"
     volumes:
       - /path/to/nas/models:/library
-      - /path/to/local/models:/dest/local-gpu
-      # Add more destinations as volume mounts under /dest/:
-      # - /mnt/laptop/models:/dest/laptop
-      # - /mnt/server2/models:/dest/server2
+      - /path/to/local/models:/targets/local-gpu
+      # Add more targets as volume mounts under /targets/:
+      # - /mnt/laptop/models:/targets/laptop
+      # - /mnt/server2/models:/targets/server2
     restart: unless-stopped
 ```
 
@@ -48,21 +48,21 @@ docker compose up -d
 # Open http://localhost:8487
 ```
 
-### Destinations
+### Targets
 
-Destinations are auto-discovered from subdirectories under `/dest/` inside the container. Each Docker volume mount creates a destination that appears in the UI.
+Targets are auto-discovered from subdirectories under `/targets/` inside the container. Each Docker volume mount creates a target that appears in the UI.
 
-To add a destination, mount the remote machine's model directory (via NFS, SMB, or local path) under `/dest/<name>`:
+To add a target, mount the remote machine's model directory (via NFS, SMB, or local path) under `/targets/<name>`:
 
 ```yaml
 volumes:
-  - /path/to/nas/models:/library              # Source of truth
-  - /mnt/gpu-pc/models:/dest/gpu-pc           # Destination 1
-  - /mnt/laptop/ai-models:/dest/laptop        # Destination 2
-  - /mnt/render-node/models:/dest/render-node # Destination 3
+  - /path/to/nas/models:/library                  # Source of truth
+  - /mnt/gpu-pc/models:/targets/gpu-pc            # Target 1
+  - /mnt/laptop/ai-models:/targets/laptop         # Target 2
+  - /mnt/render-node/models:/targets/render-node  # Target 3
 ```
 
-The folder name after `/dest/` becomes the destination name in the UI. No configuration files are needed — just add or remove volume mounts and restart the container.
+The folder name after `/targets/` becomes the target name in the UI. No configuration files are needed — just add or remove volume mounts and restart the container.
 
 ## Environment Variables
 

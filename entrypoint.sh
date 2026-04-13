@@ -26,7 +26,7 @@ if [ "$CURRENT_UID" != "$PUID" ] || [ "$CURRENT_GID" != "$PGID" ]; then
 fi
 
 # Set ownership of app and data dirs (ignore errors for read-only mounts)
-for dir in /app /library /dest; do
+for dir in /app /library /targets; do
     if [ "$(stat -c %u "$dir" 2>/dev/null)" != "$PUID" ]; then
         chown -R "$PUID:$PGID" "$dir" 2>/dev/null || true
     fi

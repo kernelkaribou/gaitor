@@ -205,7 +205,11 @@
         <div class="p-4 flex items-center justify-between">
           <div>
             <span class="text-gray-200 font-medium">Hugging Face</span>
-            <p class="text-xs text-gray-500 mt-0.5">Set via <code class="bg-gray-700 px-1 rounded">HUGGINGFACE_TOKEN</code> env var</p>
+            {#if auth?.huggingface?.configured}
+              <p class="text-xs text-gray-500 mt-0.5 font-mono tracking-widest">{'*'.repeat(20)}</p>
+            {:else}
+              <p class="text-xs text-gray-500 mt-0.5">Not configured</p>
+            {/if}
           </div>
           <span class="text-xs px-2 py-1 rounded-full {auth?.huggingface?.configured ? 'bg-green-900/40 text-green-400' : 'bg-gray-700 text-gray-500'}">
             {auth?.huggingface?.configured ? 'Configured' : 'Not set'}
@@ -214,7 +218,11 @@
         <div class="p-4 flex items-center justify-between">
           <div>
             <span class="text-gray-200 font-medium">CivitAI</span>
-            <p class="text-xs text-gray-500 mt-0.5">Set via <code class="bg-gray-700 px-1 rounded">CIVITAI_API_KEY</code> env var</p>
+            {#if auth?.civitai?.configured}
+              <p class="text-xs text-gray-500 mt-0.5 font-mono tracking-widest">{'*'.repeat(20)}</p>
+            {:else}
+              <p class="text-xs text-gray-500 mt-0.5">Not configured</p>
+            {/if}
           </div>
           <span class="text-xs px-2 py-1 rounded-full {auth?.civitai?.configured ? 'bg-green-900/40 text-green-400' : 'bg-gray-700 text-gray-500'}">
             {auth?.civitai?.configured ? 'Configured' : 'Not set'}
@@ -239,25 +247,6 @@
           >
             Export JSON
           </a>
-        </div>
-      </div>
-    </section>
-
-    <!-- Configuration -->
-    <section class="mb-8">
-      <h3 class="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">Configuration</h3>
-      <div class="bg-gray-800 rounded-lg border border-gray-700 p-4 space-y-2 text-sm">
-        <div class="flex justify-between">
-          <span class="text-gray-400">Library Path</span>
-          <span class="text-gray-300 font-mono text-xs">{disk?.library?.path || '/library'}</span>
-        </div>
-        <div class="flex justify-between">
-          <span class="text-gray-400">Destinations Root</span>
-          <span class="text-gray-300 font-mono text-xs">/dest/</span>
-        </div>
-        <div class="flex justify-between">
-          <span class="text-gray-400">Port</span>
-          <span class="text-gray-300 font-mono text-xs">8487</span>
         </div>
       </div>
     </section>

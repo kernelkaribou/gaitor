@@ -395,7 +395,7 @@
         {#if loadingDests}
           <p class="text-sm text-gray-500">Loading targets...</p>
         {:else if destinations.length === 0}
-          <p class="text-sm text-gray-500">No targets configured. Mount volumes under /dest/ in Docker.</p>
+          <p class="text-sm text-gray-500">No targets configured. Mount volumes under /targets/ in Docker.</p>
         {:else}
           <div class="space-y-2">
             {#each destinations as dest}

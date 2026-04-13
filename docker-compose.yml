@@ -13,9 +13,9 @@ services:
       - "8487:8487"
     volumes:
       - /mnt/nas/models:/library                  # Library source (NAS)
-      - /mnt/local/ai-models:/dest/local-gpu      # Destination: local GPU machine
-      # Add more destinations as needed:
-      # - /mnt/other/models:/dest/laptop
+      - /mnt/local/ai-models:/targets/local-gpu    # Target: local GPU machine
+      # Add more targets as needed:
+      # - /mnt/other/models:/targets/laptop
     deploy:
       resources:
         limits:

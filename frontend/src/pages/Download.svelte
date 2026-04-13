@@ -392,7 +392,6 @@
 
   {#if !resolved && !selectedFile && searchResults.length === 0}
     <div class="text-center py-12">
-      <span class="text-5xl mb-4 block">&#x1F310;</span>
       <p class="text-gray-500 max-w-md mx-auto">
         Paste any model URL above - HuggingFace, CivitAI, Ollama, or any direct download link.
         Use search to browse HuggingFace and CivitAI catalogs.

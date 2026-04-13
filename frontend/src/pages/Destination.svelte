@@ -210,10 +210,9 @@
       <div class="text-center py-20 text-gray-500">Loading...</div>
     {:else if destinations.length === 0}
       <div class="text-center py-20">
-        <span class="text-6xl mb-4 block">&#x1F4E1;</span>
         <h3 class="text-xl font-medium text-gray-300 mb-2">No targets found</h3>
         <p class="text-gray-500 max-w-md mx-auto">
-          Mount target directories as Docker volumes under <code class="bg-gray-800 px-1 rounded">/dest/</code> to manage them here.
+          Mount target directories as Docker volumes under <code class="bg-gray-800 px-1 rounded">/targets/</code> to manage them here.
         </p>
       </div>
     {:else}
@@ -527,7 +526,6 @@
           {/if}
         {:else}
           <div class="text-center py-20">
-            <span class="text-6xl mb-4 block">&#x1F4E1;</span>
             <h3 class="text-xl font-medium text-gray-300 mb-2">No models found</h3>
             <p class="text-gray-500 max-w-md mx-auto">
               {#if search || activeCategory}

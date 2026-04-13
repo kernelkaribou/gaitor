@@ -36,7 +36,7 @@ def _atomic_write_sidecar(path: Path, data: dict) -> None:
 
 
 def list_destinations() -> list[dict]:
-    """List all available destination directories (mounted under /dest/)."""
+    """List all available destination directories (mounted under /targets/)."""
     dest_root = config.DESTINATIONS_ROOT
     if not dest_root.exists():
         return []

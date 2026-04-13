@@ -16,7 +16,7 @@ services:
       - "8487:8487"
     volumes:
       - ./test-library:/library
-      - ./test-dest:/dest/local
+      - ./test-dest:/targets/local
     deploy:
       resources:
         limits:
