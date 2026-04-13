@@ -107,8 +107,6 @@
         description: description || undefined,
         provider: resolved?.provider || 'url',
         thumbnail_url: selectedFile.previewUrl || resolved?.preview_url || undefined,
-        version_id: selectedFile.version_id || resolved?.version_id || undefined,
-        version_name: selectedFile.version_name || resolved?.version_name || undefined,
       };
       await api.startDownload(params);
       addToast({ type: 'info', title: 'Download started', message: `${modelName || selectedFile.filename}` });

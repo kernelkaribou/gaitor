@@ -67,7 +67,6 @@ export const api = {
       body: JSON.stringify({ confirm_text: confirmText }),
     }),
   computeHash: (id) => request(`/models/${id}/hash`, { method: 'POST' }),
-  checkForUpdate: (id) => request(`/models/${id}/check-update`, { method: 'POST' }),
   bulkUpdateModels: (modelIds, updates) =>
     request('/models/bulk/update', { method: 'POST', body: JSON.stringify({ model_ids: modelIds, ...updates }) }),
   bulkDeleteModels: (modelIds, confirmText) =>

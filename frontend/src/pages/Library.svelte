@@ -600,7 +600,7 @@
                 {#if currentView === 'grid'}
                   <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 ml-4">
                     {#each models as model (model.id)}
-                      <div class="relative">{#if selectMode}<button class="absolute top-2 left-2 z-10 w-5 h-5 rounded border-2 flex items-center justify-center text-xs transition-colors {selectedIds.has(model.id) ? 'bg-green-600 border-green-500 text-white' : 'bg-gray-800/80 border-gray-500 text-transparent hover:border-gray-300'}" onclick={(e) => { e.stopPropagation(); toggleSelect(model.id); }}>{selectedIds.has(model.id) ? '2713' : ''}</button>{/if}<ModelCard {model} {formatSize} isDuplicate={duplicateIds().has(model.id)} onSelect={() => selectMode ? toggleSelect(model.id) : (selectedModel = model)} /></div>
+                      <div class="relative">{#if selectMode}<button class="absolute top-2 left-2 z-10 w-5 h-5 rounded border-2 flex items-center justify-center text-xs transition-colors {selectedIds.has(model.id) ? 'bg-green-600 border-green-500 text-white' : 'bg-gray-800/80 border-gray-500 text-transparent hover:border-gray-300'}" onclick={(e) => { e.stopPropagation(); toggleSelect(model.id); }}>{selectedIds.has(model.id) ? '\u2713' : ''}</button>{/if}<ModelCard {model} {formatSize} isDuplicate={duplicateIds().has(model.id)} onSelect={() => selectMode ? toggleSelect(model.id) : (selectedModel = model)} /></div>
                     {/each}
                   </div>
                 {:else}
@@ -624,7 +624,7 @@
             {#if currentView === 'grid'}
               <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-4">
                 {#each models as model (model.id)}
-                  <div class="relative">{#if selectMode}<button class="absolute top-2 left-2 z-10 w-5 h-5 rounded border-2 flex items-center justify-center text-xs transition-colors {selectedIds.has(model.id) ? 'bg-green-600 border-green-500 text-white' : 'bg-gray-800/80 border-gray-500 text-transparent hover:border-gray-300'}" onclick={(e) => { e.stopPropagation(); toggleSelect(model.id); }}>{selectedIds.has(model.id) ? '2713' : ''}</button>{/if}<ModelCard {model} {formatSize} isDuplicate={duplicateIds().has(model.id)} onSelect={() => selectMode ? toggleSelect(model.id) : (selectedModel = model)} /></div>
+                  <div class="relative">{#if selectMode}<button class="absolute top-2 left-2 z-10 w-5 h-5 rounded border-2 flex items-center justify-center text-xs transition-colors {selectedIds.has(model.id) ? 'bg-green-600 border-green-500 text-white' : 'bg-gray-800/80 border-gray-500 text-transparent hover:border-gray-300'}" onclick={(e) => { e.stopPropagation(); toggleSelect(model.id); }}>{selectedIds.has(model.id) ? '\u2713' : ''}</button>{/if}<ModelCard {model} {formatSize} isDuplicate={duplicateIds().has(model.id)} onSelect={() => selectMode ? toggleSelect(model.id) : (selectedModel = model)} /></div>
                 {/each}
               </div>
             {:else}
@@ -649,7 +649,7 @@
         {#if currentView === 'grid'}
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {#each filteredModels() as model (model.id)}
-              <div class="relative">{#if selectMode}<button class="absolute top-2 left-2 z-10 w-5 h-5 rounded border-2 flex items-center justify-center text-xs transition-colors {selectedIds.has(model.id) ? 'bg-green-600 border-green-500 text-white' : 'bg-gray-800/80 border-gray-500 text-transparent hover:border-gray-300'}" onclick={(e) => { e.stopPropagation(); toggleSelect(model.id); }}>{selectedIds.has(model.id) ? '2713' : ''}</button>{/if}<ModelCard {model} {formatSize} isDuplicate={duplicateIds().has(model.id)} onSelect={() => selectMode ? toggleSelect(model.id) : (selectedModel = model)} /></div>
+              <div class="relative">{#if selectMode}<button class="absolute top-2 left-2 z-10 w-5 h-5 rounded border-2 flex items-center justify-center text-xs transition-colors {selectedIds.has(model.id) ? 'bg-green-600 border-green-500 text-white' : 'bg-gray-800/80 border-gray-500 text-transparent hover:border-gray-300'}" onclick={(e) => { e.stopPropagation(); toggleSelect(model.id); }}>{selectedIds.has(model.id) ? '\u2713' : ''}</button>{/if}<ModelCard {model} {formatSize} isDuplicate={duplicateIds().has(model.id)} onSelect={() => selectMode ? toggleSelect(model.id) : (selectedModel = model)} /></div>
             {/each}
           </div>
         {:else}

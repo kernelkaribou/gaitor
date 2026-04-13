@@ -31,8 +31,6 @@ class DownloadRequest(BaseModel):
     provider: Optional[str] = None
     thumbnail_url: Optional[str] = None
     model_type: Optional[str] = None
-    version_id: Optional[str] = None
-    version_name: Optional[str] = None
 
 
 class SearchRequest(BaseModel):
@@ -111,8 +109,6 @@ async def download_model_endpoint(req: DownloadRequest):
                 provider=provider,
                 progress_callback=progress_cb,
                 thumbnail_url=req.thumbnail_url,
-                version_id=req.version_id,
-                version_name=req.version_name,
             )
             task_manager.complete_task(
                 task_id,

@@ -376,51 +376,6 @@ async def compute_hash_endpoint(model_id: str):
     return {"model_id": model_id, "hash": {"sha256": hash_value}}
 
 
-@router.post("/{model_id}/check-update")
-async def check_for_update(model_id: str):
-    """Check if a newer version is available at the model's source."""
-    from ..services.civitai import parse_civitai_url, get_model_info
-
-    model = load_model(model_id)
-    if not model:
-        raise HTTPException(status_code=404, detail="Model not found")
-
-    if not model.source or not model.source.url:
-        return {"update_available": False, "reason": "No source URL set"}
-
-    url = model.source.url
-    result = {"update_available": False, "current_version": model.source.version_name}
-
-    if "civitai.com" in url:
-        parsed = parse_civitai_url(url)
-        if not parsed:
-            return {**result, "reason": "Could not parse CivitAI URL"}
-        try:
-            info = await get_model_info(parsed["model_id"])
-            versions = info.get("versions", [])
-            if not versions:
-                return {**result, "reason": "No versions found"}
-
-            latest = versions[0]
-            result["latest_version_id"] = str(latest["id"])
-            result["latest_version_name"] = latest["name"]
-
-            current_vid = model.source.version_id
-            if current_vid and str(latest["id"]) != str(current_vid):
-                result["update_available"] = True
-            elif not current_vid:
-                result["reason"] = "No version tracked (set version_id to enable update checks)"
-
-        except Exception as e:
-            result["reason"] = f"Failed to check: {e}"
-    elif "huggingface.co" in url or "hf.co" in url:
-        result["reason"] = "HuggingFace update checks not yet supported"
-    else:
-        result["reason"] = "Update checks only available for CivitAI models"
-
-    return result
-
-
 @router.get("/{model_id}/download")
 async def download_model(model_id: str):
     """Download a model file to the user's browser."""
