@@ -238,13 +238,15 @@ def update_model_metadata(
     model_id: str,
     updates: dict,
 ) -> ModelMetadata:
-    """Update a model's metadata fields."""
+    """Update a model's metadata fields. Changing category also moves the file."""
     model = load_model(model_id)
     if not model:
         raise ValueError(f"Model not found: {model_id}")
 
     now = to_iso(get_now())
     changed_fields = {}
+    old_category = model.category
+
     for field in ("name", "description", "category", "tags"):
         if field in updates and getattr(model, field) != updates[field]:
             changed_fields[field] = {
@@ -260,6 +262,26 @@ def update_model_metadata(
         save_model(model)
         rebuild_index()
         return model
+
+    # If category changed, move the physical file
+    if "category" in changed_fields:
+        new_category = updates["category"]
+        old_path = safe_resolve(config.LIBRARY_PATH, model.relative_path)
+        if old_path.is_file():
+            # Determine subfolder within old category (if any)
+            rel_parts = Path(model.relative_path).parts
+            # rel_parts: ('old_cat', 'subfolder', ..., 'filename') or ('old_cat', 'filename')
+            if len(rel_parts) > 2:
+                subfolder = str(Path(*rel_parts[1:-1]))
+                new_dir = safe_resolve(config.LIBRARY_PATH, f"{new_category}/{subfolder}")
+            else:
+                new_dir = safe_resolve(config.LIBRARY_PATH, new_category)
+            new_dir.mkdir(parents=True, exist_ok=True)
+            new_path = new_dir / model.filename
+            if new_path.exists() and new_path != old_path:
+                raise ValueError(f"A file named '{model.filename}' already exists in {new_category}")
+            shutil.move(str(old_path), str(new_path))
+            model.relative_path = str(new_path.relative_to(config.LIBRARY_PATH))
 
     if changed_fields:
         model.updated_at = now

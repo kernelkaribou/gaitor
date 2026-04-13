@@ -162,11 +162,13 @@ def sync_model_to_destination(
     if not src_path.exists():
         raise ValueError(f"Source file not found: {model.relative_path}")
 
-    # Create category folder on destination
-    dest_category_dir = dest_path / model.category
-    dest_category_dir.mkdir(parents=True, exist_ok=True)
+    # Preserve full subfolder structure: category/subfolder/.../filename
+    rel_parts = Path(model.relative_path).parts
+    # Build destination path preserving all directories from relative_path
+    dest_model_dir = dest_path / str(Path(*rel_parts[:-1]))
+    dest_model_dir.mkdir(parents=True, exist_ok=True)
 
-    dest_file = dest_category_dir / model.filename
+    dest_file = dest_model_dir / model.filename
     total_size = src_path.stat().st_size
     copied_size = 0
 
@@ -194,7 +196,7 @@ def sync_model_to_destination(
         hash=f"sha256:{model.hash['sha256']}" if model.hash and model.hash.get("sha256") else None,
         rename_history=[],
     )
-    sidecar_path = dest_category_dir / f".{model.filename}{SIDECAR_SUFFIX}"
+    sidecar_path = dest_model_dir / f".{model.filename}{SIDECAR_SUFFIX}"
     with open(sidecar_path, "w") as f:
         json.dump(sidecar.model_dump(), f, indent=2, default=str)
 

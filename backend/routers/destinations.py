@@ -1,6 +1,7 @@
 """
 Destination management API endpoints.
 """
+import asyncio
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import logging
@@ -13,6 +14,8 @@ from ..services.sync import (
     remove_from_destination,
     apply_rename_on_destination,
 )
+from ..services.metadata import load_model
+from ..services.tasks import task_manager
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -63,28 +66,59 @@ async def destination_sync_status(dest_id: str):
 
 @router.post("/{dest_id}/sync")
 async def sync_model(dest_id: str, req: SyncRequest):
-    """Sync a single model to a destination."""
-    try:
-        result = sync_model_to_destination(req.model_id, dest_id)
-        return result
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except OSError as e:
-        raise HTTPException(status_code=500, detail=f"Sync failed: {e}")
+    """Sync a single model to a destination with progress tracking."""
+    model = load_model(req.model_id)
+    if not model:
+        raise HTTPException(status_code=404, detail="Model not found")
+
+    task_id = task_manager.create_task("sync", f"Syncing {model.name} to {dest_id}")
+
+    async def _do_sync():
+        try:
+            def progress_cb(copied, total):
+                task_manager.update_progress(task_id, copied, total)
+            result = await asyncio.to_thread(
+                sync_model_to_destination, req.model_id, dest_id, progress_cb
+            )
+            task_manager.complete_task(task_id, f"Synced {model.name} to {dest_id}")
+            return result
+        except Exception as e:
+            task_manager.fail_task(task_id, str(e))
+            raise
+
+    atask = asyncio.create_task(_do_sync())
+    task_manager.set_asyncio_task(task_id, atask)
+    return {"task_id": task_id, "message": f"Sync started for {model.name}"}
 
 
 @router.post("/{dest_id}/sync/bulk")
 async def bulk_sync(dest_id: str, req: BulkSyncRequest):
-    """Sync multiple models to a destination."""
-    results = []
-    errors = []
-    for model_id in req.model_ids:
+    """Sync multiple models to a destination with progress tracking."""
+    task_id = task_manager.create_task("sync", f"Bulk sync {len(req.model_ids)} models to {dest_id}")
+
+    async def _do_bulk_sync():
+        results = []
+        errors = []
+        total_models = len(req.model_ids)
         try:
-            result = sync_model_to_destination(model_id, dest_id)
-            results.append(result)
+            for i, model_id in enumerate(req.model_ids):
+                try:
+                    def progress_cb(copied, total, idx=i):
+                        overall = int(((idx + copied / max(total, 1)) / total_models) * 100)
+                        task_manager.update_progress(task_id, overall, 100)
+                    result = await asyncio.to_thread(
+                        sync_model_to_destination, model_id, dest_id, progress_cb
+                    )
+                    results.append(result)
+                except Exception as e:
+                    errors.append({"model_id": model_id, "error": str(e)})
+            task_manager.complete_task(task_id, f"Synced {len(results)}/{total_models} models")
         except Exception as e:
-            errors.append({"model_id": model_id, "error": str(e)})
-    return {"synced": results, "errors": errors, "count": len(results)}
+            task_manager.fail_task(task_id, str(e))
+
+    atask = asyncio.create_task(_do_bulk_sync())
+    task_manager.set_asyncio_task(task_id, atask)
+    return {"task_id": task_id, "message": f"Bulk sync started for {len(req.model_ids)} models"}
 
 
 @router.post("/{dest_id}/remove")
