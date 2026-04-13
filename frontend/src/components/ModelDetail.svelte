@@ -13,6 +13,7 @@
 
   let editing = $state(false);
   let saving = $state(false);
+  let hashing = $state(false);
   let error = $state(null);
 
   // Edit form state
@@ -159,12 +160,14 @@
 
   async function handleHash() {
     error = null;
+    hashing = true;
     try {
       await api.computeHash(model.id);
       onUpdated();
     } catch (err) {
       error = err.message;
     }
+    hashing = false;
   }
 
   async function handleThumbnailUpload(event) {
@@ -472,6 +475,8 @@
           <span class="text-xs text-gray-500 uppercase tracking-wider">Hash (SHA-256)</span>
           {#if model.hash?.sha256}
             <p class="text-green-400 text-xs mt-0.5 font-mono truncate" title={model.hash.sha256}>{'\u2713'} {model.hash.sha256}</p>
+          {:else if hashing}
+            <p class="text-gray-400 text-sm mt-0.5">Computing hash...</p>
           {:else}
             <p class="text-gray-500 text-sm mt-0.5">
               Not computed
