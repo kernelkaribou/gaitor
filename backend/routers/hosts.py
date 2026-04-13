@@ -1,5 +1,5 @@
 """
-Destination management API endpoints.
+Host management API endpoints.
 """
 import asyncio
 from fastapi import APIRouter, HTTPException
@@ -7,12 +7,12 @@ from pydantic import BaseModel
 import logging
 
 from ..services.sync import (
-    list_destinations,
-    get_destination_models,
+    list_hosts,
+    get_host_models,
     get_sync_status,
-    sync_model_to_destination,
-    remove_from_destination,
-    apply_rename_on_destination,
+    sync_model_to_host,
+    remove_from_host,
+    apply_rename_on_host,
 )
 from ..services.metadata import load_model
 from ..services.tasks import task_manager
@@ -38,49 +38,49 @@ class RemoveRequest(BaseModel):
 
 
 @router.get("/")
-async def list_destinations_endpoint():
-    """List all available destinations."""
-    dests = await asyncio.to_thread(list_destinations)
-    return {"destinations": dests, "count": len(dests)}
+async def list_hosts_endpoint():
+    """List all available hosts."""
+    hosts = await asyncio.to_thread(list_hosts)
+    return {"hosts": hosts, "count": len(hosts)}
 
 
-@router.get("/{dest_id}/models")
-async def destination_models(dest_id: str):
-    """List synced models on a destination."""
+@router.get("/{host_id}/models")
+async def host_models(host_id: str):
+    """List synced models on a host."""
     try:
-        models = await asyncio.to_thread(get_destination_models, dest_id)
+        models = await asyncio.to_thread(get_host_models, host_id)
         return {"models": models, "count": len(models)}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.get("/{dest_id}/status")
-async def destination_sync_status(dest_id: str):
-    """Get sync status comparing library with a destination."""
+@router.get("/{host_id}/status")
+async def host_sync_status(host_id: str):
+    """Get sync status comparing library with a host."""
     try:
-        status = await asyncio.to_thread(get_sync_status, dest_id)
+        status = await asyncio.to_thread(get_sync_status, host_id)
         return {"status": status, "count": len(status)}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.post("/{dest_id}/sync")
-async def sync_model(dest_id: str, req: SyncRequest):
-    """Sync a single model to a destination with progress tracking."""
+@router.post("/{host_id}/sync")
+async def sync_model(host_id: str, req: SyncRequest):
+    """Sync a single model to a host with progress tracking."""
     model = load_model(req.model_id)
     if not model:
         raise HTTPException(status_code=404, detail="Model not found")
 
-    task_id = task_manager.create_task("sync", f"Syncing {model.name} to {dest_id}")
+    task_id = task_manager.create_task("sync", f"Syncing {model.name} to {host_id}")
 
     async def _do_sync():
         try:
             def progress_cb(copied, total):
                 task_manager.update_progress(task_id, copied, total)
             result = await asyncio.to_thread(
-                sync_model_to_destination, req.model_id, dest_id, progress_cb
+                sync_model_to_host, req.model_id, host_id, progress_cb
             )
-            task_manager.complete_task(task_id, f"Synced {model.name} to {dest_id}")
+            task_manager.complete_task(task_id, f"Synced {model.name} to {host_id}")
             return result
         except Exception as e:
             task_manager.fail_task(task_id, str(e))
@@ -91,10 +91,10 @@ async def sync_model(dest_id: str, req: SyncRequest):
     return {"task_id": task_id, "message": f"Sync started for {model.name}"}
 
 
-@router.post("/{dest_id}/sync/bulk")
-async def bulk_sync(dest_id: str, req: BulkSyncRequest):
-    """Sync multiple models to a destination with progress tracking."""
-    task_id = task_manager.create_task("sync", f"Bulk sync {len(req.model_ids)} models to {dest_id}")
+@router.post("/{host_id}/sync/bulk")
+async def bulk_sync(host_id: str, req: BulkSyncRequest):
+    """Sync multiple models to a host with progress tracking."""
+    task_id = task_manager.create_task("sync", f"Bulk sync {len(req.model_ids)} models to {host_id}")
 
     async def _do_bulk_sync():
         results = []
@@ -107,7 +107,7 @@ async def bulk_sync(dest_id: str, req: BulkSyncRequest):
                         overall = int(((idx + copied / max(total, 1)) / total_models) * 100)
                         task_manager.update_progress(task_id, overall, 100)
                     result = await asyncio.to_thread(
-                        sync_model_to_destination, model_id, dest_id, progress_cb
+                        sync_model_to_host, model_id, host_id, progress_cb
                     )
                     results.append(result)
                 except Exception as e:
@@ -121,21 +121,21 @@ async def bulk_sync(dest_id: str, req: BulkSyncRequest):
     return {"task_id": task_id, "message": f"Bulk sync started for {len(req.model_ids)} models"}
 
 
-@router.post("/{dest_id}/remove")
-async def remove_model(dest_id: str, req: RemoveRequest):
-    """Remove a synced model from a destination."""
+@router.post("/{host_id}/remove")
+async def remove_model(host_id: str, req: RemoveRequest):
+    """Remove a synced model from a host."""
     try:
-        result = await asyncio.to_thread(remove_from_destination, req.model_id, dest_id)
+        result = await asyncio.to_thread(remove_from_host, req.model_id, host_id)
         return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.post("/{dest_id}/apply-rename")
-async def apply_rename(dest_id: str, req: SyncRequest):
-    """Apply a pending library rename on a destination."""
+@router.post("/{host_id}/apply-rename")
+async def apply_rename(host_id: str, req: SyncRequest):
+    """Apply a pending library rename on a host."""
     try:
-        result = await asyncio.to_thread(apply_rename_on_destination, req.model_id, dest_id)
+        result = await asyncio.to_thread(apply_rename_on_host, req.model_id, host_id)
         return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))

@@ -136,18 +136,18 @@ export const api = {
     });
   },
 
-  // Destinations
-  listDestinations: () => request('/destinations/'),
-  getDestinationModels: (destId) => request(`/destinations/${encodeURIComponent(destId)}/models`),
-  getDestinationSyncStatus: (destId) => request(`/destinations/${encodeURIComponent(destId)}/status`),
-  syncModelToDestination: (destId, modelId) =>
-    request(`/destinations/${encodeURIComponent(destId)}/sync`, { method: 'POST', body: JSON.stringify({ model_id: modelId }) }),
-  bulkSyncToDestination: (destId, modelIds) =>
-    request(`/destinations/${encodeURIComponent(destId)}/sync/bulk`, { method: 'POST', body: JSON.stringify({ model_ids: modelIds }) }),
-  removeFromDestination: (destId, modelId) =>
-    request(`/destinations/${encodeURIComponent(destId)}/remove`, { method: 'POST', body: JSON.stringify({ model_id: modelId }) }),
-  applyRenameOnDestination: (destId, modelId) =>
-    request(`/destinations/${encodeURIComponent(destId)}/apply-rename`, { method: 'POST', body: JSON.stringify({ model_id: modelId }) }),
+  // Hosts
+  listHosts: () => request('/hosts/'),
+  getHostModels: (hostId) => request(`/hosts/${encodeURIComponent(hostId)}/models`),
+  getHostSyncStatus: (hostId) => request(`/hosts/${encodeURIComponent(hostId)}/status`),
+  syncModelToHost: (hostId, modelId) =>
+    request(`/hosts/${encodeURIComponent(hostId)}/sync`, { method: 'POST', body: JSON.stringify({ model_id: modelId }) }),
+  bulkSyncToHost: (hostId, modelIds) =>
+    request(`/hosts/${encodeURIComponent(hostId)}/sync/bulk`, { method: 'POST', body: JSON.stringify({ model_ids: modelIds }) }),
+  removeFromHost: (hostId, modelId) =>
+    request(`/hosts/${encodeURIComponent(hostId)}/remove`, { method: 'POST', body: JSON.stringify({ model_id: modelId }) }),
+  applyRenameOnHost: (hostId, modelId) =>
+    request(`/hosts/${encodeURIComponent(hostId)}/apply-rename`, { method: 'POST', body: JSON.stringify({ model_id: modelId }) }),
 
   // Download (formerly Retrieve)
   getProviders: () => request('/retrieve/providers'),

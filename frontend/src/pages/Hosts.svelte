@@ -6,8 +6,8 @@
 
   let { onBack } = $props();
 
-  let destinations = $state([]);
-  let selectedDest = $state(null);
+  let hosts = $state([]);
+  let selectedHost = $state(null);
   let syncStatus = $state([]);
   let categories = $state([]);
   let loading = $state(true);
@@ -27,11 +27,11 @@
 
   onMount(async () => {
     try {
-      const [destData, catsData] = await Promise.all([
-        api.listDestinations(),
+      const [hostData, catsData] = await Promise.all([
+        api.listHosts(),
         api.getCategories(),
       ]);
-      destinations = destData.destinations || [];
+      hosts = hostData.hosts || [];
       categories = catsData.categories || [];
     } catch (err) {
       error = err.message;
@@ -39,13 +39,13 @@
     loading = false;
   });
 
-  async function selectDestination(dest) {
-    selectedDest = dest;
+  async function selectHost(host) {
+    selectedHost = host;
     loading = true;
     search = '';
     activeCategory = null;
     try {
-      const data = await api.getDestinationSyncStatus(dest.id);
+      const data = await api.getHostSyncStatus(host.id);
       syncStatus = data.status || [];
     } catch (err) {
       error = err.message;
@@ -58,8 +58,8 @@
     syncing = { ...syncing, [modelId]: true };
     error = null;
     try {
-      await api.syncModelToDestination(selectedDest.id, modelId);
-      await selectDestination(selectedDest);
+      await api.syncModelToHost(selectedHost.id, modelId);
+      await selectHost(selectedHost);
     } catch (err) {
       error = err.message;
     }
@@ -69,8 +69,8 @@
   async function removeModel(modelId) {
     syncing = { ...syncing, [modelId]: true };
     try {
-      await api.removeFromDestination(selectedDest.id, modelId);
-      await selectDestination(selectedDest);
+      await api.removeFromHost(selectedHost.id, modelId);
+      await selectHost(selectedHost);
     } catch (err) {
       error = err.message;
     }
@@ -80,8 +80,8 @@
   async function applyRename(modelId) {
     syncing = { ...syncing, [modelId]: true };
     try {
-      await api.applyRenameOnDestination(selectedDest.id, modelId);
-      await selectDestination(selectedDest);
+      await api.applyRenameOnHost(selectedHost.id, modelId);
+      await selectHost(selectedHost);
     } catch (err) {
       error = err.message;
     }
@@ -200,51 +200,51 @@
     </div>
   {/if}
 
-  {#if !selectedDest}
-    <!-- Target list -->
+  {#if !selectedHost}
+    <!-- Host list -->
     <div class="flex items-center justify-between mb-4">
-      <h2 class="text-lg font-semibold text-gray-200">Targets</h2>
+      <h2 class="text-lg font-semibold text-gray-200">Hosts</h2>
     </div>
 
     {#if loading}
       <div class="text-center py-20 text-gray-500">Loading...</div>
-    {:else if destinations.length === 0}
+    {:else if hosts.length === 0}
       <div class="text-center py-20">
-        <h3 class="text-xl font-medium text-gray-300 mb-2">No targets found</h3>
+        <h3 class="text-xl font-medium text-gray-300 mb-2">No hosts found</h3>
         <p class="text-gray-500 max-w-md mx-auto">
-          Mount target directories as Docker volumes under <code class="bg-gray-800 px-1 rounded">/targets/</code> to manage them here.
+          Mount host directories as Docker volumes under <code class="bg-gray-800 px-1 rounded">/hosts/</code> to manage them here.
         </p>
       </div>
     {:else}
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {#each destinations as dest}
-          {@const isHealthy = dest.health?.status === 'healthy'}
-          {@const isDegraded = dest.health?.status === 'degraded'}
-          {@const isOffline = dest.health?.status === 'offline' || dest.health?.status === 'error'}
+        {#each hosts as host}
+          {@const isHealthy = host.health?.status === 'healthy'}
+          {@const isDegraded = host.health?.status === 'degraded'}
+          {@const isOffline = host.health?.status === 'offline' || host.health?.status === 'error'}
           <button
             class="bg-gray-800 rounded-lg border border-gray-700 p-5 hover:border-green-600/50 transition-colors text-left w-full {isOffline ? 'opacity-60' : ''}"
-            onclick={() => selectDestination(dest)}
+            onclick={() => selectHost(host)}
             disabled={isOffline}
           >
             <div class="flex items-center justify-between mb-2">
-              <h3 class="font-medium text-gray-100">{dest.name}</h3>
+              <h3 class="font-medium text-gray-100">{host.name}</h3>
               <span class="text-xs px-2 py-0.5 rounded-full {isHealthy ? 'bg-green-900/40 text-green-400' : isDegraded ? 'bg-yellow-900/40 text-yellow-400' : 'bg-red-900/40 text-red-400'}">
                 {isHealthy ? 'Healthy' : isDegraded ? 'Read-only' : 'Offline'}
               </span>
             </div>
-            <p class="text-xs text-gray-500 font-mono mb-3">{dest.path}</p>
+            <p class="text-xs text-gray-500 font-mono mb-3">{host.path}</p>
             {#if isOffline || isDegraded}
-              <p class="text-xs text-yellow-500 mb-2">{dest.health?.message}</p>
+              <p class="text-xs text-yellow-500 mb-2">{host.health?.message}</p>
             {/if}
-            {#if dest.disk_total}
+            {#if host.disk_total}
               <div class="w-full bg-gray-700 rounded-full h-2 mb-1">
                 <div
                   class="bg-green-500 h-2 rounded-full"
-                  style="width: {usagePercent(dest.disk_total, dest.disk_free)}%"
+                  style="width: {usagePercent(host.disk_total, host.disk_free)}%"
                 ></div>
               </div>
               <p class="text-xs text-gray-500">
-                {formatSize(dest.disk_free)} free of {formatSize(dest.disk_total)}
+                {formatSize(host.disk_free)} free of {formatSize(host.disk_total)}
               </p>
             {/if}
           </button>
@@ -252,12 +252,12 @@
       </div>
     {/if}
   {:else}
-    <!-- Destination detail - Library-style layout -->
+    <!-- Host detail - Library-style layout -->
     <div class="flex gap-6">
       <!-- Category sidebar -->
       <aside class="w-48 shrink-0">
-        <button class="text-gray-400 hover:text-gray-200 text-sm mb-4 flex items-center gap-1" onclick={() => selectedDest = null}>
-          &#x2190; All Targets
+        <button class="text-gray-400 hover:text-gray-200 text-sm mb-4 flex items-center gap-1" onclick={() => selectedHost = null}>
+          &#x2190; All Hosts
         </button>
 
         <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2 font-semibold">Categories</h3>
@@ -287,7 +287,7 @@
           <div class="space-y-1 text-xs">
             <p class="text-gray-300">{syncStatus.length} total models</p>
             {#if syncSummary.synced > 0}
-              <p class="text-green-400">{syncSummary.synced} synced to this target</p>
+              <p class="text-green-400">{syncSummary.synced} synced to this host</p>
             {/if}
             {#if syncSummary.outdated > 0}
               <p class="text-yellow-400">{syncSummary.outdated} outdated</p>
@@ -302,16 +302,16 @@
         </div>
 
         <!-- Disk usage -->
-        {#if selectedDest.disk_total}
+        {#if selectedHost.disk_total}
           <div class="mt-4 pt-4 border-t border-gray-700">
             <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2 font-semibold">Disk Usage</h3>
             <div class="w-full bg-gray-700 rounded-full h-2 mb-1">
               <div
                 class="bg-green-500 h-2 rounded-full"
-                style="width: {usagePercent(selectedDest.disk_total, selectedDest.disk_free)}%"
+                style="width: {usagePercent(selectedHost.disk_total, selectedHost.disk_free)}%"
               ></div>
             </div>
-            <p class="text-xs text-gray-500">{formatSize(selectedDest.disk_free)} free</p>
+            <p class="text-xs text-gray-500">{formatSize(selectedHost.disk_free)} free</p>
           </div>
         {/if}
       </aside>
@@ -321,7 +321,7 @@
         <!-- Controls bar -->
         <div class="flex items-center justify-between mb-4">
           <div class="flex items-center gap-3">
-            <h2 class="text-lg font-semibold text-gray-200">{selectedDest.name}</h2>
+            <h2 class="text-lg font-semibold text-gray-200">{selectedHost.name}</h2>
             <span class="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-400">
               {syncStatus.length} models | {syncSummary.synced} synced
             </span>
@@ -372,7 +372,7 @@
             <span class="text-sm text-gray-300">{selectionInfo.count} selected</span>
             {#if confirmBulkAction}
               <span class="text-sm text-yellow-300">
-                {selectionInfo.hasUnsynced ? `Sync ${selectionInfo.count} models to target?` : `Remove ${selectionInfo.count} models from target?`}
+                {selectionInfo.hasUnsynced ? `Sync ${selectionInfo.count} models to host?` : `Remove ${selectionInfo.count} models from host?`}
               </span>
               <button
                 class="px-3 py-1 text-xs rounded {selectionInfo.hasUnsynced ? 'bg-green-600 hover:bg-green-500' : 'bg-red-700 hover:bg-red-600'} text-white"
@@ -421,8 +421,8 @@
                       </span>
                       <span class="text-xs text-gray-500">{formatSize(item.size)}</span>
                     </div>
-                    {#if item.status === 'rename_pending' && item.dest_filename}
-                      <p class="text-xs text-blue-400 mb-2 truncate">On dest: {item.dest_filename}</p>
+                    {#if item.status === 'rename_pending' && item.host_filename}
+                      <p class="text-xs text-blue-400 mb-2 truncate">On host: {item.host_filename}</p>
                     {/if}
                     <!-- Actions -->
                     <div class="flex gap-1">
@@ -446,7 +446,7 @@
                       {#if item.status === 'synced' || item.status === 'orphaned'}
                         {#if confirmRemove === item.model_id}
                           <div class="flex gap-1 flex-1">
-                            <span class="text-xs text-red-400 self-center mr-1">Remove from target?</span>
+                            <span class="text-xs text-red-400 self-center mr-1">Remove from host?</span>
                             <button class="flex-1 px-2 py-1 text-xs rounded bg-red-700 text-white" onclick={() => { confirmRemove = null; removeModel(item.model_id); }}>Yes</button>
                             <button class="flex-1 px-2 py-1 text-xs rounded bg-gray-700 text-gray-300" onclick={() => confirmRemove = null}>No</button>
                           </div>
@@ -474,8 +474,8 @@
                   <div class="flex-1 min-w-0">
                     <span class="text-gray-100 font-medium text-sm">{item.model_name}</span>
                     <span class="text-gray-600 text-xs ml-2">{item.filename}</span>
-                    {#if item.status === 'rename_pending' && item.dest_filename}
-                      <span class="text-blue-400 text-xs ml-2">(on dest: {item.dest_filename})</span>
+                    {#if item.status === 'rename_pending' && item.host_filename}
+                      <span class="text-blue-400 text-xs ml-2">(on host: {item.host_filename})</span>
                     {/if}
                   </div>
                   {#if item.category}
@@ -505,7 +505,7 @@
                     {:else if item.status === 'synced' || item.status === 'orphaned'}
                       {#if confirmRemove === item.model_id}
                         <div class="flex gap-1 items-center">
-                          <span class="text-xs text-red-400 mr-1">Remove from target?</span>
+                          <span class="text-xs text-red-400 mr-1">Remove from host?</span>
                           <button class="px-2 py-1 text-xs rounded bg-red-700 text-white" onclick={() => { confirmRemove = null; removeModel(item.model_id); }}>Yes</button>
                           <button class="px-2 py-1 text-xs rounded bg-gray-700 text-gray-300" onclick={() => confirmRemove = null}>No</button>
                         </div>

@@ -4,19 +4,19 @@
 
 # gAItor
 
-AI local model asset manager and sync tool. A self-hosted, Docker-based web UI for managing AI model files across a **library** (NAS/source of truth) and one or more **destinations** (inferencing machines).
+AI local model asset manager and sync tool. A self-hosted, Docker-based web UI for managing AI model files across a **library** (NAS/source of truth) and one or more **hosts** (inferencing machines).
 
-Think of it as a smart FTP specifically designed for AI models - browse, sync, retrieve from Hugging Face / CivitAI and other URL's, manage with history tracking, and depoloy models across your local AI infrastructure.
+Think of it as a smart FTP specifically designed for AI models - browse, sync, retrieve from Hugging Face / CivitAI and other URL's, manage with history tracking, and deploy models across your local AI infrastructure.
 
 ## Features
 
 - **Library Management** - Centralized model library with metadata, categories (ComfyUI-style), search, and tagging
-- **Destination Sync** - Copy models to inferencing machines with real-time progress tracking
+- **Host Sync** - Copy models to inferencing machines with real-time progress tracking
 - **External Retrieval** - Download models from Hugging Face and CivitAI directly into your library
-- **Rename Tracking** - Rename models in the library with full history; destinations track rename lineage
+- **Rename Tracking** - Rename models in the library with full history; hosts track rename lineage
 - **Web Upload & Scan** - Upload models through the browser or scan for files added directly to storage
 - **File Integrity** - SHA-256 hashing for verifying large model file transfers
-- **Docker Native** - Single container, volume mounts for library and destinations, PUID/PGID support for NAS
+- **Docker Native** - Single container, volume mounts for library and hosts, PUID/PGID support for NAS
 
 ## Quick Start
 
@@ -36,10 +36,10 @@ services:
       - "8487:8487"
     volumes:
       - /path/to/nas/models:/library
-      - /path/to/local/models:/targets/local-gpu
-      # Add more targets as volume mounts under /targets/:
-      # - /mnt/laptop/models:/targets/laptop
-      # - /mnt/server2/models:/targets/server2
+      - /path/to/local/models:/hosts/local-gpu
+      # Add more hosts as volume mounts under /hosts/:
+      # - /mnt/laptop/models:/hosts/laptop
+      # - /mnt/server2/models:/hosts/server2
     restart: unless-stopped
 ```
 
@@ -48,21 +48,21 @@ docker compose up -d
 # Open http://localhost:8487
 ```
 
-### Targets
+### Hosts
 
-Targets are auto-discovered from subdirectories under `/targets/` inside the container. Each Docker volume mount creates a target that appears in the UI.
+Hosts are auto-discovered from subdirectories under `/hosts/` inside the container. Each Docker volume mount creates a host that appears in the UI.
 
-To add a target, mount the remote machine's model directory (via NFS, SMB, or local path) under `/targets/<name>`:
+To add a host, mount the remote machine's model directory (via NFS, SMB, or local path) under `/hosts/<name>`:
 
 ```yaml
 volumes:
   - /path/to/nas/models:/library                  # Source of truth
-  - /mnt/gpu-pc/models:/targets/gpu-pc            # Target 1
-  - /mnt/laptop/ai-models:/targets/laptop         # Target 2
-  - /mnt/render-node/models:/targets/render-node  # Target 3
+  - /mnt/gpu-pc/models:/hosts/gpu-pc              # Host 1
+  - /mnt/laptop/ai-models:/hosts/laptop           # Host 2
+  - /mnt/render-node/models:/hosts/render-node    # Host 3
 ```
 
-The folder name after `/targets/` becomes the target name in the UI. No configuration files are needed — just add or remove volume mounts and restart the container.
+The folder name after `/hosts/` becomes the host name in the UI. No configuration files are needed — just add or remove volume mounts and restart the container.
 
 ## Environment Variables
 

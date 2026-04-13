@@ -207,7 +207,7 @@ def upload_model(
     # Sanitize filename to prevent path traversal
     safe_name = sanitize_filename(Path(filename).stem, Path(filename).suffix)
 
-    # Validate category and destination stay within library
+    # Validate category and host stay within library
     dest_dir = safe_resolve(config.LIBRARY_PATH, category)
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest_path = dest_dir / safe_name

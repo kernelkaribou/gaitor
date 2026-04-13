@@ -20,10 +20,10 @@
         Library
       </button>
       <button
-        class="px-3 py-1.5 text-sm rounded-md transition-colors {currentPage === 'targets' ? 'bg-gray-700 text-gray-200' : 'hover:bg-gray-700 text-gray-400'}"
-        onclick={() => currentPage = 'targets'}
+        class="px-3 py-1.5 text-sm rounded-md transition-colors {currentPage === 'hosts' ? 'bg-gray-700 text-gray-200' : 'hover:bg-gray-700 text-gray-400'}"
+        onclick={() => currentPage = 'hosts'}
       >
-        Targets
+        Hosts
       </button>
       <button
         class="px-3 py-1.5 text-sm rounded-md transition-colors {currentPage === 'download' ? 'bg-gray-700 text-gray-200' : 'hover:bg-gray-700 text-gray-400'}"

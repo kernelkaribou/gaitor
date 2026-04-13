@@ -1,7 +1,7 @@
 <script>
   import Layout from './components/Layout.svelte';
   import Library from './pages/Library.svelte';
-  import Destination from './pages/Destination.svelte';
+  import Hosts from './pages/Hosts.svelte';
   import Download from './pages/Download.svelte';
   import Settings from './pages/Settings.svelte';
   import UpdateBanner from './components/UpdateBanner.svelte';
@@ -13,8 +13,8 @@
   <UpdateBanner />
   {#if currentPage === 'library'}
     <Library onNavigate={(page) => currentPage = page} />
-  {:else if currentPage === 'targets'}
-    <Destination onBack={() => currentPage = 'library'} />
+  {:else if currentPage === 'hosts'}
+    <Hosts onBack={() => currentPage = 'library'} />
   {:else if currentPage === 'download'}
     <Download />
   {:else if currentPage === 'settings'}

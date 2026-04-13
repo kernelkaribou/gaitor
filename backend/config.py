@@ -7,7 +7,7 @@ from pathlib import Path
 # Base paths
 BASE_DIR = Path(__file__).resolve().parent.parent  # /app
 LIBRARY_PATH = Path(os.getenv("LIBRARY_PATH", "/library"))
-DESTINATIONS_ROOT = Path(os.getenv("DESTINATIONS_ROOT", "/targets"))
+HOSTS_ROOT = Path(os.getenv("HOSTS_ROOT", "/hosts"))
 
 # Metadata directory name within the library
 METADATA_DIR_NAME = ".gaitor"

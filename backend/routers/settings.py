@@ -44,12 +44,12 @@ async def get_version(request: Request):
 
 @router.get("/disk")
 async def get_disk_usage():
-    """Get disk usage for library and all destinations."""
-    result = {"library": _disk_info(config.LIBRARY_PATH), "destinations": {}}
-    if config.DESTINATIONS_ROOT.exists():
-        for entry in sorted(config.DESTINATIONS_ROOT.iterdir()):
+    """Get disk usage for library and all hosts."""
+    result = {"library": _disk_info(config.LIBRARY_PATH), "hosts": {}}
+    if config.HOSTS_ROOT.exists():
+        for entry in sorted(config.HOSTS_ROOT.iterdir()):
             if entry.is_dir():
-                result["destinations"][entry.name] = _disk_info(entry)
+                result["hosts"][entry.name] = _disk_info(entry)
     return result
 
 

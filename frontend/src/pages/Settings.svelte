@@ -133,8 +133,8 @@
             </div>
           </div>
         {/if}
-        {#if disk?.destinations}
-          {#each Object.entries(disk.destinations) as [name, info]}
+        {#if disk?.hosts}
+          {#each Object.entries(disk.hosts) as [name, info]}
             {@const pct = usagePercent(info.total, info.free)}
             <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
               <div class="flex items-center justify-between mb-2">

@@ -2,7 +2,7 @@
 import pytest
 from pathlib import Path
 
-from backend.utils import safe_resolve, validate_model_id, validate_dest_id, sanitize_filename
+from backend.utils import safe_resolve, validate_model_id, validate_host_id, sanitize_filename
 from backend import config
 
 
@@ -47,24 +47,24 @@ class TestValidateModelId:
             validate_model_id("")
 
 
-class TestValidateDestId:
-    def test_valid_dest(self):
-        assert validate_dest_id("my-gpu-1")
+class TestValidateHostId:
+    def test_valid_host(self):
+        assert validate_host_id("my-gpu-1")
 
     def test_valid_with_dots(self):
-        assert validate_dest_id("server.local")
+        assert validate_host_id("server.local")
 
     def test_rejects_traversal(self):
-        with pytest.raises(ValueError, match="Invalid destination ID"):
-            validate_dest_id("../library")
+        with pytest.raises(ValueError, match="Invalid host ID"):
+            validate_host_id("../library")
 
     def test_rejects_slashes(self):
-        with pytest.raises(ValueError, match="Invalid destination ID"):
-            validate_dest_id("path/to/dir")
+        with pytest.raises(ValueError, match="Invalid host ID"):
+            validate_host_id("path/to/dir")
 
     def test_rejects_empty(self):
-        with pytest.raises(ValueError, match="Invalid destination ID"):
-            validate_dest_id("")
+        with pytest.raises(ValueError, match="Invalid host ID"):
+            validate_host_id("")
 
 
 class TestSanitizeFilename:

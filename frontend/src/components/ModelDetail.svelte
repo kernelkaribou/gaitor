@@ -53,12 +53,12 @@
   let thumbUrl = $derived(model.thumbnail ? api.getThumbnailUrl(model.id) + '?t=' + Date.now() : null);
   let uploadingThumb = $state(false);
 
-  // Sync to target
+  // Sync to host
   let showSyncPicker = $state(false);
-  let destinations = $state([]);
+  let hosts = $state([]);
   let syncingTo = $state({});
-  let loadingDests = $state(false);
-  let confirmSyncDest = $state(null);
+  let loadingHosts = $state(false);
+  let confirmSyncHost = $state(null);
 
   function getModelSubfolder() {
     const parts = model.relative_path.split('/');
@@ -193,27 +193,27 @@
 
   async function openSyncPicker() {
     showSyncPicker = true;
-    loadingDests = true;
-    confirmSyncDest = null;
+    loadingHosts = true;
+    confirmSyncHost = null;
     try {
-      const data = await api.listDestinations();
-      destinations = data.destinations || [];
+      const data = await api.listHosts();
+      hosts = data.hosts || [];
     } catch (err) {
       error = err.message;
     }
-    loadingDests = false;
+    loadingHosts = false;
   }
 
-  async function syncToDestination(destId) {
-    syncingTo = { ...syncingTo, [destId]: true };
-    confirmSyncDest = null;
+  async function syncToHost(hostId) {
+    syncingTo = { ...syncingTo, [hostId]: true };
+    confirmSyncHost = null;
     error = null;
     try {
-      await api.syncModelToDestination(destId, model.id);
+      await api.syncModelToHost(hostId, model.id);
     } catch (err) {
       error = err.message;
     }
-    syncingTo = { ...syncingTo, [destId]: false };
+    syncingTo = { ...syncingTo, [hostId]: false };
   }
 
   function formatHistoryEntry(entry) {
@@ -251,7 +251,7 @@
         return changes.length ? changes.join('; ') : 'Metadata updated';
       }
       case 'synced':
-        return `Synced to ${d.destination || 'target'}`;
+        return `Synced to ${d.host || 'host'}`;
       case 'moved':
         return `Moved to ${d.to || 'new location'}`;
       default:
@@ -386,42 +386,42 @@
         </div>
       </div>
     {:else if showSyncPicker}
-      <!-- Sync to target picker -->
+      <!-- Sync to host picker -->
       <div class="space-y-4">
         <div class="flex items-center justify-between">
-          <h3 class="text-sm font-medium text-gray-300">Sync to Target</h3>
+          <h3 class="text-sm font-medium text-gray-300">Sync to Host</h3>
           <button class="text-xs text-gray-500 hover:text-gray-300" onclick={() => showSyncPicker = false}>Back</button>
         </div>
-        {#if loadingDests}
-          <p class="text-sm text-gray-500">Loading targets...</p>
-        {:else if destinations.length === 0}
-          <p class="text-sm text-gray-500">No targets configured. Mount volumes under /targets/ in Docker.</p>
+        {#if loadingHosts}
+          <p class="text-sm text-gray-500">Loading hosts...</p>
+        {:else if hosts.length === 0}
+          <p class="text-sm text-gray-500">No hosts configured. Mount volumes under /hosts/ in Docker.</p>
         {:else}
           <div class="space-y-2">
-            {#each destinations as dest}
+            {#each hosts as host}
               <div class="flex items-center justify-between bg-gray-900 rounded-lg px-4 py-3 border border-gray-700">
                 <div>
-                  <p class="text-sm text-gray-200 font-medium">{dest.name}</p>
-                  {#if dest.disk_free}
-                    <p class="text-xs text-gray-500">{formatSize(dest.disk_free)} free</p>
+                  <p class="text-sm text-gray-200 font-medium">{host.name}</p>
+                  {#if host.disk_free}
+                    <p class="text-xs text-gray-500">{formatSize(host.disk_free)} free</p>
                   {/if}
                 </div>
-                {#if confirmSyncDest === dest.id}
+                {#if confirmSyncHost === host.id}
                   <div class="flex gap-1">
                     <button
                       class="px-2 py-1 text-xs rounded bg-green-700 hover:bg-green-600 text-white disabled:opacity-50"
-                      onclick={() => syncToDestination(dest.id)}
-                      disabled={syncingTo[dest.id]}
+                      onclick={() => syncToHost(host.id)}
+                      disabled={syncingTo[host.id]}
                     >
-                      {syncingTo[dest.id] ? 'Syncing...' : 'Confirm'}
+                      {syncingTo[host.id] ? 'Syncing...' : 'Confirm'}
                     </button>
-                    <button class="px-2 py-1 text-xs rounded bg-gray-700 text-gray-300" onclick={() => confirmSyncDest = null}>No</button>
+                    <button class="px-2 py-1 text-xs rounded bg-gray-700 text-gray-300" onclick={() => confirmSyncHost = null}>No</button>
                   </div>
                 {:else}
                   <button
                     class="px-3 py-1.5 text-xs rounded bg-green-700 hover:bg-green-600 text-white disabled:opacity-50"
-                    onclick={() => confirmSyncDest = dest.id}
-                    disabled={syncingTo[dest.id]}
+                    onclick={() => confirmSyncHost = host.id}
+                    disabled={syncingTo[host.id]}
                   >
                     Sync
                   </button>
@@ -532,7 +532,7 @@
         <!-- Actions -->
         <div class="border-t border-gray-700 pt-4 flex flex-wrap gap-2">
           <button class="px-3 py-1.5 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={startEditing}>Edit</button>
-          <button class="px-3 py-1.5 text-sm rounded bg-green-700 hover:bg-green-600 text-white" onclick={openSyncPicker}>Sync to Target</button>
+          <button class="px-3 py-1.5 text-sm rounded bg-green-700 hover:bg-green-600 text-white" onclick={openSyncPicker}>Sync to Host</button>
           <a
             href={api.getDownloadUrl(model.id)}
             download

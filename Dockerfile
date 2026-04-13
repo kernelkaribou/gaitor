@@ -22,7 +22,7 @@ COPY VERSION ./VERSION
 COPY backend/ ./backend/
 COPY --from=frontend-build /build/dist ./frontend/dist/
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh && mkdir -p /library /targets
+RUN chmod +x /entrypoint.sh && mkdir -p /library /hosts
 
 LABEL org.opencontainers.image.title="gAItor" \
       org.opencontainers.image.description="AI model library manager and sync tool" \
