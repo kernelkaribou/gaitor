@@ -2,7 +2,7 @@
   import Layout from './components/Layout.svelte';
   import Library from './pages/Library.svelte';
   import Destination from './pages/Destination.svelte';
-  import Retrieve from './pages/Retrieve.svelte';
+  import Download from './pages/Download.svelte';
   import Settings from './pages/Settings.svelte';
   import UpdateBanner from './components/UpdateBanner.svelte';
 
@@ -12,11 +12,11 @@
 <Layout bind:currentPage>
   <UpdateBanner />
   {#if currentPage === 'library'}
-    <Library />
+    <Library onNavigate={(page) => currentPage = page} />
   {:else if currentPage === 'destinations'}
     <Destination onBack={() => currentPage = 'library'} />
-  {:else if currentPage === 'retrieve'}
-    <Retrieve />
+  {:else if currentPage === 'download'}
+    <Download />
   {:else if currentPage === 'settings'}
     <Settings />
   {/if}

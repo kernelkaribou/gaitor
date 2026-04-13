@@ -1,50 +1,91 @@
 /**
- * WebSocket client for real-time progress updates.
+ * WebSocket client for real-time task progress updates.
  */
+import { toasts, addToast, updateToast, removeToast } from './stores.js';
 
 let ws = null;
-let listeners = new Map();
+let reconnectTimer = null;
+const taskToastMap = new Map();
 
 export function connectWebSocket() {
+  if (ws && ws.readyState <= 1) return;
+
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const url = `${protocol}//${window.location.host}/ws/progress`;
+  const url = `${protocol}//${window.location.host}/ws/tasks`;
 
   ws = new WebSocket(url);
 
   ws.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
-      const { type, ...payload } = data;
-      const typeListeners = listeners.get(type) || [];
-      typeListeners.forEach((callback) => callback(payload));
+      if (data.type === 'init' && data.tasks) {
+        for (const task of data.tasks) {
+          handleTaskUpdate(task);
+        }
+      } else if (data.type === 'update') {
+        handleTaskUpdate(data);
+      }
     } catch (e) {
       console.error('WebSocket message parse error:', e);
     }
   };
 
   ws.onclose = () => {
-    setTimeout(connectWebSocket, 5000);
+    ws = null;
+    reconnectTimer = setTimeout(connectWebSocket, 5000);
   };
 
-  ws.onerror = (error) => {
-    console.error('WebSocket error:', error);
-  };
+  ws.onerror = () => {};
 }
 
-export function onProgress(type, callback) {
-  if (!listeners.has(type)) {
-    listeners.set(type, []);
-  }
-  listeners.get(type).push(callback);
+function handleTaskUpdate(task) {
+  const existingToastId = taskToastMap.get(task.task_id);
 
-  return () => {
-    const typeListeners = listeners.get(type);
-    const index = typeListeners.indexOf(callback);
-    if (index > -1) typeListeners.splice(index, 1);
-  };
+  if (task.status === 'completed') {
+    if (existingToastId) {
+      removeToast(existingToastId);
+      taskToastMap.delete(task.task_id);
+    }
+    addToast({ type: 'success', title: task.title, message: task.message, duration: 6000 });
+  } else if (task.status === 'failed') {
+    if (existingToastId) {
+      removeToast(existingToastId);
+      taskToastMap.delete(task.task_id);
+    }
+    addToast({ type: 'error', title: task.title, message: task.message, duration: 10000 });
+  } else if (task.status === 'running') {
+    if (existingToastId) {
+      updateToast(existingToastId, {
+        progress: task.progress,
+        downloaded: task.downloaded,
+        total: task.total,
+        speed: task.speed,
+        eta: task.eta,
+        message: task.message,
+      });
+    } else {
+      const toastId = addToast({
+        type: 'progress',
+        title: task.title,
+        persistent: true,
+      });
+      taskToastMap.set(task.task_id, toastId);
+      updateToast(toastId, {
+        progress: task.progress,
+        downloaded: task.downloaded,
+        total: task.total,
+        speed: task.speed,
+        eta: task.eta,
+      });
+    }
+  }
 }
 
 export function disconnectWebSocket() {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
   if (ws) {
     ws.close();
     ws = null;

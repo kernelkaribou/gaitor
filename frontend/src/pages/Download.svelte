@@ -1,14 +1,13 @@
 <script>
   import { onMount } from 'svelte';
   import { api } from '../lib/api.js';
+  import { addToast } from '../lib/stores.js';
 
   let providers = $state([]);
   let url = $state('');
   let resolving = $state(false);
   let resolved = $state(null);
-  let downloading = $state(false);
   let error = $state(null);
-  let success = $state(null);
 
   // Download form
   let selectedFile = $state(null);
@@ -23,6 +22,20 @@
   let searching = $state(false);
 
   let categories = $state([]);
+
+  // CivitAI type to category mapping
+  const civitaiTypeMap = {
+    'Checkpoint': 'checkpoints',
+    'LORA': 'loras',
+    'TextualInversion': 'embeddings',
+    'Hypernetwork': 'hypernetworks',
+    'Controlnet': 'controlnet',
+    'Upscaler': 'upscale_models',
+    'VAE': 'vae',
+    'LoCon': 'loras',
+    'DoRA': 'loras',
+    'MotionModule': 'animatediff_models',
+  };
 
   function formatSize(bytes) {
     if (!bytes) return '-';
@@ -52,41 +65,61 @@
     error = null;
     resolved = null;
     selectedFile = null;
+    description = '';
     try {
       resolved = await api.resolveUrl(url);
+
+      // Auto-populate metadata from source
+      if (resolved.description) {
+        // Strip HTML tags from CivitAI descriptions
+        description = resolved.description.replace(/<[^>]*>/g, '').slice(0, 500);
+      }
+
+      // Auto-select category from CivitAI model type
+      if (resolved.model_type && civitaiTypeMap[resolved.model_type]) {
+        category = civitaiTypeMap[resolved.model_type];
+      }
     } catch (err) {
       error = err.message || 'Failed to resolve URL';
     }
     resolving = false;
   }
 
-  function selectFile(file) {
-    selectedFile = file;
-    modelName = file.filename.replace(/\.[^.]+$/, '');
+  function selectFile(file, previewUrl = null) {
+    selectedFile = { ...file, previewUrl };
+    modelName = file.filename.replace(/\.[^.]+$/, '').replace(/[_-]/g, ' ');
+
+    // If CivitAI, use model name instead of filename
+    if (resolved?.model_info?.name) {
+      modelName = resolved.model_info.name;
+    }
   }
 
-  async function downloadModel() {
+  async function startDownload() {
     if (!selectedFile) return;
-    downloading = true;
     error = null;
-    success = null;
     try {
-      const result = await api.downloadModel({
+      const params = {
         url: selectedFile.download_url,
         filename: selectedFile.filename,
         category,
         name: modelName || undefined,
         description: description || undefined,
-        provider: resolved?.provider,
-      });
-      success = `Downloaded "${result.model?.name || selectedFile.filename}" to ${category}`;
+        provider: resolved?.provider || 'url',
+        thumbnail_url: selectedFile.previewUrl || resolved?.preview_url || undefined,
+      };
+      await api.startDownload(params);
+      addToast({ type: 'info', title: 'Download started', message: `${modelName || selectedFile.filename}` });
+
+      // Clear form for next download
       resolved = null;
       selectedFile = null;
       url = '';
+      modelName = '';
+      description = '';
     } catch (err) {
       error = err.message;
     }
-    downloading = false;
   }
 
   async function searchModels() {
@@ -113,6 +146,20 @@
     searchQuery = '';
     resolveUrl();
   }
+
+  function clearUrl() {
+    url = '';
+    resolved = null;
+    selectedFile = null;
+    error = null;
+    description = '';
+    modelName = '';
+  }
+
+  function clearSearch() {
+    searchQuery = '';
+    searchResults = [];
+  }
 </script>
 
 <div class="max-w-4xl mx-auto">
@@ -122,33 +169,35 @@
       <button class="ml-2 underline" onclick={() => error = null}>dismiss</button>
     </div>
   {/if}
-  {#if success}
-    <div class="bg-green-900/30 border border-green-700 rounded-md px-4 py-2 mb-4 text-green-300 text-sm">
-      ✓ {success}
-      <button class="ml-2 underline" onclick={() => success = null}>dismiss</button>
-    </div>
-  {/if}
 
-  <h2 class="text-lg font-semibold text-gray-200 mb-4">Retrieve Models</h2>
+  <h2 class="text-lg font-semibold text-gray-200 mb-4">Download Models</h2>
 
   <!-- Providers status -->
   <div class="flex gap-3 mb-6">
     {#each providers as p}
       <span class="text-xs px-2 py-1 rounded-full {p.configured ? 'bg-green-900/40 text-green-400' : 'bg-gray-800 text-gray-500'}">
-        {p.name}: {p.configured ? '✓ Connected' : '○ No token'}
+        {p.name}: {p.configured ? 'Connected' : 'No token'}
       </span>
     {/each}
   </div>
 
   <!-- URL input -->
   <div class="flex gap-2 mb-6">
-    <input
-      type="text"
-      bind:value={url}
-      placeholder="Paste a HuggingFace or CivitAI URL..."
-      class="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:border-green-600"
-      onkeydown={(e) => e.key === 'Enter' && resolveUrl()}
-    />
+    <div class="flex-1 relative">
+      <input
+        type="text"
+        bind:value={url}
+        placeholder="Paste any model URL (HuggingFace, CivitAI, Ollama, or direct link)..."
+        class="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:border-green-600 pr-8"
+        onkeydown={(e) => e.key === 'Enter' && resolveUrl()}
+      />
+      {#if url}
+        <button
+          class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 text-sm"
+          onclick={clearUrl}
+        >&#x2715;</button>
+      {/if}
+    </div>
     <button
       class="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg disabled:opacity-50"
       onclick={resolveUrl}
@@ -168,13 +217,21 @@
         <option value="huggingface">Hugging Face</option>
         <option value="civitai">CivitAI</option>
       </select>
-      <input
-        type="text"
-        bind:value={searchQuery}
-        placeholder="Search models..."
-        class="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:border-green-600"
-        onkeydown={(e) => e.key === 'Enter' && searchModels()}
-      />
+      <div class="flex-1 relative">
+        <input
+          type="text"
+          bind:value={searchQuery}
+          placeholder="Search models..."
+          class="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:border-green-600 pr-8"
+          onkeydown={(e) => e.key === 'Enter' && searchModels()}
+        />
+        {#if searchQuery}
+          <button
+            class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 text-sm"
+            onclick={clearSearch}
+          >&#x2715;</button>
+        {/if}
+      </div>
       <button
         class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg disabled:opacity-50"
         onclick={searchModels}
@@ -191,11 +248,14 @@
             onclick={() => selectSearchResult(result)}
           >
             <span class="text-gray-100 text-sm font-medium">{result.name || result.repo_id}</span>
+            {#if result.type}
+              <span class="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-400 ml-2">{result.type}</span>
+            {/if}
             {#if result.author || result.creator}
               <span class="text-gray-500 text-xs ml-2">by {result.author || result.creator}</span>
             {/if}
             {#if result.downloads}
-              <span class="text-gray-600 text-xs ml-2">↓ {result.downloads.toLocaleString()}</span>
+              <span class="text-gray-600 text-xs ml-2">{result.downloads.toLocaleString()} downloads</span>
             {/if}
           </button>
         {/each}
@@ -207,14 +267,28 @@
   {#if resolved}
     <div class="bg-gray-800 border border-gray-700 rounded-lg p-5 mb-6">
       <div class="flex items-center gap-2 mb-3">
-        <span class="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-300">{resolved.provider}</span>
+        <span class="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-300">{resolved.provider || 'url'}</span>
         {#if resolved.repo_id}
           <span class="text-gray-400 text-sm font-mono">{resolved.repo_id}</span>
         {/if}
         {#if resolved.model_info?.name}
           <span class="text-gray-200 font-medium">{resolved.model_info.name}</span>
         {/if}
+        {#if resolved.model_type}
+          <span class="text-xs px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-400">{resolved.model_type}</span>
+        {/if}
       </div>
+
+      {#if resolved.repo_info?.description}
+        <p class="text-xs text-gray-500 mb-3 line-clamp-2">{resolved.repo_info.description}</p>
+      {/if}
+
+      <!-- CivitAI preview image -->
+      {#if resolved.preview_url}
+        <div class="mb-3">
+          <img src={resolved.preview_url} alt="Preview" class="w-32 h-32 object-cover rounded-lg border border-gray-700" />
+        </div>
+      {/if}
 
       <!-- HuggingFace files -->
       {#if resolved.provider === 'huggingface' && resolved.files}
@@ -239,10 +313,11 @@
           <div class="mb-3">
             <p class="text-gray-400 text-sm font-medium mb-1">{version.name} ({version.base_model})</p>
             {#each version.files as file}
+              {@const previewUrl = version.images?.[0] || resolved.preview_url || null}
               <button
                 class="w-full flex items-center justify-between px-3 py-2 rounded text-sm transition-colors
                   {selectedFile?.download_url === file.download_url ? 'bg-green-900/30 border border-green-700' : 'bg-gray-900 hover:bg-gray-700'}"
-                onclick={() => selectFile({ filename: file.name, download_url: file.download_url, size: file.size })}
+                onclick={() => selectFile({ filename: file.name, download_url: file.download_url, size: file.size }, previewUrl)}
               >
                 <span class="text-gray-200 font-mono text-xs">{file.name}</span>
                 <span class="text-gray-500 text-xs">{formatSize(file.size)}</span>
@@ -250,6 +325,25 @@
             {/each}
           </div>
         {/each}
+      {/if}
+
+      <!-- Generic URL files -->
+      {#if resolved.provider === 'url' && resolved.files}
+        <p class="text-gray-500 text-xs mb-2">Direct download:</p>
+        <div class="space-y-1">
+          {#each resolved.files as file}
+            <button
+              class="w-full flex items-center justify-between px-3 py-2 rounded text-sm transition-colors
+                {selectedFile?.filename === file.filename ? 'bg-green-900/30 border border-green-700' : 'bg-gray-900 hover:bg-gray-700'}"
+              onclick={() => selectFile(file)}
+            >
+              <span class="text-gray-200 font-mono text-xs">{file.filename}</span>
+              {#if file.size}
+                <span class="text-gray-500 text-xs">{formatSize(file.size)}</span>
+              {/if}
+            </button>
+          {/each}
+        </div>
       {/if}
     </div>
   {/if}
@@ -288,13 +382,17 @@
         </div>
       </div>
       <div class="mt-4 flex items-center justify-between">
-        <span class="text-xs text-gray-500">Size: {formatSize(selectedFile.size)}</span>
+        <span class="text-xs text-gray-500">
+          Size: {formatSize(selectedFile.size)}
+          {#if selectedFile.previewUrl || resolved?.preview_url}
+            &middot; Preview image will be saved as thumbnail
+          {/if}
+        </span>
         <button
-          class="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg disabled:opacity-50"
-          onclick={downloadModel}
-          disabled={downloading}
+          class="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg"
+          onclick={startDownload}
         >
-          {downloading ? 'Downloading...' : 'Download to Library'}
+          Download to Library
         </button>
       </div>
     </div>
@@ -302,9 +400,10 @@
 
   {#if !resolved && !selectedFile && searchResults.length === 0}
     <div class="text-center py-12">
-      <span class="text-5xl mb-4 block">🌐</span>
+      <span class="text-5xl mb-4 block">&#x1F310;</span>
       <p class="text-gray-500 max-w-md mx-auto">
-        Paste a HuggingFace or CivitAI URL above, or use search to find models.
+        Paste any model URL above - HuggingFace, CivitAI, Ollama, or any direct download link.
+        Use search to browse HuggingFace and CivitAI catalogs.
         Models will be downloaded directly into your library.
       </p>
     </div>

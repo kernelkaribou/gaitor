@@ -1,21 +1,24 @@
 """
 Main FastAPI application for Model gAItor.
 """
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 from contextlib import asynccontextmanager
+import asyncio
 import uvicorn
 import logging
+import json
 import sys
 import os
 from pathlib import Path
 
 from . import config
 from .routers import settings, library, models, destinations, retrieve
+from .services.tasks import task_manager
 
 
 def get_app_version() -> str:
@@ -125,6 +128,36 @@ app.include_router(library.router, prefix="/api/library", tags=["library"])
 app.include_router(models.router, prefix="/api/models", tags=["models"])
 app.include_router(destinations.router, prefix="/api/destinations", tags=["destinations"])
 app.include_router(retrieve.router, prefix="/api/retrieve", tags=["retrieve"])
+
+
+# --- WebSocket for real-time task progress ---
+
+@app.websocket("/ws/tasks")
+async def websocket_tasks(websocket: WebSocket):
+    """WebSocket endpoint for real-time task progress updates."""
+    await websocket.accept()
+    queue = task_manager.subscribe()
+    try:
+        # Send current active tasks on connect
+        active = task_manager.get_active_tasks()
+        if active:
+            await websocket.send_text(json.dumps({"type": "init", "tasks": active}))
+        # Stream updates
+        while True:
+            msg = await queue.get()
+            await websocket.send_text(json.dumps({"type": "update", **msg}))
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
+        task_manager.unsubscribe(queue)
+
+
+@app.get("/api/tasks")
+async def list_active_tasks():
+    """List currently active background tasks."""
+    return {"tasks": task_manager.get_active_tasks()}
 
 # Serve built frontend static assets
 FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"

@@ -15,6 +15,7 @@
   let search = $state('');
   let activeCategory = $state(null);
   let currentView = $state('grid');
+  let showExtended = $state(false);
 
   function formatSize(bytes) {
     if (!bytes) return '-';
@@ -214,7 +215,7 @@
           All Models
           <span class="text-xs text-gray-500 ml-1">({syncStatus.length})</span>
         </button>
-        {#each categories as cat}
+        {#each categories.filter(c => c.is_primary) as cat}
           {@const count = categoryCountMap()[cat.id] || 0}
           {#if count > 0}
             <button
@@ -226,6 +227,29 @@
             </button>
           {/if}
         {/each}
+        <!-- Extended categories with models -->
+        {#if categories.filter(c => !c.is_primary && (categoryCountMap()[c.id] || 0) > 0).length > 0}
+          <button
+            class="w-full text-left px-3 py-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors mt-2"
+            onclick={() => showExtended = !showExtended}
+          >
+            {showExtended ? '&#x25BE;' : '&#x25B8;'} More ({categories.filter(c => !c.is_primary && (categoryCountMap()[c.id] || 0) > 0).length})
+          </button>
+          {#if showExtended}
+            {#each categories.filter(c => !c.is_primary) as cat}
+              {@const count = categoryCountMap()[cat.id] || 0}
+              {#if count > 0}
+                <button
+                  class="w-full text-left px-3 py-1.5 rounded text-sm transition-colors mb-0.5 {activeCategory === cat.id ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}"
+                  onclick={() => activeCategory = cat.id}
+                >
+                  {cat.label}
+                  <span class="text-xs text-gray-500 ml-1">({count})</span>
+                </button>
+              {/if}
+            {/each}
+          {/if}
+        {/if}
 
         <!-- Sync status summary -->
         <div class="mt-6 pt-4 border-t border-gray-700">
@@ -275,12 +299,20 @@
             </span>
           </div>
           <div class="flex items-center gap-2">
-            <input
-              type="text"
-              bind:value={search}
-              placeholder="Search models..."
-              class="bg-gray-800 border border-gray-600 rounded-md px-3 py-1.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-green-500 w-56"
-            />
+            <div class="relative">
+              <input
+                type="text"
+                bind:value={search}
+                placeholder="Search models..."
+                class="bg-gray-800 border border-gray-600 rounded-md px-3 py-1.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-green-500 w-56 pr-7"
+              />
+              {#if search}
+                <button
+                  class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 text-xs"
+                  onclick={() => search = ''}
+                >&#x2715;</button>
+              {/if}
+            </div>
             <!-- View toggle -->
             <div class="flex border border-gray-600 rounded-md overflow-hidden">
               <button

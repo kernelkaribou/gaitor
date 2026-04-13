@@ -128,14 +128,17 @@ export const api = {
   applyRenameOnDestination: (destId, modelId) =>
     request(`/destinations/${destId}/apply-rename`, { method: 'POST', body: JSON.stringify({ model_id: modelId }) }),
 
-  // Retrieve
+  // Download (formerly Retrieve)
   getProviders: () => request('/retrieve/providers'),
   resolveUrl: (url) =>
     request('/retrieve/resolve', { method: 'POST', body: JSON.stringify({ url }) }),
-  downloadModel: (params) =>
+  startDownload: (params) =>
     request('/retrieve/download', { method: 'POST', body: JSON.stringify(params) }),
   searchModels: (query, provider = 'huggingface', limit = 20) =>
     request('/retrieve/search', { method: 'POST', body: JSON.stringify({ query, provider, limit }) }),
   listHfFiles: (repoId) => request(`/retrieve/hf/${repoId}/files`),
   getCivitaiModel: (modelId) => request(`/retrieve/civitai/${modelId}`),
+
+  // Tasks
+  getActiveTasks: () => request('/tasks'),
 };

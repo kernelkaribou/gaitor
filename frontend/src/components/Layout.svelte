@@ -1,4 +1,6 @@
 <script>
+  import ToastContainer from './ToastContainer.svelte';
+
   let { children: content, currentPage = $bindable('library') } = $props();
 </script>
 
@@ -6,10 +8,16 @@
   <!-- Header -->
   <header class="bg-gray-800 border-b border-gray-700 px-6 py-3 flex items-center justify-between">
     <div class="flex items-center gap-3">
-      <span class="text-2xl">🐊</span>
+      <span class="text-2xl">&#x1F40A;</span>
       <h1 class="text-xl font-bold text-green-400">Model gAItor</h1>
     </div>
     <nav class="flex items-center gap-4">
+      <button
+        class="px-3 py-1.5 text-sm rounded-md transition-colors {currentPage === 'download' ? 'bg-gray-700 text-gray-200' : 'hover:bg-gray-700 text-gray-400'}"
+        onclick={() => currentPage = 'download'}
+      >
+        Download
+      </button>
       <button
         class="px-3 py-1.5 text-sm rounded-md transition-colors {currentPage === 'library' ? 'bg-gray-700 text-gray-200' : 'hover:bg-gray-700 text-gray-400'}"
         onclick={() => currentPage = 'library'}
@@ -21,12 +29,6 @@
         onclick={() => currentPage = 'destinations'}
       >
         Destinations
-      </button>
-      <button
-        class="px-3 py-1.5 text-sm rounded-md transition-colors {currentPage === 'retrieve' ? 'bg-gray-700 text-gray-200' : 'hover:bg-gray-700 text-gray-400'}"
-        onclick={() => currentPage = 'retrieve'}
-      >
-        Retrieve
       </button>
       <div class="w-px h-6 bg-gray-600"></div>
       <button
@@ -46,4 +48,6 @@
   <main class="p-6">
     {@render content()}
   </main>
+
+  <ToastContainer />
 </div>

@@ -1,6 +1,7 @@
 """
 External model retrieval API endpoints.
 """
+import asyncio
 import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -9,6 +10,7 @@ from typing import Optional
 from .. import config
 from ..services import huggingface, civitai
 from ..services.retrieval import detect_provider, resolve_url, download_model
+from ..services.tasks import task_manager
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -26,6 +28,8 @@ class DownloadRequest(BaseModel):
     description: Optional[str] = None
     tags: Optional[list[str]] = None
     provider: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    model_type: Optional[str] = None
 
 
 class SearchRequest(BaseModel):
@@ -55,6 +59,11 @@ async def list_providers():
                 "name": "CivitAI",
                 "configured": bool(config.CIVITAI_API_KEY),
             },
+            {
+                "id": "url",
+                "name": "Direct URL",
+                "configured": True,
+            },
         ]
     }
 
@@ -76,23 +85,38 @@ async def resolve_url_endpoint(req: ResolveRequest):
 
 @router.post("/download")
 async def download_model_endpoint(req: DownloadRequest):
-    """Download a model file from an external source into the library."""
-    try:
-        model = await download_model(
-            url=req.url,
-            filename=req.filename,
-            category=req.category,
-            name=req.name,
-            description=req.description,
-            tags=req.tags,
-            provider=req.provider or detect_provider(req.url),
-        )
-        return {"model": model.model_dump(), "status": "downloaded"}
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Download failed: {e}")
-        raise HTTPException(status_code=502, detail="Download failed")
+    """Start a model download as a background task with progress tracking."""
+    provider = req.provider or detect_provider(req.url) or "url"
+    display_name = req.name or req.filename
+
+    task_id = task_manager.create_task("download", f"Downloading {display_name}")
+
+    async def _do_download():
+        try:
+            def progress_cb(downloaded, total):
+                task_manager.update_progress(task_id, downloaded, total)
+
+            model = await download_model(
+                url=req.url,
+                filename=req.filename,
+                category=req.category,
+                name=req.name,
+                description=req.description,
+                tags=req.tags,
+                provider=provider,
+                progress_callback=progress_cb,
+                thumbnail_url=req.thumbnail_url,
+            )
+            task_manager.complete_task(
+                task_id,
+                f"Downloaded {model.name} to {req.category}",
+            )
+        except Exception as e:
+            logger.error(f"Download task failed: {e}")
+            task_manager.fail_task(task_id, str(e))
+
+    asyncio.create_task(_do_download())
+    return {"task_id": task_id, "status": "started"}
 
 
 @router.post("/search")

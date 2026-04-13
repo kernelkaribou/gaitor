@@ -8,6 +8,8 @@
   import ScanResults from '../components/ScanResults.svelte';
   import ConfirmDialog from '../components/ConfirmDialog.svelte';
 
+  let { onNavigate } = $props();
+
   let libraryStatus = $state(null);
   let modelList = $state([]);
   let categories = $state([]);
@@ -21,6 +23,7 @@
   let error = $state(null);
   let activeCategory = $state(null);
   let currentView = $state('grid');
+  let showExtended = $state(false);
 
   async function loadData() {
     loading = true;
@@ -136,7 +139,7 @@
       All Models
       <span class="text-xs text-gray-500 ml-1">({modelList.length})</span>
     </button>
-    {#each categories as cat}
+    {#each categories.filter(c => c.is_primary) as cat}
       {@const count = categoryCountMap()[cat.id] || 0}
       <button
         class="w-full text-left px-3 py-1.5 rounded text-sm transition-colors mb-0.5 {activeCategory === cat.id ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}"
@@ -148,6 +151,29 @@
         {/if}
       </button>
     {/each}
+    <!-- Extended categories (collapsible) -->
+    {#if categories.filter(c => !c.is_primary).length > 0}
+      <button
+        class="w-full text-left px-3 py-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors mt-2"
+        onclick={() => showExtended = !showExtended}
+      >
+        {showExtended ? '&#x25BE;' : '&#x25B8;'} More ({categories.filter(c => !c.is_primary).length})
+      </button>
+      {#if showExtended}
+        {#each categories.filter(c => !c.is_primary) as cat}
+          {@const count = categoryCountMap()[cat.id] || 0}
+          <button
+            class="w-full text-left px-3 py-1.5 rounded text-sm transition-colors mb-0.5 {activeCategory === cat.id ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}"
+            onclick={() => activeCategory = cat.id}
+          >
+            {cat.label}
+            {#if count > 0}
+              <span class="text-xs text-gray-500 ml-1">({count})</span>
+            {/if}
+          </button>
+        {/each}
+      {/if}
+    {/if}
   </aside>
 
   <!-- Main content -->
@@ -170,12 +196,20 @@
         {/if}
       </div>
       <div class="flex items-center gap-2">
-        <input
-          type="text"
-          bind:value={search}
-          placeholder="Search models..."
-          class="bg-gray-800 border border-gray-600 rounded-md px-3 py-1.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-green-500 w-56"
-        />
+        <div class="relative">
+          <input
+            type="text"
+            bind:value={search}
+            placeholder="Search models..."
+            class="bg-gray-800 border border-gray-600 rounded-md px-3 py-1.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-green-500 w-56 pr-7"
+          />
+          {#if search}
+            <button
+              class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 text-xs"
+              onclick={() => search = ''}
+            >&#x2715;</button>
+          {/if}
+        </div>
         <!-- View toggle -->
         <div class="flex border border-gray-600 rounded-md overflow-hidden">
           <button
@@ -263,11 +297,11 @@
       {/if}
     {:else}
       <div class="text-center py-20">
-        <span class="text-6xl mb-4 block">🐊</span>
+        <span class="text-6xl mb-4 block">&#x1F40A;</span>
         <h3 class="text-xl font-medium text-gray-300 mb-2">No models yet</h3>
         <p class="text-gray-500 max-w-md mx-auto mb-4">
           Add models to your library by uploading files, scanning your library directory,
-          or retrieving from Hugging Face and CivitAI.
+          or downloading from the web.
         </p>
         <div class="flex gap-3 justify-center">
           <button
@@ -281,6 +315,12 @@
             onclick={() => showUpload = true}
           >
             Upload a Model
+          </button>
+          <button
+            class="px-4 py-2 text-sm rounded-md bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+            onclick={() => onNavigate?.('download')}
+          >
+            Download from Web
           </button>
         </div>
       </div>

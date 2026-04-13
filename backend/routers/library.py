@@ -15,7 +15,7 @@ from ..services.metadata import (
     update_category,
     delete_category,
 )
-from ..schemas.library import CategoryDefinition
+from ..schemas.library import CategoryDefinition, PRIMARY_CATEGORY_IDS
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -67,9 +67,14 @@ async def scan_library():
 
 @router.get("/categories")
 async def list_categories():
-    """List all model categories."""
+    """List all model categories with primary/extended grouping."""
     categories = load_categories()
-    return {"categories": [c.model_dump() for c in categories]}
+    return {
+        "categories": [
+            {**c.model_dump(), "is_primary": c.id in PRIMARY_CATEGORY_IDS}
+            for c in categories
+        ],
+    }
 
 
 @router.post("/categories")
