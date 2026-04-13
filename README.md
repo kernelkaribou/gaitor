@@ -68,8 +68,8 @@ The folder name after `/dest/` becomes the destination name in the UI. No config
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PUID` | `0` | User ID for file operations |
-| `PGID` | `0` | Group ID for file operations |
+| `PUID` | `1000` | User ID for file operations |
+| `PGID` | `1000` | Group ID for file operations |
 | `TZ` | `Etc/UTC` | Timezone |
 | `PORT` | `8487` | Web UI port |
 | `LOG_LEVEL` | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR) |
