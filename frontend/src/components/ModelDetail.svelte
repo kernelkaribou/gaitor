@@ -144,6 +144,47 @@
     }
     movingModel = false;
   }
+
+  function formatHistoryEntry(entry) {
+    const d = entry.details || {};
+    switch (entry.action) {
+      case 'added':
+        if (d.method === 'upload') return 'Uploaded to library';
+        if (d.method === 'catalog') return 'Cataloged from scan';
+        if (d.method === 'download') return `Downloaded from ${d.source || 'external source'}`;
+        return 'Added to library';
+      case 'renamed': {
+        const parts = [];
+        if (d.from_name) parts.push(`"${d.from_name}" \u2192 "${d.to_name}"`);
+        if (d.from_filename) parts.push(`file: ${d.from_filename} \u2192 ${d.to_filename}`);
+        return parts.length ? `Renamed: ${parts.join(', ')}` : 'Renamed';
+      }
+      case 'metadata_updated': {
+        const changes = [];
+        if (d.category) changes.push(`category ${d.category.from} \u2192 ${d.category.to}`);
+        if (d.tags) {
+          const from = Array.isArray(d.tags.from) ? d.tags.from : [];
+          const to = Array.isArray(d.tags.to) ? d.tags.to : [];
+          const added = to.filter(t => !from.includes(t));
+          const removed = from.filter(t => !to.includes(t));
+          if (added.length) changes.push(`tags added: ${added.join(', ')}`);
+          if (removed.length) changes.push(`tags removed: ${removed.join(', ')}`);
+          if (!added.length && !removed.length) changes.push('tags updated');
+        }
+        if (d.name) changes.push(`name "${d.name.from}" \u2192 "${d.name.to}"`);
+        if (d.description) changes.push('description updated');
+        if (d.source_url) changes.push(`source URL ${d.source_url.to ? 'set' : 'cleared'}`);
+        if (d.base_model) changes.push(`base model ${d.base_model.to ? `set to "${d.base_model.to}"` : 'cleared'}`);
+        return changes.length ? changes.join('; ') : 'Metadata updated';
+      }
+      case 'synced':
+        return `Synced to ${d.destination || 'target'}`;
+      case 'moved':
+        return `Moved to ${d.to || 'new location'}`;
+      default:
+        return entry.action;
+    }
+  }
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
@@ -168,7 +209,9 @@
     <div class="mb-6">
       {#if thumbUrl}
         <div class="relative group">
-          <img src={thumbUrl} alt={model.name} class="w-full h-48 object-cover rounded-lg border border-gray-700" />
+          <div class="w-full flex items-center justify-center bg-gray-900 rounded-lg border border-gray-700" style="max-height: 512px;">
+            <img src={thumbUrl} alt={model.name} class="max-w-full max-h-[512px] object-contain rounded-lg" />
+          </div>
           <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">
             <label class="px-3 py-1.5 text-xs rounded bg-gray-700 hover:bg-gray-600 text-gray-200 cursor-pointer">
               Change
@@ -399,16 +442,18 @@
             <p class="text-gray-500 text-sm mt-0.5">Not specified</p>
           {/if}
         </div>
-        {#if model.tags?.length}
-          <div>
-            <span class="text-xs text-gray-500 uppercase tracking-wider">Tags</span>
+        <div>
+          <span class="text-xs text-gray-500 uppercase tracking-wider">Tags</span>
+          {#if model.tags?.length}
             <div class="flex flex-wrap gap-1 mt-1">
               {#each model.tags as tag}
                 <span class="px-2 py-0.5 rounded-full bg-gray-700 text-gray-300 text-xs">{tag}</span>
               {/each}
             </div>
-          </div>
-        {/if}
+          {:else}
+            <p class="text-gray-600 text-sm mt-0.5 italic">No tags</p>
+          {/if}
+        </div>
         <div>
           <span class="text-xs text-gray-500 uppercase tracking-wider">Path</span>
           <p class="text-gray-500 text-xs mt-0.5 font-mono">{model.relative_path}</p>
@@ -421,11 +466,8 @@
             <div class="mt-1 space-y-1">
               {#each model.history.slice().reverse() as entry}
                 <div class="text-xs text-gray-500">
-                  <span class="text-gray-400">{entry.action}</span>
-                  - {new Date(entry.timestamp).toLocaleString()}
-                  {#if entry.details?.from_name}
-                    <span class="text-gray-600">({entry.details.from_name} -> {entry.details.to_name})</span>
-                  {/if}
+                  <span class="text-gray-400">{formatHistoryEntry(entry)}</span>
+                  <span class="text-gray-600 ml-1">{new Date(entry.timestamp).toLocaleString()}</span>
                 </div>
               {/each}
             </div>

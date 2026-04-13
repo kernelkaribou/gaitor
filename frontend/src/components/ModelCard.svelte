@@ -22,8 +22,8 @@
   onclick={onSelect}
 >
   {#if thumbUrl}
-    <div class="w-full h-32 bg-gray-900">
-      <img src={thumbUrl} alt={model.name} class="w-full h-full object-cover" />
+    <div class="w-full h-40 bg-gray-900 flex items-center justify-center">
+      <img src={thumbUrl} alt={model.name} class="max-w-full max-h-40 object-contain" />
     </div>
   {/if}
   <div class="p-4">
