@@ -4,7 +4,6 @@
   import { formatSize } from '../lib/utils.js';
   import ModelCard from '../components/ModelCard.svelte';
   import ModelDetail from '../components/ModelDetail.svelte';
-  import UploadDialog from '../components/UploadDialog.svelte';
   import ScanResults from '../components/ScanResults.svelte';
   import ConfirmDialog from '../components/ConfirmDialog.svelte';
 
@@ -16,7 +15,6 @@
   let libraryStats = $state(null);
   let search = $state('');
   let selectedModel = $state(null);
-  let showUpload = $state(false);
   let scanResults = $state(null);
   let scanning = $state(false);
   let deleteTarget = $state(null);
@@ -203,11 +201,6 @@
 
   async function handleCataloged() {
     scanResults = null;
-    await loadData();
-  }
-
-  async function handleUploaded() {
-    showUpload = false;
     await loadData();
   }
 
@@ -452,9 +445,9 @@
         </button>
         <button
           class="px-3 py-1.5 text-sm rounded-md bg-green-600 hover:bg-green-500 text-white transition-colors"
-          onclick={() => showUpload = true}
+          onclick={() => onNavigate?.('add')}
         >
-          Upload
+          Add Model
         </button>
       </div>
     </div>
@@ -682,15 +675,9 @@
             </button>
             <button
               class="px-4 py-2 text-sm rounded-md bg-green-600 hover:bg-green-500 text-white transition-colors"
-              onclick={() => showUpload = true}
+              onclick={() => onNavigate?.('add')}
             >
-              Upload a Model
-            </button>
-            <button
-              class="px-4 py-2 text-sm rounded-md bg-blue-600 hover:bg-blue-500 text-white transition-colors"
-              onclick={() => onNavigate?.('download')}
-            >
-              Download from Web
+              Add Model
             </button>
           </div>
         </div>
@@ -708,15 +695,6 @@
     onClose={() => selectedModel = null}
     onUpdated={handleModelUpdated}
     onDelete={handleDelete}
-  />
-{/if}
-
-<!-- Upload dialog -->
-{#if showUpload}
-  <UploadDialog
-    {categories}
-    onUploaded={handleUploaded}
-    onClose={() => showUpload = false}
   />
 {/if}
 
