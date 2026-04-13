@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/gaitor-logo.png" alt="gAItor logo" width="200" />
+</p>
+
 # gAItor 🐊
 
 AI model library manager and sync tool. A self-hosted, Docker-based web UI for managing AI model files across a **library** (NAS/source of truth) and one or more **destinations** (inferencing machines).
