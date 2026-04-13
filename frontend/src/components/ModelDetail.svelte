@@ -297,7 +297,7 @@
       <!-- Unified Edit Form -->
       <div class="space-y-4">
         <div>
-          <label class="block text-sm text-gray-400 mb-1">Display Name</label>
+          <label class="block text-sm text-gray-400 mb-1">Name</label>
           <input bind:value={editName} class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500" />
           <p class="text-xs text-gray-600 mt-0.5">How this model appears in the UI</p>
         </div>
@@ -321,7 +321,7 @@
         </div>
 
         <div class="relative">
-          <label class="block text-sm text-gray-400 mb-1">Path within category</label>
+          <label class="block text-sm text-gray-400 mb-1">Path</label>
           <input
             bind:value={editSubfolder}
             onfocus={() => { pathInputFocused = true; showPathSuggestions = true; }}
@@ -346,11 +346,6 @@
         </div>
 
         <div>
-          <label class="block text-sm text-gray-400 mb-1">Description</label>
-          <textarea bind:value={editDescription} rows="2" class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500 resize-none"></textarea>
-        </div>
-
-        <div>
           <label class="block text-sm text-gray-400 mb-1">Source URL</label>
           <input bind:value={editSourceUrl} class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500" placeholder="https://..." />
         </div>
@@ -359,6 +354,11 @@
           <label class="block text-sm text-gray-400 mb-1">Base Model</label>
           <input bind:value={editBaseModel} class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500" placeholder="e.g. SDXL 1.0, Flux.1" />
           <p class="text-xs text-gray-600 mt-0.5">Associated base model (useful for LoRAs, VAEs, etc.)</p>
+        </div>
+
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">Description</label>
+          <textarea bind:value={editDescription} rows="2" class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500 resize-none"></textarea>
         </div>
 
         <div>
@@ -448,16 +448,16 @@
             <p class="text-gray-300 text-sm mt-0.5 font-mono">{model.filename?.split('.').pop() || '-'}</p>
           </div>
         </div>
-        {#if model.description}
-          <div>
-            <span class="text-xs text-gray-500 uppercase tracking-wider">Description</span>
-            <p class="text-gray-300 text-sm mt-0.5">{model.description}</p>
-          </div>
-        {/if}
         {#if model.base_model}
           <div>
             <span class="text-xs text-gray-500 uppercase tracking-wider">Base Model</span>
             <p class="text-gray-300 text-sm mt-0.5">{model.base_model}</p>
+          </div>
+        {/if}
+        {#if model.description}
+          <div>
+            <span class="text-xs text-gray-500 uppercase tracking-wider">Description</span>
+            <p class="text-gray-300 text-sm mt-0.5">{model.description}</p>
           </div>
         {/if}
         <div>
@@ -475,7 +475,7 @@
           <span class="text-xs text-gray-500 uppercase tracking-wider">Source</span>
           {#if model.source?.url}
             <p class="text-sm mt-0.5">
-              {#if model.source.provider}
+              {#if model.source.provider && model.source.provider !== 'manual'}
                 <span class="text-gray-400">{model.source.provider}</span>
                 <span class="text-gray-600 mx-1">-</span>
               {/if}
@@ -527,10 +527,9 @@
             class="px-3 py-1.5 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200 inline-block"
           >Download</a>
           <button
-            class="px-2 py-1.5 text-sm rounded bg-red-900/50 hover:bg-red-800 text-red-300 ml-auto"
+            class="px-3 py-1.5 text-sm rounded bg-red-900/50 hover:bg-red-800 text-red-300 ml-auto"
             onclick={() => onDelete(model)}
-            title="Delete model"
-          >{'\uD83D\uDDD1'}</button>
+          >Delete</button>
         </div>
       </div>
     {/if}

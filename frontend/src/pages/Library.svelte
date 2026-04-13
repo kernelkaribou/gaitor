@@ -148,9 +148,9 @@
     deleteTarget = model;
   }
 
-  async function confirmDelete(confirmName) {
+  async function confirmDelete(confirmText) {
     try {
-      await api.deleteModel(deleteTarget.id, confirmName);
+      await api.deleteModel(deleteTarget.id, confirmText);
       deleteTarget = null;
       selectedModel = null;
       await loadData();
@@ -555,9 +555,9 @@
 {#if deleteTarget}
   <ConfirmDialog
     title="Delete Model from Library"
-    message="This will permanently delete the model file and metadata from the library. This action cannot be undone."
-    warningText="Type the model name to confirm:"
-    confirmValue={deleteTarget.name}
+    message="This will permanently delete '{deleteTarget.name}' and its file from the library. This action cannot be undone."
+    warningText="Type 'delete' to confirm:"
+    confirmValue="delete"
     confirmLabel="Delete Forever"
     danger={true}
     onConfirm={confirmDelete}

@@ -302,13 +302,13 @@ def update_model_metadata(
             if not model.source:
                 model.source = ModelSource()
             model.source.url = new_url
-            if new_url and not model.source.provider:
+            if new_url:
                 if "huggingface.co" in new_url or "hf.co" in new_url:
                     model.source.provider = "huggingface"
                 elif "civitai.com" in new_url:
                     model.source.provider = "civitai"
-                else:
-                    model.source.provider = "manual"
+                elif not model.source.provider or model.source.provider == "manual":
+                    model.source.provider = None
             changed_fields["source_url"] = {"from": old_url, "to": new_url}
 
     # Handle thumbnail separately (no history entry needed)

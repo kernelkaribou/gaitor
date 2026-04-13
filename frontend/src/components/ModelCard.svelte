@@ -25,6 +25,10 @@
     <div class="w-full h-40 bg-gray-900 flex items-center justify-center">
       <img src={thumbUrl} alt={model.name} class="max-w-full max-h-40 object-contain" />
     </div>
+  {:else}
+    <div class="w-full h-40 bg-gray-900/50 flex items-center justify-center">
+      <span class="text-4xl text-gray-700">{'\uD83E\uDDE0'}</span>
+    </div>
   {/if}
   <div class="p-4">
     <div class="flex items-start justify-between mb-2">

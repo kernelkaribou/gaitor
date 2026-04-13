@@ -68,7 +68,7 @@ class RenameRequest(BaseModel):
 
 
 class DeleteConfirmation(BaseModel):
-    confirm_name: str
+    confirm_text: str
 
 
 @router.get("/")
@@ -237,15 +237,15 @@ async def move_model_endpoint(model_id: str, req: MoveRequest):
 
 @router.delete("/{model_id}")
 async def delete_model_endpoint(model_id: str, req: DeleteConfirmation):
-    """Delete a model from the library. Requires typing the model name to confirm."""
+    """Delete a model from the library. Requires typing 'delete' to confirm."""
     model = load_model(model_id)
     if not model:
         raise HTTPException(status_code=404, detail="Model not found")
 
-    if req.confirm_name != model.name:
+    if req.confirm_text.lower() != "delete":
         raise HTTPException(
             status_code=400,
-            detail=f"Confirmation name does not match. Type '{model.name}' to confirm deletion.",
+            detail="Type 'delete' to confirm deletion.",
         )
 
     result = delete_library_model(model_id, delete_file=True)

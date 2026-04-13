@@ -59,10 +59,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ subfolder }),
     }),
-  deleteModel: (id, confirmName) =>
+  deleteModel: (id, confirmText) =>
     request(`/models/${id}`, {
       method: 'DELETE',
-      body: JSON.stringify({ confirm_name: confirmName }),
+      body: JSON.stringify({ confirm_text: confirmText }),
     }),
   computeHash: (id) => request(`/models/${id}/hash`, { method: 'POST' }),
   getDownloadUrl: (id) => `${BASE_URL}/models/${id}/download`,
