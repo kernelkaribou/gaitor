@@ -21,21 +21,12 @@ from .. import config
 
 logger = logging.getLogger(__name__)
 
-OLD_METADATA_DIR = config.LIBRARY_PATH / ".modelgaitor"
 METADATA_DIR = config.LIBRARY_PATH / config.METADATA_DIR_NAME
 MODELS_DIR = METADATA_DIR / "models"
 THUMBNAILS_DIR = METADATA_DIR / "thumbnails"
 INDEX_FILE = METADATA_DIR / "index.json"
 CONFIG_FILE = METADATA_DIR / "config.json"
 CATEGORIES_FILE = METADATA_DIR / "categories.json"
-
-
-def _migrate_metadata_dir() -> None:
-    """Auto-migrate legacy .modelgaitor directory to .gaitor."""
-    if OLD_METADATA_DIR.exists() and not METADATA_DIR.exists():
-        logger.info(f"Migrating metadata directory: {OLD_METADATA_DIR} -> {METADATA_DIR}")
-        OLD_METADATA_DIR.rename(METADATA_DIR)
-        logger.info("Metadata directory migration complete")
 
 
 def _atomic_write_json(path: Path, data: dict | list) -> None:
@@ -67,7 +58,6 @@ def _read_json(path: Path) -> Optional[dict | list]:
 
 def ensure_metadata_dir() -> bool:
     """Ensure the .gaitor directory structure exists. Returns True if it was freshly created."""
-    _migrate_metadata_dir()
     fresh = not METADATA_DIR.exists()
     METADATA_DIR.mkdir(parents=True, exist_ok=True)
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
@@ -77,7 +67,6 @@ def ensure_metadata_dir() -> bool:
 
 def is_library_initialized() -> bool:
     """Check if the library metadata directory exists and has a config."""
-    _migrate_metadata_dir()
     return CONFIG_FILE.exists()
 
 
