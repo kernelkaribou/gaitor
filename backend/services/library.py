@@ -95,23 +95,21 @@ def scan_for_untracked() -> list[dict]:
             if rel_path in tracked_paths:
                 continue
 
-            # Guess category from folder path
-            # Check ancestor folders from deepest to shallowest
-            rel_parts = Path(rel_path).parts[:-1]  # all folder segments
+            # Guess category from top-level folder (the category directory)
+            rel_parts = Path(rel_path).parts
             categories = load_categories()
             guessed_category = "other"
             folder_matched = False
-            for part in reversed(rel_parts):
-                part_lower = part.lower()
+
+            if len(rel_parts) > 1:
+                top_folder = rel_parts[0].lower()
                 for cat in categories:
-                    if cat.id == part_lower or cat.label.lower() == part_lower:
+                    if cat.id == top_folder or cat.label.lower() == top_folder:
                         guessed_category = cat.id
                         folder_matched = True
                         break
-                if folder_matched:
-                    break
 
-            # Extension-based fallback only if no folder matched
+            # Extension-based fallback only if file isn't in a known category folder
             if not folder_matched:
                 for cat in categories:
                     if cat.id != "other" and ext in cat.extensions:
