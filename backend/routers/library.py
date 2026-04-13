@@ -16,7 +16,9 @@ from ..services.metadata import (
     delete_category,
     rename_category,
 )
-from ..schemas.library import CategoryDefinition, PRIMARY_CATEGORY_IDS
+from ..schemas.library import CategoryDefinition, DEFAULT_CATEGORIES
+
+DEFAULT_CATEGORY_IDS = {c.id for c in DEFAULT_CATEGORIES}
 from ..utils import safe_resolve
 from .. import config
 
@@ -79,7 +81,7 @@ async def list_categories():
     categories = load_categories()
     return {
         "categories": [
-            {**c.model_dump(), "is_primary": c.id in PRIMARY_CATEGORY_IDS}
+            {**c.model_dump(), "is_default": c.id in DEFAULT_CATEGORY_IDS}
             for c in categories
         ],
     }
@@ -113,6 +115,8 @@ async def update_category_endpoint(category_id: str, req: CategoryUpdateRequest)
 @router.post("/categories/{category_id}/rename")
 async def rename_category_endpoint(category_id: str, req: CategoryRenameRequest):
     """Rename a category (renames folder and updates all model metadata)."""
+    if category_id in DEFAULT_CATEGORY_IDS:
+        raise HTTPException(status_code=403, detail="Default categories cannot be renamed")
     import re
     if not re.match(r'^[a-zA-Z0-9_-]+$', req.new_id):
         raise HTTPException(status_code=400, detail="Category ID must be alphanumeric with dashes/underscores only")
@@ -120,7 +124,7 @@ async def rename_category_endpoint(category_id: str, req: CategoryRenameRequest)
         categories = rename_category(category_id, req.new_id, req.new_label)
         return {
             "categories": [
-                {**c.model_dump(), "is_primary": c.id in PRIMARY_CATEGORY_IDS}
+                {**c.model_dump(), "is_default": c.id in DEFAULT_CATEGORY_IDS}
                 for c in categories
             ],
         }
@@ -131,6 +135,8 @@ async def rename_category_endpoint(category_id: str, req: CategoryRenameRequest)
 @router.delete("/categories/{category_id}")
 async def delete_category_endpoint(category_id: str):
     """Delete a category."""
+    if category_id in DEFAULT_CATEGORY_IDS:
+        raise HTTPException(status_code=403, detail="Default categories cannot be deleted")
     categories = delete_category(category_id)
     return {"categories": [c.model_dump() for c in categories]}
 

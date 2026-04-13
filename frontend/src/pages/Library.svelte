@@ -285,8 +285,8 @@
         <button
           class="w-full text-left px-3 py-1.5 rounded text-sm transition-colors mb-0.5 group {activeCategory === cat.id ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}"
           onclick={() => activeCategory = cat.id}
-          ondblclick={() => startRenameCategory(cat)}
-          title="Double-click to rename"
+          ondblclick={() => !cat.is_default && startRenameCategory(cat)}
+          title={cat.is_default ? cat.label : 'Double-click to rename'}
         >
           {cat.label}
           {#if count > 0}
