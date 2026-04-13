@@ -25,6 +25,51 @@
   let currentView = $state('grid');
   let showExtended = $state(false);
 
+  // Category management
+  let showAddCategory = $state(false);
+  let newCatId = $state('');
+  let newCatLabel = $state('');
+  let renamingCat = $state(null);
+  let renameCatId = $state('');
+  let renameCatLabel = $state('');
+
+  async function addNewCategory() {
+    if (!newCatId.trim()) return;
+    const id = newCatId.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_-]/g, '');
+    const label = newCatLabel.trim() || id.replace(/[_-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    try {
+      await api.createCategory({ id, label, extensions: [], description: '' });
+      newCatId = '';
+      newCatLabel = '';
+      showAddCategory = false;
+      await loadData();
+    } catch (err) {
+      error = err.message;
+    }
+  }
+
+  function startRenameCategory(cat) {
+    renamingCat = cat.id;
+    renameCatId = cat.id;
+    renameCatLabel = cat.label;
+  }
+
+  async function confirmRenameCategory() {
+    if (!renamingCat || !renameCatId.trim()) return;
+    const id = renameCatId.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_-]/g, '');
+    const label = renameCatLabel.trim() || id.replace(/[_-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    try {
+      await api.renameCategory(renamingCat, id, label);
+      if (activeCategory === renamingCat) {
+        activeCategory = id;
+      }
+      renamingCat = null;
+      await loadData();
+    } catch (err) {
+      error = err.message;
+    }
+  }
+
   async function loadData() {
     loading = true;
     error = null;
@@ -131,7 +176,38 @@
 <div class="flex gap-6">
   <!-- Category sidebar -->
   <aside class="w-48 shrink-0">
-    <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2 font-semibold">Categories</h3>
+    <div class="flex items-center justify-between mb-2">
+      <h3 class="text-xs uppercase tracking-wider text-gray-500 font-semibold">Categories</h3>
+      <button
+        class="text-xs text-gray-500 hover:text-green-400 transition-colors"
+        title="Add category"
+        onclick={() => showAddCategory = !showAddCategory}
+      >+</button>
+    </div>
+
+    {#if showAddCategory}
+      <div class="mb-2 p-2 bg-gray-800 border border-gray-700 rounded">
+        <input
+          type="text"
+          bind:value={newCatId}
+          placeholder="folder_name"
+          class="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 mb-1 focus:outline-none focus:border-green-500"
+          onkeydown={(e) => e.key === 'Enter' && addNewCategory()}
+        />
+        <input
+          type="text"
+          bind:value={newCatLabel}
+          placeholder="Display Label (optional)"
+          class="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 mb-1 focus:outline-none focus:border-green-500"
+          onkeydown={(e) => e.key === 'Enter' && addNewCategory()}
+        />
+        <div class="flex gap-1">
+          <button class="flex-1 text-xs px-2 py-1 bg-green-700 hover:bg-green-600 text-white rounded" onclick={addNewCategory}>Add</button>
+          <button class="flex-1 text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded" onclick={() => { showAddCategory = false; newCatId = ''; newCatLabel = ''; }}>Cancel</button>
+        </div>
+      </div>
+    {/if}
+
     <button
       class="w-full text-left px-3 py-1.5 rounded text-sm transition-colors mb-1 {activeCategory === null ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}"
       onclick={() => activeCategory = null}
@@ -139,38 +215,66 @@
       All Models
       <span class="text-xs text-gray-500 ml-1">({modelList.length})</span>
     </button>
+
     {#each categories.filter(c => c.is_primary) as cat}
       {@const count = categoryCountMap()[cat.id] || 0}
-      <button
-        class="w-full text-left px-3 py-1.5 rounded text-sm transition-colors mb-0.5 {activeCategory === cat.id ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}"
-        onclick={() => activeCategory = cat.id}
-      >
-        {cat.label}
-        {#if count > 0}
-          <span class="text-xs text-gray-500 ml-1">({count})</span>
-        {/if}
-      </button>
+      {#if renamingCat === cat.id}
+        <div class="mb-1 p-1.5 bg-gray-800 border border-gray-600 rounded">
+          <input type="text" bind:value={renameCatId} placeholder="folder_name" class="w-full bg-gray-900 border border-gray-600 rounded px-2 py-0.5 text-xs text-gray-200 mb-1 focus:outline-none focus:border-green-500" />
+          <input type="text" bind:value={renameCatLabel} placeholder="Label" class="w-full bg-gray-900 border border-gray-600 rounded px-2 py-0.5 text-xs text-gray-200 mb-1 focus:outline-none focus:border-green-500" onkeydown={(e) => e.key === 'Enter' && confirmRenameCategory()} />
+          <div class="flex gap-1">
+            <button class="flex-1 text-xs px-1 py-0.5 bg-green-700 text-white rounded" onclick={confirmRenameCategory}>Save</button>
+            <button class="flex-1 text-xs px-1 py-0.5 bg-gray-700 text-gray-300 rounded" onclick={() => renamingCat = null}>Cancel</button>
+          </div>
+        </div>
+      {:else}
+        <button
+          class="w-full text-left px-3 py-1.5 rounded text-sm transition-colors mb-0.5 group {activeCategory === cat.id ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}"
+          onclick={() => activeCategory = cat.id}
+          ondblclick={() => startRenameCategory(cat)}
+          title="Double-click to rename"
+        >
+          {cat.label}
+          {#if count > 0}
+            <span class="text-xs text-gray-500 ml-1">({count})</span>
+          {/if}
+        </button>
+      {/if}
     {/each}
+
     <!-- Extended categories (collapsible) -->
     {#if categories.filter(c => !c.is_primary).length > 0}
       <button
         class="w-full text-left px-3 py-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors mt-2"
         onclick={() => showExtended = !showExtended}
       >
-        {showExtended ? '&#x25BE;' : '&#x25B8;'} More ({categories.filter(c => !c.is_primary).length})
+        {showExtended ? '\u25BE' : '\u25B8'} More ({categories.filter(c => !c.is_primary).length})
       </button>
       {#if showExtended}
         {#each categories.filter(c => !c.is_primary) as cat}
           {@const count = categoryCountMap()[cat.id] || 0}
-          <button
-            class="w-full text-left px-3 py-1.5 rounded text-sm transition-colors mb-0.5 {activeCategory === cat.id ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}"
-            onclick={() => activeCategory = cat.id}
-          >
-            {cat.label}
-            {#if count > 0}
-              <span class="text-xs text-gray-500 ml-1">({count})</span>
-            {/if}
-          </button>
+          {#if renamingCat === cat.id}
+            <div class="mb-1 p-1.5 bg-gray-800 border border-gray-600 rounded">
+              <input type="text" bind:value={renameCatId} placeholder="folder_name" class="w-full bg-gray-900 border border-gray-600 rounded px-2 py-0.5 text-xs text-gray-200 mb-1 focus:outline-none focus:border-green-500" />
+              <input type="text" bind:value={renameCatLabel} placeholder="Label" class="w-full bg-gray-900 border border-gray-600 rounded px-2 py-0.5 text-xs text-gray-200 mb-1 focus:outline-none focus:border-green-500" onkeydown={(e) => e.key === 'Enter' && confirmRenameCategory()} />
+              <div class="flex gap-1">
+                <button class="flex-1 text-xs px-1 py-0.5 bg-green-700 text-white rounded" onclick={confirmRenameCategory}>Save</button>
+                <button class="flex-1 text-xs px-1 py-0.5 bg-gray-700 text-gray-300 rounded" onclick={() => renamingCat = null}>Cancel</button>
+              </div>
+            </div>
+          {:else}
+            <button
+              class="w-full text-left px-3 py-1.5 rounded text-sm transition-colors mb-0.5 {activeCategory === cat.id ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}"
+              onclick={() => activeCategory = cat.id}
+              ondblclick={() => startRenameCategory(cat)}
+              title="Double-click to rename"
+            >
+              {cat.label}
+              {#if count > 0}
+                <span class="text-xs text-gray-500 ml-1">({count})</span>
+              {/if}
+            </button>
+          {/if}
         {/each}
       {/if}
     {/if}

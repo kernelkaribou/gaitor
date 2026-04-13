@@ -13,22 +13,22 @@
     </div>
     <nav class="flex items-center gap-4">
       <button
-        class="px-3 py-1.5 text-sm rounded-md transition-colors {currentPage === 'download' ? 'bg-gray-700 text-gray-200' : 'hover:bg-gray-700 text-gray-400'}"
-        onclick={() => currentPage = 'download'}
-      >
-        Download
-      </button>
-      <button
         class="px-3 py-1.5 text-sm rounded-md transition-colors {currentPage === 'library' ? 'bg-gray-700 text-gray-200' : 'hover:bg-gray-700 text-gray-400'}"
         onclick={() => currentPage = 'library'}
       >
         Library
       </button>
       <button
-        class="px-3 py-1.5 text-sm rounded-md transition-colors {currentPage === 'destinations' ? 'bg-gray-700 text-gray-200' : 'hover:bg-gray-700 text-gray-400'}"
-        onclick={() => currentPage = 'destinations'}
+        class="px-3 py-1.5 text-sm rounded-md transition-colors {currentPage === 'targets' ? 'bg-gray-700 text-gray-200' : 'hover:bg-gray-700 text-gray-400'}"
+        onclick={() => currentPage = 'targets'}
       >
-        Destinations
+        Targets
+      </button>
+      <button
+        class="px-3 py-1.5 text-sm rounded-md transition-colors {currentPage === 'download' ? 'bg-gray-700 text-gray-200' : 'hover:bg-gray-700 text-gray-400'}"
+        onclick={() => currentPage = 'download'}
+      >
+        Download
       </button>
       <div class="w-px h-6 bg-gray-600"></div>
       <button

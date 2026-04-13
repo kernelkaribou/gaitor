@@ -159,9 +159,9 @@
   {/if}
 
   {#if !selectedDest}
-    <!-- Destination list -->
+    <!-- Target list -->
     <div class="flex items-center justify-between mb-4">
-      <h2 class="text-lg font-semibold text-gray-200">Destinations</h2>
+      <h2 class="text-lg font-semibold text-gray-200">Targets</h2>
     </div>
 
     {#if loading}
@@ -169,9 +169,9 @@
     {:else if destinations.length === 0}
       <div class="text-center py-20">
         <span class="text-6xl mb-4 block">&#x1F4E1;</span>
-        <h3 class="text-xl font-medium text-gray-300 mb-2">No destinations found</h3>
+        <h3 class="text-xl font-medium text-gray-300 mb-2">No targets found</h3>
         <p class="text-gray-500 max-w-md mx-auto">
-          Mount destination directories as Docker volumes under <code class="bg-gray-800 px-1 rounded">/dest/</code> to manage them here.
+          Mount target directories as Docker volumes under <code class="bg-gray-800 px-1 rounded">/dest/</code> to manage them here.
         </p>
       </div>
     {:else}
@@ -204,7 +204,7 @@
       <!-- Category sidebar -->
       <aside class="w-48 shrink-0">
         <button class="text-gray-400 hover:text-gray-200 text-sm mb-4 flex items-center gap-1" onclick={() => selectedDest = null}>
-          &#x2190; All Destinations
+          &#x2190; All Targets
         </button>
 
         <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2 font-semibold">Categories</h3>
@@ -233,7 +233,7 @@
             class="w-full text-left px-3 py-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors mt-2"
             onclick={() => showExtended = !showExtended}
           >
-            {showExtended ? '&#x25BE;' : '&#x25B8;'} More ({categories.filter(c => !c.is_primary && (categoryCountMap()[c.id] || 0) > 0).length})
+            {showExtended ? '\u25BE' : '\u25B8'} More ({categories.filter(c => !c.is_primary && (categoryCountMap()[c.id] || 0) > 0).length})
           </button>
           {#if showExtended}
             {#each categories.filter(c => !c.is_primary) as cat}

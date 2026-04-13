@@ -3,6 +3,7 @@ External model retrieval API endpoints.
 """
 import asyncio
 import logging
+from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
@@ -86,6 +87,8 @@ async def resolve_url_endpoint(req: ResolveRequest):
 @router.post("/download")
 async def download_model_endpoint(req: DownloadRequest):
     """Start a model download as a background task with progress tracking."""
+    from ..services.tasks import CancelledByUser
+
     provider = req.provider or detect_provider(req.url) or "url"
     display_name = req.name or req.filename
 
@@ -111,11 +114,24 @@ async def download_model_endpoint(req: DownloadRequest):
                 task_id,
                 f"Downloaded {model.name} to {req.category}",
             )
+        except (CancelledByUser, asyncio.CancelledError):
+            logger.info(f"Download cancelled: {display_name}")
+            # Clean up partial download file
+            from .. import config
+            from ..utils import safe_resolve, sanitize_filename
+            try:
+                safe_name = sanitize_filename(Path(req.filename).stem, Path(req.filename).suffix)
+                tmp_path = safe_resolve(config.LIBRARY_PATH, req.category) / (safe_name + ".downloading")
+                if tmp_path.exists():
+                    tmp_path.unlink()
+            except Exception:
+                pass
         except Exception as e:
             logger.error(f"Download task failed: {e}")
             task_manager.fail_task(task_id, str(e))
 
-    asyncio.create_task(_do_download())
+    atask = asyncio.create_task(_do_download())
+    task_manager.set_asyncio_task(task_id, atask)
     return {"task_id": task_id, "status": "started"}
 
 

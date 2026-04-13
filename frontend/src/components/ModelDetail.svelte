@@ -197,16 +197,16 @@
         </div>
       </div>
     {:else if showSyncPicker}
-      <!-- Sync to destination picker -->
+      <!-- Sync to target picker -->
       <div class="space-y-4">
         <div class="flex items-center justify-between">
-          <h3 class="text-sm font-medium text-gray-300">Sync to Destination</h3>
+          <h3 class="text-sm font-medium text-gray-300">Sync to Target</h3>
           <button class="text-xs text-gray-500 hover:text-gray-300" onclick={() => showSyncPicker = false}>Back</button>
         </div>
         {#if loadingDests}
-          <p class="text-sm text-gray-500">Loading destinations...</p>
+          <p class="text-sm text-gray-500">Loading targets...</p>
         {:else if destinations.length === 0}
-          <p class="text-sm text-gray-500">No destinations configured. Mount volumes under /dest/ in Docker.</p>
+          <p class="text-sm text-gray-500">No targets configured. Mount volumes under /dest/ in Docker.</p>
         {:else}
           <div class="space-y-2">
             {#each destinations as dest}
@@ -318,7 +318,7 @@
         <div class="border-t border-gray-700 pt-4 flex flex-wrap gap-2">
           <button class="px-3 py-1.5 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={() => editing = true}>Edit</button>
           <button class="px-3 py-1.5 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={() => { renaming = true; renameName = model.name; }}>Rename</button>
-          <button class="px-3 py-1.5 text-sm rounded bg-green-700 hover:bg-green-600 text-white" onclick={openSyncPicker}>Sync to Dest</button>
+          <button class="px-3 py-1.5 text-sm rounded bg-green-700 hover:bg-green-600 text-white" onclick={openSyncPicker}>Sync to Target</button>
           <a
             href={api.getDownloadUrl(model.id)}
             download

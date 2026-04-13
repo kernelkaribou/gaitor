@@ -31,6 +31,8 @@ export const api = {
     request('/library/categories', { method: 'POST', body: JSON.stringify(data) }),
   updateCategory: (id, data) =>
     request(`/library/categories/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  renameCategory: (id, newId, newLabel) =>
+    request(`/library/categories/${id}/rename`, { method: 'POST', body: JSON.stringify({ new_id: newId, new_label: newLabel }) }),
   deleteCategory: (id) =>
     request(`/library/categories/${id}`, { method: 'DELETE' }),
 
@@ -141,4 +143,6 @@ export const api = {
 
   // Tasks
   getActiveTasks: () => request('/tasks'),
+  cancelTask: (taskId) =>
+    request(`/tasks/${taskId}/cancel`, { method: 'POST' }),
 };

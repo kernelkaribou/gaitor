@@ -13,7 +13,7 @@
   <UpdateBanner />
   {#if currentPage === 'library'}
     <Library onNavigate={(page) => currentPage = page} />
-  {:else if currentPage === 'destinations'}
+  {:else if currentPage === 'targets'}
     <Destination onBack={() => currentPage = 'library'} />
   {:else if currentPage === 'download'}
     <Download />

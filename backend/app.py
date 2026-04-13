@@ -159,6 +159,17 @@ async def list_active_tasks():
     """List currently active background tasks."""
     return {"tasks": task_manager.get_active_tasks()}
 
+
+@app.post("/api/tasks/{task_id}/cancel")
+async def cancel_task(task_id: str):
+    """Cancel a running background task."""
+    if task_manager.cancel_task(task_id):
+        return {"status": "cancelled", "task_id": task_id}
+    return JSONResponse(
+        status_code=404,
+        content={"detail": "Task not found or already completed"},
+    )
+
 # Serve built frontend static assets
 FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 if FRONTEND_DIST.exists():

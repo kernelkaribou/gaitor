@@ -1,7 +1,9 @@
 <script>
   import { toasts, removeToast } from '../lib/stores.js';
+  import { api } from '../lib/api.js';
 
   let toastList = $state([]);
+  let cancelling = $state({});
   toasts.subscribe(v => toastList = v);
 
   function formatSize(bytes) {
@@ -23,6 +25,17 @@
     if (seconds < 60) return `${Math.round(seconds)}s`;
     if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
     return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
+  }
+
+  async function cancelTask(taskId) {
+    if (!taskId || cancelling[taskId]) return;
+    cancelling = { ...cancelling, [taskId]: true };
+    try {
+      await api.cancelTask(taskId);
+    } catch (e) {
+      console.error('Cancel failed:', e);
+    }
+    cancelling = { ...cancelling, [taskId]: false };
   }
 
   const typeStyles = {
@@ -74,6 +87,15 @@
                   ></div>
                 </div>
               </div>
+              {#if toast.taskId}
+                <button
+                  class="mt-2 text-xs text-red-400 hover:text-red-300 disabled:opacity-50"
+                  onclick={() => cancelTask(toast.taskId)}
+                  disabled={cancelling[toast.taskId]}
+                >
+                  {cancelling[toast.taskId] ? 'Cancelling...' : 'Cancel'}
+                </button>
+              {/if}
             {/if}
           </div>
           {#if !toast.persistent || toast.type !== 'progress'}

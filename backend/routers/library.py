@@ -14,8 +14,11 @@ from ..services.metadata import (
     add_category,
     update_category,
     delete_category,
+    rename_category,
 )
 from ..schemas.library import CategoryDefinition, PRIMARY_CATEGORY_IDS
+from ..utils import safe_resolve
+from .. import config
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -37,6 +40,11 @@ class CategoryUpdateRequest(BaseModel):
     label: Optional[str] = None
     extensions: Optional[list[str]] = None
     description: Optional[str] = None
+
+
+class CategoryRenameRequest(BaseModel):
+    new_id: str
+    new_label: str
 
 
 @router.get("/status")
@@ -79,10 +87,13 @@ async def list_categories():
 
 @router.post("/categories")
 async def create_category(req: CategoryRequest):
-    """Create a new category."""
+    """Create a new category (also creates the folder on disk)."""
     try:
         cat = CategoryDefinition(**req.model_dump())
         categories = add_category(cat)
+        # Create the physical folder
+        cat_dir = safe_resolve(config.LIBRARY_PATH, cat.id)
+        cat_dir.mkdir(parents=True, exist_ok=True)
         return {"categories": [c.model_dump() for c in categories]}
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
@@ -90,13 +101,31 @@ async def create_category(req: CategoryRequest):
 
 @router.put("/categories/{category_id}")
 async def update_category_endpoint(category_id: str, req: CategoryUpdateRequest):
-    """Update a category."""
+    """Update a category's label, extensions, or description."""
     updates = {k: v for k, v in req.model_dump().items() if v is not None}
     try:
         categories = update_category(category_id, updates)
         return {"categories": [c.model_dump() for c in categories]}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/categories/{category_id}/rename")
+async def rename_category_endpoint(category_id: str, req: CategoryRenameRequest):
+    """Rename a category (renames folder and updates all model metadata)."""
+    import re
+    if not re.match(r'^[a-zA-Z0-9_-]+$', req.new_id):
+        raise HTTPException(status_code=400, detail="Category ID must be alphanumeric with dashes/underscores only")
+    try:
+        categories = rename_category(category_id, req.new_id, req.new_label)
+        return {
+            "categories": [
+                {**c.model_dump(), "is_primary": c.id in PRIMARY_CATEGORY_IDS}
+                for c in categories
+            ],
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.delete("/categories/{category_id}")

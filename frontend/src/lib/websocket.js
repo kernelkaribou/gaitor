@@ -53,6 +53,12 @@ function handleTaskUpdate(task) {
       taskToastMap.delete(task.task_id);
     }
     addToast({ type: 'error', title: task.title, message: task.message, duration: 10000 });
+  } else if (task.status === 'cancelled') {
+    if (existingToastId) {
+      removeToast(existingToastId);
+      taskToastMap.delete(task.task_id);
+    }
+    addToast({ type: 'info', title: 'Cancelled', message: task.title, duration: 4000 });
   } else if (task.status === 'running') {
     if (existingToastId) {
       updateToast(existingToastId, {
@@ -62,12 +68,14 @@ function handleTaskUpdate(task) {
         speed: task.speed,
         eta: task.eta,
         message: task.message,
+        taskId: task.task_id,
       });
     } else {
       const toastId = addToast({
         type: 'progress',
         title: task.title,
         persistent: true,
+        taskId: task.task_id,
       });
       taskToastMap.set(task.task_id, toastId);
       updateToast(toastId, {
@@ -76,6 +84,7 @@ function handleTaskUpdate(task) {
         total: task.total,
         speed: task.speed,
         eta: task.eta,
+        taskId: task.task_id,
       });
     }
   }

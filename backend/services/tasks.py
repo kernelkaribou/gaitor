@@ -17,7 +17,7 @@ class TaskProgress:
     task_id: str
     task_type: str  # "download", "sync"
     title: str
-    status: str = "pending"  # pending, running, completed, failed
+    status: str = "pending"  # pending, running, completed, failed, cancelled
     progress: int = 0
     downloaded: int = 0
     total: int = 0
@@ -27,6 +27,13 @@ class TaskProgress:
     started_at: float = field(default_factory=time.time)
     _last_update: float = field(default=0.0, repr=False)
     _last_bytes: int = field(default=0, repr=False)
+    _cancel_event: asyncio.Event = field(default_factory=asyncio.Event, repr=False)
+    _asyncio_task: Optional[asyncio.Task] = field(default=None, repr=False)
+
+
+class CancelledByUser(Exception):
+    """Raised when a task is cancelled by user request."""
+    pass
 
 
 class TaskManager:
@@ -44,10 +51,40 @@ class TaskManager:
         self._tasks[task_id] = task
         return task_id
 
+    def set_asyncio_task(self, task_id: str, asyncio_task: asyncio.Task):
+        """Associate an asyncio.Task with a tracked task for cancellation."""
+        task = self._tasks.get(task_id)
+        if task:
+            task._asyncio_task = asyncio_task
+
+    def is_cancelled(self, task_id: str) -> bool:
+        """Check if a task has been requested to cancel."""
+        task = self._tasks.get(task_id)
+        return task._cancel_event.is_set() if task else False
+
+    def cancel_task(self, task_id: str) -> bool:
+        """Request cancellation of a task. Returns True if task was found."""
+        task = self._tasks.get(task_id)
+        if not task or task.status not in ("pending", "running"):
+            return False
+        task._cancel_event.set()
+        if task._asyncio_task and not task._asyncio_task.done():
+            task._asyncio_task.cancel()
+        task.status = "cancelled"
+        task.message = "Cancelled by user"
+        task.speed = 0
+        task.eta = 0
+        self._broadcast(task)
+        return True
+
     def update_progress(self, task_id: str, downloaded: int, total: int, message: str = ""):
         task = self._tasks.get(task_id)
         if not task:
             return
+
+        # Check for cancellation
+        if task._cancel_event.is_set():
+            raise CancelledByUser()
 
         now = time.time()
         task.status = "running"
@@ -136,11 +173,11 @@ class TaskManager:
         }
 
     def cleanup_old(self, max_age: float = 300):
-        """Remove completed/failed tasks older than max_age seconds."""
+        """Remove completed/failed/cancelled tasks older than max_age seconds."""
         now = time.time()
         to_remove = [
             tid for tid, t in self._tasks.items()
-            if t.status in ("completed", "failed") and (now - t.started_at) > max_age
+            if t.status in ("completed", "failed", "cancelled") and (now - t.started_at) > max_age
         ]
         for tid in to_remove:
             del self._tasks[tid]

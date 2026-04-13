@@ -140,6 +140,53 @@ def delete_category(category_id: str) -> list[CategoryDefinition]:
     return cats
 
 
+def rename_category(old_id: str, new_id: str, new_label: str) -> list[CategoryDefinition]:
+    """Rename a category: update metadata, rename folder, update all affected models."""
+    from ..utils import safe_resolve
+
+    cats = load_categories()
+    found = False
+    for i, c in enumerate(cats):
+        if c.id == old_id:
+            data = c.model_dump()
+            data["id"] = new_id
+            data["label"] = new_label
+            cats[i] = CategoryDefinition(**data)
+            found = True
+            break
+    if not found:
+        raise ValueError(f"Category '{old_id}' not found")
+
+    if any(c.id == new_id for c in cats if c.id != old_id and c is not cats[i]):
+        # Check if a different category already has the new_id
+        id_counts = {}
+        for c in cats:
+            id_counts[c.id] = id_counts.get(c.id, 0) + 1
+        if id_counts.get(new_id, 0) > 1:
+            raise ValueError(f"Category '{new_id}' already exists")
+
+    # Rename the physical folder if it exists
+    old_dir = safe_resolve(config.LIBRARY_PATH, old_id)
+    new_dir = safe_resolve(config.LIBRARY_PATH, new_id)
+    if old_dir.exists():
+        if new_dir.exists() and old_id != new_id:
+            raise ValueError(f"Target folder '{new_id}' already exists on disk")
+        if old_id != new_id:
+            os.rename(str(old_dir), str(new_dir))
+
+    # Update all models in this category
+    models = load_all_models()
+    for model in models:
+        if model.category == old_id:
+            model.category = new_id
+            model.relative_path = model.relative_path.replace(f"{old_id}/", f"{new_id}/", 1)
+            save_model(model)
+
+    save_categories(cats)
+    rebuild_index()
+    return cats
+
+
 # --- Model metadata operations ---
 
 def save_model(model: ModelMetadata) -> None:
