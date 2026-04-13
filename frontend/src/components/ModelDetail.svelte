@@ -274,8 +274,8 @@
     <div class="mb-6">
       {#if thumbUrl}
         <div class="relative group">
-          <div class="w-full flex items-center justify-center bg-gray-900 rounded-lg border border-gray-700" style="max-height: 512px;">
-            <img src={thumbUrl} alt={model.name} class="max-w-full max-h-[512px] object-contain rounded-lg" />
+          <div class="w-full flex items-center justify-center bg-gray-900 rounded-lg border border-gray-700" style="max-height: 400px;">
+            <img src={thumbUrl} alt={model.name} class="max-w-full max-h-[400px] object-contain rounded-lg" />
           </div>
           <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">
             <label class="px-3 py-1.5 text-xs rounded bg-gray-700 hover:bg-gray-600 text-gray-200 cursor-pointer">

@@ -196,7 +196,7 @@ async def download_model(
     import uuid
     model_id = str(uuid.uuid4())
 
-    # Download thumbnail if provided (convert to max 512x512 webp)
+    # Download thumbnail if provided (convert to max 400x400 webp)
     thumb_rel = None
     if thumbnail_url:
         try:
@@ -205,7 +205,7 @@ async def download_model(
                 resp.raise_for_status()
                 THUMBNAILS_DIR.mkdir(parents=True, exist_ok=True)
                 img = Image.open(BytesIO(resp.content))
-                img.thumbnail((512, 512), Image.LANCZOS)
+                img.thumbnail((400, 400), Image.LANCZOS)
                 buf = BytesIO()
                 img.save(buf, format="WEBP", quality=85)
                 thumb_path = THUMBNAILS_DIR / f"{model_id}.webp"

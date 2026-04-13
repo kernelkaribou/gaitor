@@ -295,7 +295,7 @@ MAX_THUMBNAIL_SIZE = 5 * 1024 * 1024  # 5MB
 
 @router.post("/{model_id}/thumbnail")
 async def upload_thumbnail(model_id: str, file: UploadFile = File(...)):
-    """Upload a thumbnail image for a model. Auto-converts to max 512x512 webp."""
+    """Upload a thumbnail image for a model. Auto-converts to max 400x400 webp."""
     model_id = validate_model_id(model_id)
     model = load_model(model_id)
     if not model:
@@ -313,7 +313,7 @@ async def upload_thumbnail(model_id: str, file: UploadFile = File(...)):
 
     try:
         img = Image.open(BytesIO(content))
-        img.thumbnail((512, 512), Image.LANCZOS)
+        img.thumbnail((400, 400), Image.LANCZOS)
         buf = BytesIO()
         img.save(buf, format="WEBP", quality=85)
         webp_data = buf.getvalue()
