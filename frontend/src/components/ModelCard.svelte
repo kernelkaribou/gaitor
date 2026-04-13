@@ -1,7 +1,7 @@
 <script>
   import { api } from '../lib/api.js';
 
-  let { model, formatSize, onSelect } = $props();
+  let { model, formatSize, onSelect, isDuplicate } = $props();
 
   const ext = $derived(model.filename?.split('.').pop()?.toLowerCase() || '');
   const extBadge = $derived(ext.toUpperCase());
@@ -41,6 +41,9 @@
     <div class="flex items-center justify-between text-xs text-gray-500">
       <span>{formatSize(model.size)}</span>
       <div class="flex items-center gap-2">
+        {#if isDuplicate}
+          <span class="text-yellow-500" title="Duplicate hash detected">DUP</span>
+        {/if}
         {#if model.hash?.sha256}
           <span class="text-green-500" title="Hash verified">&#x2713;</span>
         {/if}

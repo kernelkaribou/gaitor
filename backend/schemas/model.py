@@ -12,6 +12,8 @@ class ModelSource(BaseModel):
     url: Optional[str] = None
     provider: Optional[str] = None  # "huggingface", "civitai", "upload", "manual"
     downloaded_at: Optional[str] = None
+    version_id: Optional[str] = None  # Provider-specific version identifier
+    version_name: Optional[str] = None  # Human-readable version name
 
 
 class ModelHistoryEntry(BaseModel):

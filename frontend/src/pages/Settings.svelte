@@ -142,6 +142,26 @@
       </div>
     </section>
 
+    <!-- Metadata Export -->
+    <section class="mb-8">
+      <h3 class="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">Backup</h3>
+      <div class="bg-gray-800 rounded-lg border border-gray-700 p-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <span class="text-gray-200 font-medium">Export Library Metadata</span>
+            <p class="text-xs text-gray-500 mt-0.5">Download all model metadata, categories, and settings as a JSON file</p>
+          </div>
+          <a
+            href={api.getExportUrl()}
+            download="model-gaitor-export.json"
+            class="px-4 py-2 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors"
+          >
+            Export JSON
+          </a>
+        </div>
+      </div>
+    </section>
+
     <!-- Paths -->
     <section class="mb-8">
       <h3 class="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">Configuration</h3>

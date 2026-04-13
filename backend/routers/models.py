@@ -80,6 +80,49 @@ async def list_models():
     return {"models": index, "count": len(index), "initialized": True}
 
 
+@router.get("/stats")
+async def model_stats():
+    """Get storage statistics: total size, per-category breakdown, and duplicates."""
+    index = load_index()
+    total_size = 0
+    by_category = {}
+    hash_map = {}
+
+    for m in index:
+        size = m.get("size", 0) or 0
+        total_size += size
+        cat = m.get("category", "other")
+        if cat not in by_category:
+            by_category[cat] = {"count": 0, "size": 0}
+        by_category[cat]["count"] += 1
+        by_category[cat]["size"] += size
+
+        sha = m.get("hash", {})
+        if isinstance(sha, dict):
+            sha = sha.get("sha256")
+        if sha:
+            hash_map.setdefault(sha, []).append({
+                "id": m["id"],
+                "name": m.get("name", ""),
+                "filename": m.get("filename", ""),
+                "category": m.get("category", ""),
+            })
+
+    duplicates = {h: models for h, models in hash_map.items() if len(models) > 1}
+    duplicate_ids = set()
+    for models in duplicates.values():
+        for mdl in models:
+            duplicate_ids.add(mdl["id"])
+
+    return {
+        "total_models": len(index),
+        "total_size": total_size,
+        "by_category": by_category,
+        "duplicates": duplicates,
+        "duplicate_ids": list(duplicate_ids),
+    }
+
+
 @router.get("/{model_id}")
 async def get_model(model_id: str):
     """Get a single model's full metadata."""
@@ -158,6 +201,74 @@ async def upload_model_endpoint(
     except Exception as e:
         logger.error(f"Upload failed: {e}")
         raise HTTPException(status_code=500, detail="Upload failed")
+
+
+class BulkUpdateRequest(BaseModel):
+    model_ids: list[str]
+    category: Optional[str] = None
+    tags_add: Optional[list[str]] = None
+    tags_remove: Optional[list[str]] = None
+    base_model: Optional[str] = None
+
+
+class BulkDeleteRequest(BaseModel):
+    model_ids: list[str]
+    confirm_text: str
+
+
+@router.post("/bulk/update")
+async def bulk_update_models(req: BulkUpdateRequest):
+    """Bulk update metadata for multiple models (category, tags, base model)."""
+    if len(req.model_ids) > 100:
+        raise HTTPException(status_code=400, detail="Bulk update limited to 100 models")
+
+    results = []
+    errors = []
+    for model_id in req.model_ids:
+        try:
+            updates = {}
+            if req.category is not None:
+                updates["category"] = req.category
+            if req.base_model is not None:
+                updates["base_model"] = req.base_model
+            if req.tags_add or req.tags_remove:
+                model = load_model(model_id)
+                if model:
+                    current_tags = list(model.tags or [])
+                    if req.tags_add:
+                        for t in req.tags_add:
+                            if t not in current_tags:
+                                current_tags.append(t)
+                    if req.tags_remove:
+                        current_tags = [t for t in current_tags if t not in req.tags_remove]
+                    updates["tags"] = current_tags
+            if updates:
+                model = update_model_metadata(model_id, updates)
+                results.append(model_id)
+        except Exception as e:
+            errors.append({"id": model_id, "error": str(e)})
+
+    return {"updated": len(results), "errors": errors}
+
+
+@router.post("/bulk/delete")
+async def bulk_delete_models(req: BulkDeleteRequest):
+    """Bulk delete multiple models from the library."""
+    if req.confirm_text.lower() != "delete":
+        raise HTTPException(status_code=400, detail="Type 'delete' to confirm bulk deletion.")
+    if len(req.model_ids) > 100:
+        raise HTTPException(status_code=400, detail="Bulk delete limited to 100 models")
+
+    results = []
+    errors = []
+    for model_id in req.model_ids:
+        try:
+            delete_library_model(model_id, delete_file=True)
+            results.append(model_id)
+        except Exception as e:
+            errors.append({"id": model_id, "error": str(e)})
+
+    return {"deleted": len(results), "errors": errors}
 
 
 @router.put("/{model_id}")
@@ -263,6 +374,51 @@ async def compute_hash_endpoint(model_id: str):
     if not hash_value:
         raise HTTPException(status_code=500, detail="Hash computation failed")
     return {"model_id": model_id, "hash": {"sha256": hash_value}}
+
+
+@router.post("/{model_id}/check-update")
+async def check_for_update(model_id: str):
+    """Check if a newer version is available at the model's source."""
+    from ..services.civitai import parse_civitai_url, get_model_info
+
+    model = load_model(model_id)
+    if not model:
+        raise HTTPException(status_code=404, detail="Model not found")
+
+    if not model.source or not model.source.url:
+        return {"update_available": False, "reason": "No source URL set"}
+
+    url = model.source.url
+    result = {"update_available": False, "current_version": model.source.version_name}
+
+    if "civitai.com" in url:
+        parsed = parse_civitai_url(url)
+        if not parsed:
+            return {**result, "reason": "Could not parse CivitAI URL"}
+        try:
+            info = await get_model_info(parsed["model_id"])
+            versions = info.get("versions", [])
+            if not versions:
+                return {**result, "reason": "No versions found"}
+
+            latest = versions[0]
+            result["latest_version_id"] = str(latest["id"])
+            result["latest_version_name"] = latest["name"]
+
+            current_vid = model.source.version_id
+            if current_vid and str(latest["id"]) != str(current_vid):
+                result["update_available"] = True
+            elif not current_vid:
+                result["reason"] = "No version tracked (set version_id to enable update checks)"
+
+        except Exception as e:
+            result["reason"] = f"Failed to check: {e}"
+    elif "huggingface.co" in url or "hf.co" in url:
+        result["reason"] = "HuggingFace update checks not yet supported"
+    else:
+        result["reason"] = "Update checks only available for CivitAI models"
+
+    return result
 
 
 @router.get("/{model_id}/download")

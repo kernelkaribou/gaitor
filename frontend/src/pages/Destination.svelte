@@ -227,12 +227,24 @@
     {:else}
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {#each destinations as dest}
+          {@const isHealthy = dest.health?.status === 'healthy'}
+          {@const isDegraded = dest.health?.status === 'degraded'}
+          {@const isOffline = dest.health?.status === 'offline' || dest.health?.status === 'error'}
           <button
-            class="bg-gray-800 rounded-lg border border-gray-700 p-5 hover:border-green-600/50 transition-colors text-left w-full"
+            class="bg-gray-800 rounded-lg border border-gray-700 p-5 hover:border-green-600/50 transition-colors text-left w-full {isOffline ? 'opacity-60' : ''}"
             onclick={() => selectDestination(dest)}
+            disabled={isOffline}
           >
-            <h3 class="font-medium text-gray-100 mb-2">{dest.name}</h3>
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="font-medium text-gray-100">{dest.name}</h3>
+              <span class="text-xs px-2 py-0.5 rounded-full {isHealthy ? 'bg-green-900/40 text-green-400' : isDegraded ? 'bg-yellow-900/40 text-yellow-400' : 'bg-red-900/40 text-red-400'}">
+                {isHealthy ? 'Healthy' : isDegraded ? 'Read-only' : 'Offline'}
+              </span>
+            </div>
             <p class="text-xs text-gray-500 font-mono mb-3">{dest.path}</p>
+            {#if isOffline || isDegraded}
+              <p class="text-xs text-yellow-500 mb-2">{dest.health?.message}</p>
+            {/if}
             {#if dest.disk_total}
               <div class="w-full bg-gray-700 rounded-full h-2 mb-1">
                 <div

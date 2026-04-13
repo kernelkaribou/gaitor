@@ -20,6 +20,7 @@ export const api = {
   getVersion: () => request('/settings/version'),
   getDiskUsage: () => request('/settings/disk'),
   getAuthStatus: () => request('/settings/auth'),
+  getExportUrl: () => `${BASE_URL}/settings/export`,
 
   // Library
   getLibraryStatus: () => request('/library/status'),
@@ -42,6 +43,7 @@ export const api = {
 
   // Models
   listModels: () => request('/models/'),
+  getModelStats: () => request('/models/stats'),
   getModel: (id) => request(`/models/${id}`),
   catalogModel: (data) =>
     request('/models/catalog', { method: 'POST', body: JSON.stringify(data) }),
@@ -65,6 +67,11 @@ export const api = {
       body: JSON.stringify({ confirm_text: confirmText }),
     }),
   computeHash: (id) => request(`/models/${id}/hash`, { method: 'POST' }),
+  checkForUpdate: (id) => request(`/models/${id}/check-update`, { method: 'POST' }),
+  bulkUpdateModels: (modelIds, updates) =>
+    request('/models/bulk/update', { method: 'POST', body: JSON.stringify({ model_ids: modelIds, ...updates }) }),
+  bulkDeleteModels: (modelIds, confirmText) =>
+    request('/models/bulk/delete', { method: 'POST', body: JSON.stringify({ model_ids: modelIds, confirm_text: confirmText }) }),
   getDownloadUrl: (id) => `${BASE_URL}/models/${id}/download`,
   getThumbnailUrl: (id) => `${BASE_URL}/models/${id}/thumbnail`,
 

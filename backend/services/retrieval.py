@@ -75,10 +75,23 @@ async def resolve_url(url: str) -> dict:
             if preview_url:
                 break
 
+        # Determine version name from the selected/first version
+        version_name = None
+        target_vid = parsed.get("version_id")
+        for v in info.get("versions", []):
+            if target_vid and str(v.get("id")) == str(target_vid):
+                version_name = v.get("name")
+                break
+            elif not target_vid:
+                version_name = v.get("name")
+                target_vid = str(v.get("id"))
+                break
+
         return {
             "provider": "civitai",
             "model_id": parsed["model_id"],
-            "version_id": parsed.get("version_id"),
+            "version_id": target_vid,
+            "version_name": version_name,
             "model_info": info,
             "preview_url": preview_url,
             "model_type": model_type,
@@ -143,6 +156,8 @@ async def download_model(
     provider: Optional[str] = None,
     progress_callback: Optional[Callable] = None,
     thumbnail_url: Optional[str] = None,
+    version_id: Optional[str] = None,
+    version_name: Optional[str] = None,
 ) -> ModelMetadata:
     """Download a model file from an external URL into the library.
 
@@ -228,6 +243,8 @@ async def download_model(
             url=url,
             provider=provider or detect_provider(url) or "url",
             downloaded_at=now,
+            version_id=version_id,
+            version_name=version_name,
         ),
         history=[
             ModelHistoryEntry(

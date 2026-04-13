@@ -32,6 +32,10 @@
   let showPathSuggestions = $state(false);
   let pathInputFocused = $state(false);
 
+  // Version check
+  let updateCheck = $state(null);
+  let checkingUpdate = $state(false);
+
   let filteredSuggestions = $derived(
     editSubfolder.trim()
       ? knownSubfolders.filter(s => s.toLowerCase().startsWith(editSubfolder.toLowerCase()) && s !== editSubfolder)
@@ -157,6 +161,17 @@
     } catch (err) {
       error = err.message;
     }
+  }
+
+  async function handleCheckUpdate() {
+    checkingUpdate = true;
+    updateCheck = null;
+    try {
+      updateCheck = await api.checkForUpdate(model.id);
+    } catch (err) {
+      updateCheck = { error: err.message };
+    }
+    checkingUpdate = false;
   }
 
   async function handleThumbnailUpload(event) {
@@ -481,6 +496,29 @@
               {/if}
               <a href={model.source.url} target="_blank" rel="noopener" class="text-green-400 hover:text-green-300 underline break-all">{model.source.url}</a>
             </p>
+            {#if model.source.version_name}
+              <p class="text-xs text-gray-500 mt-0.5">Version: {model.source.version_name}</p>
+            {/if}
+            {#if model.source.provider === 'civitai'}
+              <div class="mt-1">
+                <button
+                  class="text-xs text-blue-400 hover:text-blue-300 underline"
+                  onclick={handleCheckUpdate}
+                  disabled={checkingUpdate}
+                >{checkingUpdate ? 'Checking...' : 'Check for update'}</button>
+                {#if updateCheck}
+                  {#if updateCheck.error}
+                    <p class="text-xs text-red-400 mt-0.5">{updateCheck.error}</p>
+                  {:else if updateCheck.update_available}
+                    <p class="text-xs text-yellow-400 mt-0.5">Update available: {updateCheck.latest_version_name}</p>
+                  {:else if updateCheck.reason}
+                    <p class="text-xs text-gray-500 mt-0.5">{updateCheck.reason}</p>
+                  {:else}
+                    <p class="text-xs text-green-400 mt-0.5">Up to date</p>
+                  {/if}
+                {/if}
+              </div>
+            {/if}
           {:else}
             <p class="text-gray-500 text-sm mt-0.5">Not specified</p>
           {/if}

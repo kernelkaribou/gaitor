@@ -13,6 +13,7 @@
   let libraryStatus = $state(null);
   let modelList = $state([]);
   let categories = $state([]);
+  let libraryStats = $state(null);
   let search = $state('');
   let selectedModel = $state(null);
   let showUpload = $state(false);
@@ -37,6 +38,78 @@
   let collapsedGroups = $state({});
   let showAddSubfolder = $state(false);
   let newSubfolderName = $state('');
+
+  // Bulk selection
+  let selectMode = $state(false);
+  let selectedIds = $state(new Set());
+  let showBulkCategory = $state(false);
+  let bulkCategory = $state('');
+  let showBulkTags = $state(false);
+  let bulkTagsAdd = $state('');
+  let showBulkDelete = $state(false);
+
+  function toggleSelect(id) {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    selectedIds = next;
+  }
+
+  function toggleSelectAll() {
+    const visible = filteredModels().map(m => m.id);
+    if (visible.every(id => selectedIds.has(id))) {
+      selectedIds = new Set();
+    } else {
+      selectedIds = new Set(visible);
+    }
+  }
+
+  function exitSelectMode() {
+    selectMode = false;
+    selectedIds = new Set();
+    showBulkCategory = false;
+    showBulkTags = false;
+    showBulkDelete = false;
+  }
+
+  async function bulkApplyCategory() {
+    if (!bulkCategory || selectedIds.size === 0) return;
+    try {
+      await api.bulkUpdateModels([...selectedIds], { category: bulkCategory });
+      showBulkCategory = false;
+      bulkCategory = '';
+      exitSelectMode();
+      await loadData();
+    } catch (err) {
+      error = err.message;
+    }
+  }
+
+  async function bulkApplyTags() {
+    if (!bulkTagsAdd.trim() || selectedIds.size === 0) return;
+    try {
+      const tags = bulkTagsAdd.split(',').map(t => t.trim()).filter(Boolean);
+      await api.bulkUpdateModels([...selectedIds], { tags_add: tags });
+      showBulkTags = false;
+      bulkTagsAdd = '';
+      exitSelectMode();
+      await loadData();
+    } catch (err) {
+      error = err.message;
+    }
+  }
+
+  async function bulkDeleteConfirmed(confirmText) {
+    try {
+      await api.bulkDeleteModels([...selectedIds], confirmText);
+      showBulkDelete = false;
+      exitSelectMode();
+      selectedModel = null;
+      await loadData();
+    } catch (err) {
+      throw err;
+    }
+  }
 
   async function addNewCategory() {
     if (!newCatId.trim()) return;
@@ -98,14 +171,16 @@
     loading = true;
     error = null;
     try {
-      const [status, modelsData, catsData] = await Promise.all([
+      const [status, modelsData, catsData, stats] = await Promise.all([
         api.getLibraryStatus(),
         api.listModels(),
         api.getCategories(),
+        api.getModelStats().catch(() => null),
       ]);
       libraryStatus = status;
       modelList = modelsData.models || [];
       categories = catsData.categories || [];
+      libraryStats = stats;
     } catch (err) {
       error = err.message;
       console.error('Failed to load library:', err);
@@ -210,6 +285,10 @@
     }
     return map;
   });
+
+  let duplicateIds = $derived(() => {
+    return new Set(libraryStats?.duplicate_ids || []);
+  });
 </script>
 
 <div class="flex gap-6">
@@ -295,6 +374,30 @@
         </button>
       {/if}
     {/each}
+
+    <!-- Storage stats -->
+    {#if libraryStats}
+      <div class="mt-6 pt-4 border-t border-gray-700">
+        <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2 font-semibold">Storage</h3>
+        <div class="space-y-1 text-xs">
+          <p class="text-gray-300">{libraryStats.total_models} models</p>
+          <p class="text-gray-400">{formatSize(libraryStats.total_size)} total</p>
+          {#if libraryStats.duplicate_ids?.length > 0}
+            <p class="text-yellow-400">{libraryStats.duplicate_ids.length} duplicates</p>
+          {/if}
+          {#if activeCategory && libraryStats.by_category?.[activeCategory]}
+            <div class="mt-2 pt-2 border-t border-gray-700/50">
+              <p class="text-gray-400">
+                {libraryStats.by_category[activeCategory].count} in category
+              </p>
+              <p class="text-gray-500">
+                {formatSize(libraryStats.by_category[activeCategory].size)}
+              </p>
+            </div>
+          {/if}
+        </div>
+      </div>
+    {/if}
   </aside>
 
   <!-- Main content -->
@@ -352,6 +455,12 @@
           {scanning ? 'Scanning...' : 'Scan'}
         </button>
         <button
+          class="px-3 py-1.5 text-sm rounded-md transition-colors {selectMode ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-200'}"
+          onclick={() => selectMode ? exitSelectMode() : (selectMode = true)}
+        >
+          {selectMode ? 'Cancel' : 'Select'}
+        </button>
+        <button
           class="px-3 py-1.5 text-sm rounded-md bg-green-600 hover:bg-green-500 text-white transition-colors"
           onclick={() => showUpload = true}
         >
@@ -365,6 +474,73 @@
         {error}
         <button class="ml-2 underline" onclick={() => error = null}>dismiss</button>
       </div>
+    {/if}
+
+    <!-- Bulk action bar -->
+    {#if selectMode}
+      <div class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 mb-4 flex items-center gap-3 flex-wrap">
+        <button
+          class="text-sm text-gray-400 hover:text-gray-200 underline"
+          onclick={toggleSelectAll}
+        >
+          {filteredModels().length > 0 && filteredModels().every(m => selectedIds.has(m.id)) ? 'Deselect all' : 'Select all'}
+        </button>
+        <span class="text-sm text-gray-500">{selectedIds.size} selected</span>
+        {#if selectedIds.size > 0}
+          <div class="flex items-center gap-2 ml-auto">
+            <button
+              class="px-3 py-1.5 text-xs rounded bg-gray-700 hover:bg-gray-600 text-gray-200"
+              onclick={() => { showBulkCategory = true; showBulkTags = false; }}
+            >Re-categorize</button>
+            <button
+              class="px-3 py-1.5 text-xs rounded bg-gray-700 hover:bg-gray-600 text-gray-200"
+              onclick={() => { showBulkTags = true; showBulkCategory = false; }}
+            >Add Tags</button>
+            <button
+              class="px-3 py-1.5 text-xs rounded bg-red-900/50 hover:bg-red-800 text-red-300"
+              onclick={() => showBulkDelete = true}
+            >Delete</button>
+          </div>
+        {/if}
+      </div>
+
+      {#if showBulkCategory}
+        <div class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 mb-4 flex items-center gap-3">
+          <span class="text-sm text-gray-400">Move to:</span>
+          <select
+            bind:value={bulkCategory}
+            class="bg-gray-900 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-green-500"
+          >
+            <option value="">Select category</option>
+            {#each categories as cat}
+              <option value={cat.id}>{cat.label}</option>
+            {/each}
+          </select>
+          <button
+            class="px-3 py-1.5 text-sm rounded bg-green-600 hover:bg-green-500 text-white disabled:opacity-50"
+            onclick={bulkApplyCategory}
+            disabled={!bulkCategory}
+          >Apply</button>
+          <button class="px-3 py-1.5 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={() => showBulkCategory = false}>Cancel</button>
+        </div>
+      {/if}
+
+      {#if showBulkTags}
+        <div class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 mb-4 flex items-center gap-3">
+          <span class="text-sm text-gray-400">Add tags:</span>
+          <input
+            bind:value={bulkTagsAdd}
+            placeholder="tag1, tag2, ..."
+            class="bg-gray-900 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-green-500 flex-1"
+          />
+          <button
+            class="px-3 py-1.5 text-sm rounded bg-green-600 hover:bg-green-500 text-white disabled:opacity-50"
+            onclick={bulkApplyTags}
+            disabled={!bulkTagsAdd.trim()}
+          >Apply</button>
+          <button class="px-3 py-1.5 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={() => showBulkTags = false}>Cancel</button>
+        </div>
+      {/if}
     {/if}
 
     <!-- Scan results -->
@@ -424,7 +600,7 @@
                 {#if currentView === 'grid'}
                   <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 ml-4">
                     {#each models as model (model.id)}
-                      <ModelCard {model} {formatSize} onSelect={() => selectedModel = model} />
+                      <div class="relative">{#if selectMode}<button class="absolute top-2 left-2 z-10 w-5 h-5 rounded border-2 flex items-center justify-center text-xs transition-colors {selectedIds.has(model.id) ? 'bg-green-600 border-green-500 text-white' : 'bg-gray-800/80 border-gray-500 text-transparent hover:border-gray-300'}" onclick={(e) => { e.stopPropagation(); toggleSelect(model.id); }}>{selectedIds.has(model.id) ? '2713' : ''}</button>{/if}<ModelCard {model} {formatSize} isDuplicate={duplicateIds().has(model.id)} onSelect={() => selectMode ? toggleSelect(model.id) : (selectedModel = model)} /></div>
                     {/each}
                   </div>
                 {:else}
@@ -448,7 +624,7 @@
             {#if currentView === 'grid'}
               <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-4">
                 {#each models as model (model.id)}
-                  <ModelCard {model} {formatSize} onSelect={() => selectedModel = model} />
+                  <div class="relative">{#if selectMode}<button class="absolute top-2 left-2 z-10 w-5 h-5 rounded border-2 flex items-center justify-center text-xs transition-colors {selectedIds.has(model.id) ? 'bg-green-600 border-green-500 text-white' : 'bg-gray-800/80 border-gray-500 text-transparent hover:border-gray-300'}" onclick={(e) => { e.stopPropagation(); toggleSelect(model.id); }}>{selectedIds.has(model.id) ? '2713' : ''}</button>{/if}<ModelCard {model} {formatSize} isDuplicate={duplicateIds().has(model.id)} onSelect={() => selectMode ? toggleSelect(model.id) : (selectedModel = model)} /></div>
                 {/each}
               </div>
             {:else}
@@ -473,7 +649,7 @@
         {#if currentView === 'grid'}
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {#each filteredModels() as model (model.id)}
-              <ModelCard {model} {formatSize} onSelect={() => selectedModel = model} />
+              <div class="relative">{#if selectMode}<button class="absolute top-2 left-2 z-10 w-5 h-5 rounded border-2 flex items-center justify-center text-xs transition-colors {selectedIds.has(model.id) ? 'bg-green-600 border-green-500 text-white' : 'bg-gray-800/80 border-gray-500 text-transparent hover:border-gray-300'}" onclick={(e) => { e.stopPropagation(); toggleSelect(model.id); }}>{selectedIds.has(model.id) ? '2713' : ''}</button>{/if}<ModelCard {model} {formatSize} isDuplicate={duplicateIds().has(model.id)} onSelect={() => selectMode ? toggleSelect(model.id) : (selectedModel = model)} /></div>
             {/each}
           </div>
         {:else}
@@ -562,5 +738,18 @@
     danger={true}
     onConfirm={confirmDelete}
     onCancel={() => deleteTarget = null}
+  />
+{/if}
+
+{#if showBulkDelete}
+  <ConfirmDialog
+    title="Bulk Delete from Library"
+    message="This will permanently delete {selectedIds.size} model(s) and their files from the library. This action cannot be undone."
+    warningText="Type 'delete' to confirm:"
+    confirmValue="delete"
+    confirmLabel="Delete All"
+    danger={true}
+    onConfirm={bulkDeleteConfirmed}
+    onCancel={() => showBulkDelete = false}
   />
 {/if}

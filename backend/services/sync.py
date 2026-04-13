@@ -41,9 +41,50 @@ def list_destinations() -> list[dict]:
                 "path": str(entry),
                 "disk_total": disk_total,
                 "disk_free": disk_free,
+                "health": check_destination_health(entry),
             })
 
     return destinations
+
+
+def check_destination_health(path: Path) -> dict:
+    """Check if a destination mount is accessible and writable."""
+    result = {"status": "unknown", "readable": False, "writable": False, "message": ""}
+
+    if not path.exists():
+        result["status"] = "offline"
+        result["message"] = "Path does not exist"
+        return result
+
+    try:
+        os.listdir(str(path))
+        result["readable"] = True
+    except PermissionError:
+        result["status"] = "error"
+        result["message"] = "Permission denied (read)"
+        return result
+    except OSError as e:
+        result["status"] = "offline"
+        result["message"] = f"Not accessible: {e}"
+        return result
+
+    probe = path / ".gaitor_health_probe"
+    try:
+        probe.write_text("ok")
+        probe.unlink()
+        result["writable"] = True
+    except PermissionError:
+        result["status"] = "degraded"
+        result["message"] = "Read-only (cannot write)"
+        return result
+    except OSError as e:
+        result["status"] = "degraded"
+        result["message"] = f"Write check failed: {e}"
+        return result
+
+    result["status"] = "healthy"
+    result["message"] = "Accessible and writable"
+    return result
 
 
 def get_destination_models(dest_id: str) -> list[dict]:

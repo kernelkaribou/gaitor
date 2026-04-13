@@ -1,7 +1,8 @@
 """
-Settings API endpoints - version checking, configuration, disk space.
+Settings API endpoints - version checking, configuration, disk space, metadata export.
 """
 from fastapi import APIRouter, Request
+from fastapi.responses import Response
 import logging
 import os
 import urllib.request
@@ -9,6 +10,7 @@ import json
 from pathlib import Path
 
 from .. import config
+from ..services.metadata import load_all_models, load_categories, get_library_config
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -84,3 +86,26 @@ def _is_newer(latest: str, current: str) -> bool:
         return latest_parts > current_parts
     except (ValueError, AttributeError):
         return False
+
+
+@router.get("/export")
+async def export_metadata():
+    """Export all library metadata as a single JSON file for backup."""
+    lib_config = get_library_config()
+    all_models = load_all_models()
+    cats = load_categories()
+
+    export_data = {
+        "export_version": 1,
+        "library": lib_config.model_dump() if lib_config else None,
+        "categories": [c.model_dump() for c in cats],
+        "models": [m.model_dump() for m in all_models],
+        "model_count": len(all_models),
+    }
+
+    content = json.dumps(export_data, indent=2, default=str)
+    return Response(
+        content=content,
+        media_type="application/json",
+        headers={"Content-Disposition": "attachment; filename=model-gaitor-export.json"},
+    )
