@@ -16,6 +16,7 @@
   let search = $state('');
   let selectedModel = $state(null);
   let scanResults = $state(null);
+  let scanKey = $state(0);
   let scanning = $state(false);
   let deleteTarget = $state(null);
   let loading = $state(true);
@@ -193,6 +194,7 @@
     try {
       const result = await api.scanLibrary();
       scanResults = result;
+      scanKey += 1;
     } catch (err) {
       error = err.message;
     }
@@ -528,12 +530,14 @@
 
     <!-- Scan results -->
     {#if scanResults && scanResults.count > 0}
-      <ScanResults
-        results={scanResults}
-        {categories}
-        onCataloged={handleCataloged}
-        onDismiss={() => scanResults = null}
-      />
+      {#key scanKey}
+        <ScanResults
+          results={scanResults}
+          {categories}
+          onCataloged={handleCataloged}
+          onDismiss={() => scanResults = null}
+        />
+      {/key}
     {:else if scanResults && scanResults.count === 0}
       <div class="bg-gray-800 border border-gray-700 rounded-md px-4 py-3 mb-4 text-gray-400 text-sm">
         No untracked models found. All files are already cataloged.
