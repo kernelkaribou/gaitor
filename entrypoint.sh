@@ -25,10 +25,12 @@ if [ "$CURRENT_UID" != "$PUID" ] || [ "$CURRENT_GID" != "$PGID" ]; then
     usermod -u "$PUID" -g "$PGID" appuser 2>/dev/null || true
 fi
 
-# Set ownership of app data only if needed (ignore errors for read-only mounts)
-if [ "$(stat -c %u /app 2>/dev/null)" != "$PUID" ]; then
-    chown -R "$PUID:$PGID" /app 2>/dev/null || true
-fi
+# Set ownership of app and data dirs (ignore errors for read-only mounts)
+for dir in /app /library /dest; do
+    if [ "$(stat -c %u "$dir" 2>/dev/null)" != "$PUID" ]; then
+        chown -R "$PUID:$PGID" "$dir" 2>/dev/null || true
+    fi
+done
 
 # Switch to app user and execute the command
 exec gosu appuser "$@"

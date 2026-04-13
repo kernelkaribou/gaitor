@@ -2,11 +2,11 @@
   <img src="docs/gaitor-logo.png" alt="gAItor logo" width="200" />
 </p>
 
-# gAItor 🐊
+# gAItor
 
-AI model library manager and sync tool. A self-hosted, Docker-based web UI for managing AI model files across a **library** (NAS/source of truth) and one or more **destinations** (inferencing machines).
+AI local model asset manager and sync tool. A self-hosted, Docker-based web UI for managing AI model files across a **library** (NAS/source of truth) and one or more **destinations** (inferencing machines).
 
-Think of it as a smart FTP specifically designed for AI models - browse, sync, retrieve from Hugging Face / CivitAI, rename with history tracking, and manage models across your local AI infrastructure.
+Think of it as a smart FTP specifically designed for AI models - browse, sync, retrieve from Hugging Face / CivitAI and other URL's, manage with history tracking, and depoloy models across your local AI infrastructure.
 
 ## Features
 
@@ -121,3 +121,7 @@ make test
 ## License
 
 MIT - see [LICENSE](LICENSE)
+
+## Disclaimer
+
+It may surprise you I built a local AI model management tool with AI but I did. I had this idea as I was messing with local AI models and passing them across a few machines and wanted a better way to manage it. I did not write the code, ai did, I gave it the idea. I plan to update and keep it functioning as long as I use it and tweak futures here and there but its pretty defined scope tool that already went a little overboard. YOu can do whatever you want with this tool, I dont care. Maybe someone will make something better after seeing this...or already has.
