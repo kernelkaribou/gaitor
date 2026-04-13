@@ -65,7 +65,7 @@
     <div class="px-4 py-2 text-red-300 text-sm bg-red-900/20">{error}</div>
   {/if}
 
-  <div class="divide-y divide-gray-700 max-h-[70vh] overflow-y-auto">
+  <div class="divide-y divide-gray-700 max-h-[80vh] overflow-y-auto">
     <!-- Select all row -->
     <div class="px-4 py-2 flex items-center gap-3 bg-gray-750">
       <input type="checkbox" checked={allSelected} onchange={(e) => toggleAll(e.target.checked)} class="rounded" />

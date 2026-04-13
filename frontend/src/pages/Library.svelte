@@ -541,8 +541,9 @@
       </div>
     {/if}
 
-    <!-- Model grid/list -->
-    {#if loading}
+    <!-- Model grid/list (hidden while scan results are showing) -->
+    {#if !(scanResults && scanResults.count > 0)}
+      {#if loading}
       <div class="text-center py-20 text-gray-500">Loading...</div>
     {:else if filteredModels.length > 0}
       {#if activeCategory && groupedModels}
@@ -657,31 +658,28 @@
         {/if}
       {/if}
     {:else}
-      {#if scanResults && scanResults.count > 0}
-        <!-- Scan results take over the full space when no models exist -->
-      {:else}
-        <div class="text-center py-20">
-          <h3 class="text-xl font-medium text-gray-300 mb-2">No models yet</h3>
-          <p class="text-gray-500 max-w-md mx-auto mb-4">
-            Add models to your library by uploading files, scanning your library directory,
-            or downloading from the web.
-          </p>
-          <div class="flex gap-3 justify-center">
-            <button
-              class="px-4 py-2 text-sm rounded-md bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors"
-              onclick={handleScan}
-            >
-              Scan Library Directory
-            </button>
-            <button
-              class="px-4 py-2 text-sm rounded-md bg-green-600 hover:bg-green-500 text-white transition-colors"
-              onclick={() => onNavigate?.('add')}
-            >
-              Add Model
-            </button>
-          </div>
+      <div class="text-center py-20">
+        <h3 class="text-xl font-medium text-gray-300 mb-2">No models yet</h3>
+        <p class="text-gray-500 max-w-md mx-auto mb-4">
+          Add models to your library by uploading files, scanning your library directory,
+          or downloading from the web.
+        </p>
+        <div class="flex gap-3 justify-center">
+          <button
+            class="px-4 py-2 text-sm rounded-md bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors"
+            onclick={handleScan}
+          >
+            Scan Library Directory
+          </button>
+          <button
+            class="px-4 py-2 text-sm rounded-md bg-green-600 hover:bg-green-500 text-white transition-colors"
+            onclick={() => onNavigate?.('add')}
+          >
+            Add Model
+          </button>
         </div>
-      {/if}
+      </div>
+    {/if}
     {/if}
   </div>
 </div>
