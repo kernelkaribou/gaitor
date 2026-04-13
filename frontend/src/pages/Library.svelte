@@ -664,33 +664,37 @@
         {/if}
       {/if}
     {:else}
-      <div class="text-center py-20">
-        <h3 class="text-xl font-medium text-gray-300 mb-2">No models yet</h3>
-        <p class="text-gray-500 max-w-md mx-auto mb-4">
-          Add models to your library by uploading files, scanning your library directory,
-          or downloading from the web.
-        </p>
-        <div class="flex gap-3 justify-center">
-          <button
-            class="px-4 py-2 text-sm rounded-md bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors"
-            onclick={handleScan}
-          >
-            Scan Library Directory
-          </button>
-          <button
-            class="px-4 py-2 text-sm rounded-md bg-green-600 hover:bg-green-500 text-white transition-colors"
-            onclick={() => showUpload = true}
-          >
-            Upload a Model
-          </button>
-          <button
-            class="px-4 py-2 text-sm rounded-md bg-blue-600 hover:bg-blue-500 text-white transition-colors"
-            onclick={() => onNavigate?.('download')}
-          >
-            Download from Web
-          </button>
+      {#if scanResults && scanResults.count > 0}
+        <!-- Scan results take over the full space when no models exist -->
+      {:else}
+        <div class="text-center py-20">
+          <h3 class="text-xl font-medium text-gray-300 mb-2">No models yet</h3>
+          <p class="text-gray-500 max-w-md mx-auto mb-4">
+            Add models to your library by uploading files, scanning your library directory,
+            or downloading from the web.
+          </p>
+          <div class="flex gap-3 justify-center">
+            <button
+              class="px-4 py-2 text-sm rounded-md bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors"
+              onclick={handleScan}
+            >
+              Scan Library Directory
+            </button>
+            <button
+              class="px-4 py-2 text-sm rounded-md bg-green-600 hover:bg-green-500 text-white transition-colors"
+              onclick={() => showUpload = true}
+            >
+              Upload a Model
+            </button>
+            <button
+              class="px-4 py-2 text-sm rounded-md bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+              onclick={() => onNavigate?.('download')}
+            >
+              Download from Web
+            </button>
+          </div>
         </div>
-      </div>
+      {/if}
     {/if}
   </div>
 </div>
