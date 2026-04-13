@@ -55,15 +55,12 @@ export const api = {
     }),
   computeHash: (id) => request(`/models/${id}/hash`, { method: 'POST' }),
   getDownloadUrl: (id) => `${BASE_URL}/models/${id}/download`,
+  getThumbnailUrl: (id) => `${BASE_URL}/models/${id}/thumbnail`,
 
-  async uploadModel(file, name, category, description = '', tags = '') {
+  async uploadThumbnail(modelId, file) {
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('name', name);
-    formData.append('category', category);
-    formData.append('description', description);
-    formData.append('tags', tags);
-    const response = await fetch(`${BASE_URL}/models/upload`, {
+    const response = await fetch(`${BASE_URL}/models/${modelId}/thumbnail`, {
       method: 'POST',
       body: formData,
     });
@@ -72,6 +69,50 @@ export const api = {
       throw new Error(error.detail || `HTTP ${response.status}`);
     }
     return response.json();
+  },
+
+  deleteThumbnail: (id) => request(`/models/${id}/thumbnail`, { method: 'DELETE' }),
+
+  async uploadModel(file, name, category, description = '', tags = '', onProgress = null) {
+    return new Promise((resolve, reject) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('name', name);
+      formData.append('category', category);
+      formData.append('description', description);
+      formData.append('tags', tags);
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `${BASE_URL}/models/upload`);
+
+      if (onProgress) {
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            onProgress({ loaded: e.loaded, total: e.total, percent: Math.round((e.loaded / e.total) * 100) });
+          }
+        });
+      }
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            resolve(JSON.parse(xhr.responseText));
+          } catch {
+            resolve({});
+          }
+        } else {
+          try {
+            const err = JSON.parse(xhr.responseText);
+            reject(new Error(err.detail || `HTTP ${xhr.status}`));
+          } catch {
+            reject(new Error(`HTTP ${xhr.status}`));
+          }
+        }
+      };
+
+      xhr.onerror = () => reject(new Error('Upload failed - network error'));
+      xhr.send(formData);
+    });
   },
 
   // Destinations

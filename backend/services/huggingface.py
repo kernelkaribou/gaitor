@@ -1,5 +1,5 @@
 """
-HuggingFace integration — browse repos, resolve files, download models.
+HuggingFace integration - browse repos, resolve files, download models.
 """
 import logging
 import re

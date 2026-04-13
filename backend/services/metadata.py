@@ -1,5 +1,5 @@
 """
-JSON metadata service — atomic reads/writes for model metadata on network shares.
+JSON metadata service - atomic reads/writes for model metadata on network shares.
 
 Strategy:
 - Individual {uuid}.json files per model (safe writes on NFS/SMB)
@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 METADATA_DIR = config.LIBRARY_PATH / config.METADATA_DIR_NAME
 MODELS_DIR = METADATA_DIR / "models"
+THUMBNAILS_DIR = METADATA_DIR / "thumbnails"
 INDEX_FILE = METADATA_DIR / "index.json"
 CONFIG_FILE = METADATA_DIR / "config.json"
 CATEGORIES_FILE = METADATA_DIR / "categories.json"
@@ -60,6 +61,7 @@ def ensure_metadata_dir() -> bool:
     fresh = not METADATA_DIR.exists()
     METADATA_DIR.mkdir(parents=True, exist_ok=True)
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    THUMBNAILS_DIR.mkdir(parents=True, exist_ok=True)
     return fresh
 
 

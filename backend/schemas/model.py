@@ -34,6 +34,7 @@ class ModelMetadata(BaseModel):
     description: str = ""
     tags: list[str] = Field(default_factory=list)
     preview_image: Optional[str] = None
+    thumbnail: Optional[str] = None  # Relative path to thumbnail within .modelgaitor/thumbnails/
     history: list[ModelHistoryEntry] = Field(default_factory=list)
     created_at: str = ""
     updated_at: str = ""

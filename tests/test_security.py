@@ -1,4 +1,4 @@
-"""Tests for security hardening — path traversal, input validation, etc."""
+"""Tests for security hardening - path traversal, input validation, etc."""
 import pytest
 from pathlib import Path
 

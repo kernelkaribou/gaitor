@@ -1,5 +1,5 @@
 """
-Sync service — file copy operations between library and destinations with progress tracking.
+Sync service - file copy operations between library and destinations with progress tracking.
 """
 import json
 import logging

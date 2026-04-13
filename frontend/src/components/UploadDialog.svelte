@@ -10,6 +10,7 @@
   let tags = $state('');
   let uploading = $state(false);
   let progress = $state(0);
+  let progressBytes = $state({ loaded: 0, total: 0 });
   let error = $state(null);
 
   function handleFileSelect(event) {
@@ -19,7 +20,6 @@
       if (!name) {
         name = selected.name.replace(/\.[^.]+$/, '').replace(/[_-]/g, ' ');
       }
-      // Guess category from extension
       const ext = selected.name.split('.').pop().toLowerCase();
       const extMap = { safetensors: 'checkpoints', ckpt: 'checkpoints', gguf: 'llm', pt: 'vae', pth: 'upscalers' };
       if (extMap[ext] && categories.some((c) => c.id === extMap[ext])) {
@@ -28,12 +28,18 @@
     }
   }
 
+  function handleProgress(e) {
+    progress = e.percent;
+    progressBytes = { loaded: e.loaded, total: e.total };
+  }
+
   async function handleUpload() {
     if (!file || !name) return;
     uploading = true;
+    progress = 0;
     error = null;
     try {
-      await api.uploadModel(file, name, category, description, tags);
+      await api.uploadModel(file, name, category, description, tags, handleProgress);
       onUploaded();
     } catch (err) {
       error = err.message;
@@ -60,7 +66,7 @@
     <div class="p-6">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-lg font-semibold text-gray-100">Upload Model</h2>
-        <button class="text-gray-400 hover:text-gray-200 text-xl" onclick={onClose}>✕</button>
+        <button class="text-gray-400 hover:text-gray-200 text-xl" onclick={onClose}>&#x2715;</button>
       </div>
 
       {#if error}
@@ -109,6 +115,22 @@
           <input bind:value={tags} class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500" placeholder="sdxl, base, 1024px" />
         </div>
 
+        <!-- Progress bar -->
+        {#if uploading}
+          <div>
+            <div class="flex items-center justify-between text-xs text-gray-400 mb-1">
+              <span>Uploading... {progress}%</span>
+              <span>{formatSize(progressBytes.loaded)} / {formatSize(progressBytes.total)}</span>
+            </div>
+            <div class="w-full bg-gray-700 rounded-full h-2.5">
+              <div
+                class="bg-green-500 h-2.5 rounded-full transition-all duration-300"
+                style="width: {progress}%"
+              ></div>
+            </div>
+          </div>
+        {/if}
+
         <!-- Upload button -->
         <div class="flex gap-2 pt-2">
           <button
@@ -116,9 +138,9 @@
             onclick={handleUpload}
             disabled={uploading || !file || !name}
           >
-            {uploading ? 'Uploading...' : 'Upload'}
+            {uploading ? `Uploading ${progress}%` : 'Upload'}
           </button>
-          <button class="px-4 py-2 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={onClose}>Cancel</button>
+          <button class="px-4 py-2 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={onClose} disabled={uploading}>Cancel</button>
         </div>
       </div>
     </div>

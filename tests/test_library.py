@@ -47,6 +47,7 @@ def temp_library(tmp_path, monkeypatch):
     import backend.services.metadata as meta
     meta.METADATA_DIR = config.LIBRARY_PATH / config.METADATA_DIR_NAME
     meta.MODELS_DIR = meta.METADATA_DIR / "models"
+    meta.THUMBNAILS_DIR = meta.METADATA_DIR / "thumbnails"
     meta.INDEX_FILE = meta.METADATA_DIR / "index.json"
     meta.CONFIG_FILE = meta.METADATA_DIR / "config.json"
     meta.CATEGORIES_FILE = meta.METADATA_DIR / "categories.json"
@@ -68,6 +69,7 @@ class TestMetadata:
         assert fresh is True
         assert meta.METADATA_DIR.exists()
         assert meta.MODELS_DIR.exists()
+        assert meta.THUMBNAILS_DIR.exists()
 
         # Second call should not be fresh
         fresh2 = ensure_metadata_dir()

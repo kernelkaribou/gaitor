@@ -1,5 +1,5 @@
 """
-Retrieval service — download pipeline for external model sources.
+Retrieval service - download pipeline for external model sources.
 Handles URL detection, downloading with progress, and cataloging into the library.
 """
 import logging

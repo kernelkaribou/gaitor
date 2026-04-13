@@ -1,5 +1,5 @@
 """
-Settings API endpoints — version checking, configuration, disk space.
+Settings API endpoints - version checking, configuration, disk space.
 """
 from fastapi import APIRouter, Request
 import logging

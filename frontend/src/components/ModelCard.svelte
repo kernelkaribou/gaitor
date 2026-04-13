@@ -1,4 +1,6 @@
 <script>
+  import { api } from '../lib/api.js';
+
   let { model, formatSize, onSelect } = $props();
 
   const ext = $derived(model.filename?.split('.').pop()?.toLowerCase() || '');
@@ -12,28 +14,36 @@
     ext === 'onnx' ? 'bg-teal-900/50 text-teal-400' :
     'bg-gray-700 text-gray-400'
   );
+  const thumbUrl = $derived(model.thumbnail ? api.getThumbnailUrl(model.id) : null);
 </script>
 
 <button
-  class="bg-gray-800 rounded-lg border border-gray-700 p-4 hover:border-green-600/50 transition-colors cursor-pointer text-left w-full"
+  class="bg-gray-800 rounded-lg border border-gray-700 hover:border-green-600/50 transition-colors cursor-pointer text-left w-full overflow-hidden"
   onclick={onSelect}
 >
-  <div class="flex items-start justify-between mb-2">
-    <h3 class="font-medium text-gray-100 truncate text-sm">{model.name}</h3>
-    <span class="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-300 shrink-0 ml-2">
-      {model.category}
-    </span>
-  </div>
-  <p class="text-xs text-gray-500 truncate mb-3">{model.filename}</p>
-  <div class="flex items-center justify-between text-xs text-gray-500">
-    <span>{formatSize(model.size)}</span>
-    <div class="flex items-center gap-2">
-      {#if model.hash?.sha256}
-        <span class="text-green-500" title="Hash verified">✓</span>
-      {/if}
-      {#if extBadge}
-        <span class="px-1.5 py-0.5 rounded {extColor} font-mono text-[10px]">{extBadge}</span>
-      {/if}
+  {#if thumbUrl}
+    <div class="w-full h-32 bg-gray-900">
+      <img src={thumbUrl} alt={model.name} class="w-full h-full object-cover" />
+    </div>
+  {/if}
+  <div class="p-4">
+    <div class="flex items-start justify-between mb-2">
+      <h3 class="font-medium text-gray-100 truncate text-sm">{model.name}</h3>
+      <span class="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-300 shrink-0 ml-2">
+        {model.category}
+      </span>
+    </div>
+    <p class="text-xs text-gray-500 truncate mb-3">{model.filename}</p>
+    <div class="flex items-center justify-between text-xs text-gray-500">
+      <span>{formatSize(model.size)}</span>
+      <div class="flex items-center gap-2">
+        {#if model.hash?.sha256}
+          <span class="text-green-500" title="Hash verified">&#x2713;</span>
+        {/if}
+        {#if extBadge}
+          <span class="px-1.5 py-0.5 rounded {extColor} font-mono text-[10px]">{extBadge}</span>
+        {/if}
+      </div>
     </div>
   </div>
 </button>

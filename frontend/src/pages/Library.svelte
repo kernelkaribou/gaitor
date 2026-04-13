@@ -88,7 +88,7 @@
   }
 
   function formatSize(bytes) {
-    if (!bytes) return '—';
+    if (!bytes) return '-';
     const units = ['B', 'KB', 'MB', 'GB', 'TB'];
     let i = 0;
     let size = bytes;

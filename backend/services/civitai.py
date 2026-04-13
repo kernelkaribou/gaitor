@@ -1,5 +1,5 @@
 """
-CivitAI integration — search models, resolve URLs, download.
+CivitAI integration - search models, resolve URLs, download.
 """
 import logging
 import re

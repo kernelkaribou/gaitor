@@ -1,4 +1,4 @@
-"""Tests for sync service — destination management and model syncing."""
+"""Tests for sync service - destination management and model syncing."""
 import json
 import pytest
 from pathlib import Path
@@ -37,6 +37,7 @@ def temp_env(tmp_path, monkeypatch):
     import backend.services.metadata as meta
     meta.METADATA_DIR = lib / config.METADATA_DIR_NAME
     meta.MODELS_DIR = meta.METADATA_DIR / "models"
+    meta.THUMBNAILS_DIR = meta.METADATA_DIR / "thumbnails"
     meta.INDEX_FILE = meta.METADATA_DIR / "index.json"
     meta.CONFIG_FILE = meta.METADATA_DIR / "config.json"
     meta.CATEGORIES_FILE = meta.METADATA_DIR / "categories.json"

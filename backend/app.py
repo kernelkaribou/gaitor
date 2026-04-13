@@ -92,7 +92,7 @@ app = FastAPI(
     redoc_url=None,
 )
 
-# CORS — same-origin for security; loosen in dev if needed
+# CORS - same-origin for security; loosen in dev if needed
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[],

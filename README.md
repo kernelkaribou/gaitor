@@ -2,17 +2,17 @@
 
 AI model library manager and sync tool. A self-hosted, Docker-based web UI for managing AI model files across a **library** (NAS/source of truth) and one or more **destinations** (inferencing machines).
 
-Think of it as a smart FTP specifically designed for AI models — browse, sync, retrieve from Hugging Face / CivitAI, rename with history tracking, and manage models across your local AI infrastructure.
+Think of it as a smart FTP specifically designed for AI models - browse, sync, retrieve from Hugging Face / CivitAI, rename with history tracking, and manage models across your local AI infrastructure.
 
 ## Features
 
-- **Library Management** — Centralized model library with metadata, categories (ComfyUI-style), search, and tagging
-- **Destination Sync** — Copy models to inferencing machines with real-time progress tracking
-- **External Retrieval** — Download models from Hugging Face and CivitAI directly into your library
-- **Rename Tracking** — Rename models in the library with full history; destinations track rename lineage
-- **Web Upload & Scan** — Upload models through the browser or scan for files added directly to storage
-- **File Integrity** — SHA-256 hashing for verifying large model file transfers
-- **Docker Native** — Single container, volume mounts for library and destinations, PUID/PGID support for NAS
+- **Library Management** - Centralized model library with metadata, categories (ComfyUI-style), search, and tagging
+- **Destination Sync** - Copy models to inferencing machines with real-time progress tracking
+- **External Retrieval** - Download models from Hugging Face and CivitAI directly into your library
+- **Rename Tracking** - Rename models in the library with full history; destinations track rename lineage
+- **Web Upload & Scan** - Upload models through the browser or scan for files added directly to storage
+- **File Integrity** - SHA-256 hashing for verifying large model file transfers
+- **Docker Native** - Single container, volume mounts for library and destinations, PUID/PGID support for NAS
 
 ## Quick Start
 
@@ -50,8 +50,8 @@ docker compose up -d
 | `TZ` | `Etc/UTC` | Timezone |
 | `PORT` | `8487` | Web UI port |
 | `LOG_LEVEL` | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR) |
-| `HUGGINGFACE_TOKEN` | — | Hugging Face API token (for gated models) |
-| `CIVITAI_API_KEY` | — | CivitAI API key |
+| `HUGGINGFACE_TOKEN` | - | Hugging Face API token (for gated models) |
+| `CIVITAI_API_KEY` | - | CivitAI API key |
 
 ## Development
 
@@ -92,9 +92,9 @@ make test
 
 - **Backend**: Python 3.12 + FastAPI
 - **Frontend**: Svelte 5 + Vite + Tailwind CSS
-- **Metadata**: JSON files (no database — network share friendly)
+- **Metadata**: JSON files (no database - network share friendly)
 - **Transfers**: Server-side file copy between Docker volume mounts (browser only receives progress updates)
 
 ## License
 
-MIT — see [LICENSE](LICENSE)
+MIT - see [LICENSE](LICENSE)

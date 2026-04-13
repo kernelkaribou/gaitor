@@ -67,7 +67,7 @@ def validate_model_id(model_id: str) -> str:
 
 
 def validate_dest_id(dest_id: str) -> str:
-    """Validate destination ID — alphanumeric, dashes, underscores only."""
+    """Validate destination ID - alphanumeric, dashes, underscores only."""
     if not re.match(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]*$", dest_id):
         raise ValueError(f"Invalid destination ID: {dest_id}")
     return dest_id

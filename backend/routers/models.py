@@ -2,12 +2,14 @@
 Model CRUD API endpoints.
 """
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional
 from pathlib import Path
 import logging
 
 from .. import config
+from ..utils import validate_model_id
 from ..services.library import (
     catalog_model,
     upload_model,
@@ -21,6 +23,8 @@ from ..services.metadata import (
     load_model,
     load_index,
     is_library_initialized,
+    THUMBNAILS_DIR,
+    ensure_metadata_dir,
 )
 
 router = APIRouter()
@@ -201,7 +205,6 @@ async def compute_hash_endpoint(model_id: str):
 @router.get("/{model_id}/download")
 async def download_model(model_id: str):
     """Download a model file to the user's browser."""
-    from fastapi.responses import FileResponse
     from ..utils import safe_resolve
 
     model = load_model(model_id)
@@ -221,3 +224,76 @@ async def download_model(model_id: str):
         filename=model.filename,
         media_type="application/octet-stream",
     )
+
+
+ALLOWED_THUMBNAIL_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+MAX_THUMBNAIL_SIZE = 5 * 1024 * 1024  # 5MB
+
+
+@router.post("/{model_id}/thumbnail")
+async def upload_thumbnail(model_id: str, file: UploadFile = File(...)):
+    """Upload a thumbnail image for a model."""
+    model_id = validate_model_id(model_id)
+    model = load_model(model_id)
+    if not model:
+        raise HTTPException(status_code=404, detail="Model not found")
+
+    if file.content_type not in ALLOWED_THUMBNAIL_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid image type. Allowed: JPEG, PNG, WebP, GIF",
+        )
+
+    content = await file.read()
+    if len(content) > MAX_THUMBNAIL_SIZE:
+        raise HTTPException(status_code=400, detail="Thumbnail must be under 5MB")
+
+    ext_map = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}
+    ext = ext_map.get(file.content_type, ".jpg")
+    ensure_metadata_dir()
+    thumb_path = THUMBNAILS_DIR / f"{model_id}{ext}"
+
+    # Remove any existing thumbnail with different extension
+    for old in THUMBNAILS_DIR.glob(f"{model_id}.*"):
+        old.unlink(missing_ok=True)
+
+    thumb_path.write_bytes(content)
+
+    # Update model metadata with thumbnail path
+    rel_thumb = f"thumbnails/{model_id}{ext}"
+    update_model_metadata(model_id, {"thumbnail": rel_thumb})
+
+    return {"thumbnail": rel_thumb}
+
+
+@router.delete("/{model_id}/thumbnail")
+async def delete_thumbnail(model_id: str):
+    """Remove a model's thumbnail."""
+    model_id = validate_model_id(model_id)
+    model = load_model(model_id)
+    if not model:
+        raise HTTPException(status_code=404, detail="Model not found")
+
+    for old in THUMBNAILS_DIR.glob(f"{model_id}.*"):
+        old.unlink(missing_ok=True)
+
+    update_model_metadata(model_id, {"thumbnail": None})
+    return {"deleted": True}
+
+
+@router.get("/{model_id}/thumbnail")
+async def get_thumbnail(model_id: str):
+    """Serve a model's thumbnail image."""
+    model_id = validate_model_id(model_id)
+    model = load_model(model_id)
+    if not model or not model.thumbnail:
+        raise HTTPException(status_code=404, detail="No thumbnail found")
+
+    thumb_path = THUMBNAILS_DIR / Path(model.thumbnail).name
+    if not thumb_path.exists():
+        raise HTTPException(status_code=404, detail="Thumbnail file missing")
+
+    media_map = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif"}
+    media_type = media_map.get(thumb_path.suffix.lower(), "image/jpeg")
+
+    return FileResponse(path=str(thumb_path), media_type=media_type)

@@ -1,5 +1,5 @@
 """
-Library service — model scanning, file operations, hashing, upload handling.
+Library service - model scanning, file operations, hashing, upload handling.
 """
 import hashlib
 import logging
@@ -163,7 +163,7 @@ def upload_model(
     description: str = "",
     tags: Optional[list[str]] = None,
 ) -> ModelMetadata:
-    """Handle an uploaded model file — stream to disk, catalog it."""
+    """Handle an uploaded model file - stream to disk, catalog it."""
     ensure_metadata_dir()
 
     # Sanitize filename to prevent path traversal
@@ -253,6 +253,14 @@ def update_model_metadata(
             }
             setattr(model, field, updates[field])
 
+    # Handle thumbnail separately (no history entry needed)
+    if "thumbnail" in updates:
+        model.thumbnail = updates["thumbnail"]
+        model.updated_at = now
+        save_model(model)
+        rebuild_index()
+        return model
+
     if changed_fields:
         model.updated_at = now
         model.history.append(
@@ -269,7 +277,7 @@ def update_model_metadata(
 
 
 def rename_model(model_id: str, new_name: str, rename_file: bool = True) -> ModelMetadata:
-    """Rename a model — updates metadata and optionally the physical file."""
+    """Rename a model - updates metadata and optionally the physical file."""
     model = load_model(model_id)
     if not model:
         raise ValueError(f"Model not found: {model_id}")
