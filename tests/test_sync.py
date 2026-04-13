@@ -146,7 +146,7 @@ class TestSyncModel:
         assert any(h.action == "synced" for h in updated.history)
 
     def test_sync_missing_model(self, setup_library, dest_path):
-        with pytest.raises(ValueError, match="not found"):
+        with pytest.raises(ValueError, match="Invalid model ID format"):
             sync_model_to_destination("nonexistent-id", "test-gpu")
 
     def test_sync_missing_destination(self, sample_model):
@@ -232,7 +232,7 @@ class TestApplyRename:
 
         result = apply_rename_on_destination(sample_model.id, "test-gpu")
         assert result["old_filename"] == "sdxl.safetensors"
-        assert "better name" in result["new_filename"].lower()
+        assert "better_name" in result["new_filename"].lower()
 
         updated_model = load_model(sample_model.id)
         new_dest_file = dest_path / "checkpoints" / updated_model.filename
@@ -246,5 +246,5 @@ class TestApplyRename:
         assert len(data["rename_history"]) == 1
 
     def test_apply_rename_missing_model(self, setup_library, dest_path):
-        with pytest.raises(ValueError, match="not found"):
+        with pytest.raises(ValueError, match="Invalid model ID format"):
             apply_rename_on_destination("no-such-model", "test-gpu")

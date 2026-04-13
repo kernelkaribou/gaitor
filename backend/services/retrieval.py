@@ -10,7 +10,7 @@ from typing import Optional, Callable
 import httpx
 
 from .. import config
-from ..utils import get_now, to_iso
+from ..utils import get_now, to_iso, safe_resolve, sanitize_filename
 from ..schemas.model import ModelMetadata, ModelHistoryEntry, ModelSource
 from .metadata import save_model, rebuild_index, ensure_metadata_dir
 from . import huggingface, civitai
@@ -83,12 +83,14 @@ async def download_model(
     """
     ensure_metadata_dir()
 
-    category_dir = config.LIBRARY_PATH / category
+    # Sanitize filename and validate path stays within library
+    safe_name = sanitize_filename(Path(filename).stem, Path(filename).suffix)
+    category_dir = safe_resolve(config.LIBRARY_PATH, category)
     category_dir.mkdir(parents=True, exist_ok=True)
-    dest_path = category_dir / filename
+    dest_path = category_dir / safe_name
 
     if dest_path.exists():
-        raise ValueError(f"File already exists: {category}/{filename}")
+        raise ValueError(f"File already exists: {category}/{safe_name}")
 
     tmp_path = str(dest_path) + ".downloading"
     total_size = 0

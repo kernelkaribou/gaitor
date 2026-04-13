@@ -4,8 +4,6 @@
 #
 #    pip-compile --output-file=requirements.txt requirements.in
 #
-aiofiles==24.1.0
-    # via -r requirements.in
 annotated-doc==0.0.4
     # via fastapi
 annotated-types==0.7.0
@@ -19,38 +17,24 @@ certifi==2026.2.25
     # via
     #   httpcore
     #   httpx
-    #   requests
-charset-normalizer==3.4.7
-    # via requests
 click==8.3.2
     # via uvicorn
 fastapi==0.135.3
     # via -r requirements.in
-filelock==3.25.2
-    # via huggingface-hub
-fsspec==2026.3.0
-    # via huggingface-hub
 h11==0.16.0
     # via
     #   httpcore
     #   uvicorn
-hf-xet==1.4.3
-    # via huggingface-hub
 httpcore==1.0.9
     # via httpx
 httptools==0.7.1
     # via uvicorn
 httpx==0.28.1
     # via -r requirements.in
-huggingface-hub==0.36.2
-    # via -r requirements.in
 idna==3.11
     # via
     #   anyio
     #   httpx
-    #   requests
-packaging==26.0
-    # via huggingface-hub
 pydantic==2.13.0
     # via
     #   -r requirements.in
@@ -62,19 +46,12 @@ python-dotenv==1.2.2
 python-multipart==0.0.26
     # via -r requirements.in
 pyyaml==6.0.3
-    # via
-    #   huggingface-hub
-    #   uvicorn
-requests==2.33.1
-    # via huggingface-hub
+    # via uvicorn
 starlette==1.0.0
     # via fastapi
-tqdm==4.67.3
-    # via huggingface-hub
 typing-extensions==4.15.0
     # via
     #   fastapi
-    #   huggingface-hub
     #   pydantic
     #   pydantic-core
     #   typing-inspection
@@ -82,8 +59,6 @@ typing-inspection==0.4.2
     # via
     #   fastapi
     #   pydantic
-urllib3==2.6.3
-    # via requests
 uvicorn[standard]==0.44.0
     # via -r requirements.in
 uvloop==0.22.1
@@ -91,6 +66,4 @@ uvloop==0.22.1
 watchfiles==1.1.1
     # via uvicorn
 websockets==14.2
-    # via
-    #   -r requirements.in
-    #   uvicorn
+    # via uvicorn

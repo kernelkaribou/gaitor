@@ -136,9 +136,11 @@ async def upload_model_endpoint(
         if background_tasks:
             background_tasks.add_task(compute_hash, model.id)
         return model.model_dump()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Upload failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Upload failed: {e}")
+        raise HTTPException(status_code=500, detail="Upload failed")
 
 
 @router.put("/{model_id}")
@@ -200,12 +202,17 @@ async def compute_hash_endpoint(model_id: str):
 async def download_model(model_id: str):
     """Download a model file to the user's browser."""
     from fastapi.responses import FileResponse
+    from ..utils import safe_resolve
 
     model = load_model(model_id)
     if not model:
         raise HTTPException(status_code=404, detail="Model not found")
 
-    filepath = config.LIBRARY_PATH / model.relative_path
+    try:
+        filepath = safe_resolve(config.LIBRARY_PATH, model.relative_path)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid model path")
+
     if not filepath.exists():
         raise HTTPException(status_code=404, detail="Model file not found on disk")
 

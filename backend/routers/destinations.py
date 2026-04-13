@@ -25,6 +25,10 @@ class SyncRequest(BaseModel):
 class BulkSyncRequest(BaseModel):
     model_ids: list[str]
 
+    def model_post_init(self, __context):
+        if len(self.model_ids) > 100:
+            raise ValueError("Bulk sync limited to 100 models at a time")
+
 
 class RemoveRequest(BaseModel):
     model_id: str

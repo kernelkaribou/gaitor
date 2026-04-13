@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Optional, Callable
 
 from .. import config
-from ..utils import get_now, to_iso
+from ..utils import get_now, to_iso, safe_resolve, validate_dest_id
 from ..schemas.model import ModelMetadata, SyncMetadata, ModelHistoryEntry
 from .metadata import load_model, save_model, rebuild_index, load_all_models
 
@@ -48,7 +48,8 @@ def list_destinations() -> list[dict]:
 
 def get_destination_models(dest_id: str) -> list[dict]:
     """List all synced models on a destination (by reading sidecar files)."""
-    dest_path = config.DESTINATIONS_ROOT / dest_id
+    validate_dest_id(dest_id)
+    dest_path = safe_resolve(config.DESTINATIONS_ROOT, dest_id)
     if not dest_path.exists():
         raise ValueError(f"Destination not found: {dest_id}")
 
@@ -148,15 +149,16 @@ def sync_model_to_destination(
     progress_callback: Optional[Callable] = None,
 ) -> dict:
     """Copy a model from the library to a destination with sidecar metadata."""
+    validate_dest_id(dest_id)
     model = load_model(model_id)
     if not model:
         raise ValueError(f"Model not found: {model_id}")
 
-    dest_path = config.DESTINATIONS_ROOT / dest_id
+    dest_path = safe_resolve(config.DESTINATIONS_ROOT, dest_id)
     if not dest_path.exists():
         raise ValueError(f"Destination not found: {dest_id}")
 
-    src_path = config.LIBRARY_PATH / model.relative_path
+    src_path = safe_resolve(config.LIBRARY_PATH, model.relative_path)
     if not src_path.exists():
         raise ValueError(f"Source file not found: {model.relative_path}")
 
@@ -220,7 +222,8 @@ def sync_model_to_destination(
 
 def remove_from_destination(model_id: str, dest_id: str) -> dict:
     """Remove a synced model and its sidecar from a destination."""
-    dest_path = config.DESTINATIONS_ROOT / dest_id
+    validate_dest_id(dest_id)
+    dest_path = safe_resolve(config.DESTINATIONS_ROOT, dest_id)
     if not dest_path.exists():
         raise ValueError(f"Destination not found: {dest_id}")
 
@@ -251,11 +254,12 @@ def remove_from_destination(model_id: str, dest_id: str) -> dict:
 
 def apply_rename_on_destination(model_id: str, dest_id: str) -> dict:
     """Apply a pending library rename to a synced model on a destination."""
+    validate_dest_id(dest_id)
     model = load_model(model_id)
     if not model:
         raise ValueError(f"Model not found: {model_id}")
 
-    dest_path = config.DESTINATIONS_ROOT / dest_id
+    dest_path = safe_resolve(config.DESTINATIONS_ROOT, dest_id)
     if not dest_path.exists():
         raise ValueError(f"Destination not found: {dest_id}")
 

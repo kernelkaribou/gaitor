@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 from .. import config
-from ..utils import get_now, to_iso
+from ..utils import get_now, to_iso, safe_resolve, sanitize_filename
 from ..schemas.model import ModelMetadata, ModelSource, ModelHistoryEntry
 from .metadata import (
     ensure_metadata_dir,
@@ -120,7 +120,7 @@ def catalog_model(
     source_provider: str = "manual",
 ) -> ModelMetadata:
     """Create a metadata entry for an existing file in the library."""
-    filepath = config.LIBRARY_PATH / relative_path
+    filepath = safe_resolve(config.LIBRARY_PATH, relative_path)
 
     if not filepath.exists():
         raise FileNotFoundError(f"File not found: {relative_path}")
@@ -166,10 +166,13 @@ def upload_model(
     """Handle an uploaded model file — stream to disk, catalog it."""
     ensure_metadata_dir()
 
-    # Place in category folder
-    dest_dir = config.LIBRARY_PATH / category
+    # Sanitize filename to prevent path traversal
+    safe_name = sanitize_filename(Path(filename).stem, Path(filename).suffix)
+
+    # Validate category and destination stay within library
+    dest_dir = safe_resolve(config.LIBRARY_PATH, category)
     dest_dir.mkdir(parents=True, exist_ok=True)
-    dest_path = dest_dir / filename
+    dest_path = dest_dir / safe_name
 
     # Avoid overwriting
     if dest_path.exists():
@@ -189,8 +192,10 @@ def upload_model(
                 chunk = data_stream.read(config.COPY_BUFFER_SIZE)
                 if not chunk:
                     break
-                f.write(chunk)
                 total_size += len(chunk)
+                if total_size > config.MAX_UPLOAD_SIZE:
+                    raise ValueError(f"Upload exceeds maximum size ({config.MAX_UPLOAD_SIZE} bytes)")
+                f.write(chunk)
         os.replace(str(tmp_path), str(dest_path))
     except Exception:
         try:
@@ -276,17 +281,23 @@ def rename_model(model_id: str, new_name: str, rename_file: bool = True) -> Mode
     model.name = new_name
 
     if rename_file:
-        old_path = config.LIBRARY_PATH / model.relative_path
+        old_path = safe_resolve(config.LIBRARY_PATH, model.relative_path)
         ext = old_path.suffix
-        # Sanitize filename
-        safe_name = "".join(c for c in new_name if c.isalnum() or c in " -_").strip()
-        new_filename = f"{safe_name}{ext}"
+        new_filename = sanitize_filename(new_name, ext)
         new_path = old_path.parent / new_filename
 
-        if old_path.exists() and not new_path.exists():
+        # Verify new path stays within library
+        if not new_path.resolve().is_relative_to(config.LIBRARY_PATH.resolve()):
+            raise ValueError("Rename would escape library directory")
+
+        try:
             os.rename(str(old_path), str(new_path))
             model.filename = new_filename
             model.relative_path = str(new_path.relative_to(config.LIBRARY_PATH))
+        except FileNotFoundError:
+            pass  # source gone, just update metadata
+        except FileExistsError:
+            raise ValueError(f"A file named '{new_filename}' already exists")
 
     model.updated_at = now
     model.history.append(
@@ -323,7 +334,7 @@ def delete_library_model(model_id: str, delete_file: bool = True) -> dict:
     }
 
     if delete_file:
-        filepath = config.LIBRARY_PATH / model.relative_path
+        filepath = safe_resolve(config.LIBRARY_PATH, model.relative_path)
         if filepath.exists():
             filepath.unlink()
             result["file_deleted"] = True
@@ -341,7 +352,7 @@ def compute_hash(model_id: str) -> Optional[str]:
     if not model:
         return None
 
-    filepath = config.LIBRARY_PATH / model.relative_path
+    filepath = safe_resolve(config.LIBRARY_PATH, model.relative_path)
     if not filepath.exists():
         return None
 

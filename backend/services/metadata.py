@@ -16,6 +16,7 @@ from typing import Optional
 
 from ..schemas.model import ModelMetadata
 from ..schemas.library import CategoryDefinition, LibraryConfig, DEFAULT_CATEGORIES
+from ..utils import validate_model_id
 from .. import config
 
 logger = logging.getLogger(__name__)
@@ -147,6 +148,7 @@ def save_model(model: ModelMetadata) -> None:
 
 def load_model(model_id: str) -> Optional[ModelMetadata]:
     """Load a single model's metadata by ID."""
+    validate_model_id(model_id)
     model_file = MODELS_DIR / f"{model_id}.json"
     data = _read_json(model_file)
     if data:
@@ -156,6 +158,7 @@ def load_model(model_id: str) -> Optional[ModelMetadata]:
 
 def delete_model_metadata(model_id: str) -> bool:
     """Delete a model's metadata file. Returns True if deleted."""
+    validate_model_id(model_id)
     model_file = MODELS_DIR / f"{model_id}.json"
     try:
         model_file.unlink()

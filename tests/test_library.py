@@ -205,7 +205,7 @@ class TestLibraryService:
         renamed = rename_model(model.id, "New Name", rename_file=True)
 
         assert renamed.name == "New Name"
-        assert "New Name" in renamed.filename
+        assert "New_Name" in renamed.filename
         assert any(h.action == "renamed" for h in renamed.history)
         # Old file should be gone, new file should exist
         assert not filepath.exists()

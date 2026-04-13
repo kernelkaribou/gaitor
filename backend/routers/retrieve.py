@@ -33,6 +33,12 @@ class SearchRequest(BaseModel):
     provider: str = "huggingface"
     limit: int = 20
 
+    def model_post_init(self, __context):
+        if self.limit < 1:
+            self.limit = 1
+        elif self.limit > 100:
+            self.limit = 100
+
 
 @router.get("/providers")
 async def list_providers():
@@ -64,7 +70,8 @@ async def resolve_url_endpoint(req: ResolveRequest):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Failed to resolve URL: {e}")
+        logger.error(f"Failed to resolve URL: {e}")
+        raise HTTPException(status_code=502, detail="Failed to resolve URL")
 
 
 @router.post("/download")
@@ -85,7 +92,7 @@ async def download_model_endpoint(req: DownloadRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Download failed: {e}")
-        raise HTTPException(status_code=502, detail=f"Download failed: {e}")
+        raise HTTPException(status_code=502, detail="Download failed")
 
 
 @router.post("/search")
@@ -102,7 +109,8 @@ async def search_models(req: SearchRequest):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Search failed: {e}")
+        logger.error(f"Search failed: {e}")
+        raise HTTPException(status_code=502, detail="Search failed")
 
 
 @router.get("/hf/{repo_id:path}/files")
@@ -112,7 +120,8 @@ async def list_hf_files(repo_id: str):
         files = await huggingface.list_repo_files(repo_id)
         return {"files": files, "repo_id": repo_id}
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Failed to list files: {e}")
+        logger.error(f"Failed to list HF files: {e}")
+        raise HTTPException(status_code=502, detail="Failed to list files")
 
 
 @router.get("/civitai/{model_id}")
@@ -122,4 +131,5 @@ async def get_civitai_model(model_id: str):
         info = await civitai.get_model_info(model_id)
         return info
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Failed to get model: {e}")
+        logger.error(f"Failed to get CivitAI model: {e}")
+        raise HTTPException(status_code=502, detail="Failed to get model info")

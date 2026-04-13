@@ -108,6 +108,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: https:; connect-src 'self' ws: wss:; font-src 'self'"
+        )
         if request.url.path.startswith("/assets/"):
             response.headers["Cache-Control"] = "public, max-age=86400"
         return response
@@ -134,7 +138,6 @@ async def health_check():
     return {
         "status": "healthy",
         "version": app.version,
-        "library": str(config.LIBRARY_PATH),
     }
 
 
