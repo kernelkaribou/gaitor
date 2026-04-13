@@ -13,7 +13,7 @@ class CategoryDefinition(BaseModel):
 
 
 class LibraryConfig(BaseModel):
-    """Library-level configuration stored in .modelgaitor/config.json."""
+    """Library-level configuration stored in .gaitor/config.json."""
     name: str = "Model Library"
     version: str = "1"
     categories_template: str = "default"

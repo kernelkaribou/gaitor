@@ -1,5 +1,5 @@
 """
-Configuration management for Model gAItor.
+Configuration management for gAItor.
 """
 import os
 from pathlib import Path
@@ -10,7 +10,7 @@ LIBRARY_PATH = Path(os.getenv("LIBRARY_PATH", "/library"))
 DESTINATIONS_ROOT = Path(os.getenv("DESTINATIONS_ROOT", "/dest"))
 
 # Metadata directory name within the library
-METADATA_DIR_NAME = ".modelgaitor"
+METADATA_DIR_NAME = ".gaitor"
 
 # Server settings
 HOST = os.getenv("HOST", "0.0.0.0")
@@ -25,7 +25,7 @@ HUGGINGFACE_TOKEN = os.getenv("HUGGINGFACE_TOKEN", "")
 CIVITAI_API_KEY = os.getenv("CIVITAI_API_KEY", "")
 
 # GitHub repo for version checking
-GITHUB_REPO = "kernelkaribou/model-gAItor"
+GITHUB_REPO = "kernelkaribou/gaitor"
 
 # File transfer settings
 COPY_BUFFER_SIZE = 8 * 1024 * 1024  # 8MB chunks for file copy progress

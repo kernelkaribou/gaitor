@@ -22,7 +22,7 @@
 {#if info}
   <div class="bg-green-900/50 border border-green-700 rounded-lg px-4 py-2 mb-4 flex items-center justify-between">
     <span class="text-green-300 text-sm">
-      🐊 Model gAItor <strong>v{info.latest}</strong> is available!
+      🐊 gAItor <strong>v{info.latest}</strong> is available!
     </span>
     {#if info.release_url}
       <a

@@ -1,1 +1,1 @@
-"""Model gAItor - AI model library manager and sync tool."""
+"""gAItor - AI model library manager and sync tool."""

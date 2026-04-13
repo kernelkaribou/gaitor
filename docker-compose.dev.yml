@@ -1,10 +1,10 @@
 services:
-  modelgaitor:
+  gaitor:
     build:
       context: .
       dockerfile: Dockerfile
-    image: model-gaitor:dev
-    container_name: model-gaitor-dev
+    image: gaitor:dev
+    container_name: gaitor-dev
     environment:
       - PUID=1000
       - PGID=1000

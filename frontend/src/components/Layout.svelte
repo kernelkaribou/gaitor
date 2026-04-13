@@ -9,7 +9,7 @@
   <header class="bg-gray-800 border-b border-gray-700 px-6 py-3 flex items-center justify-between">
     <div class="flex items-center gap-3">
       <span class="text-2xl">&#x1F40A;</span>
-      <h1 class="text-xl font-bold text-green-400">Model gAItor</h1>
+      <h1 class="text-xl font-bold text-green-400">gAItor</h1>
     </div>
     <nav class="flex items-center gap-4">
       <button

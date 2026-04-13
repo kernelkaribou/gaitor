@@ -1,5 +1,5 @@
 """
-Utility functions for Model gAItor.
+Utility functions for gAItor.
 """
 import re
 from datetime import datetime

@@ -1,7 +1,7 @@
 services:
-  modelgaitor:
-    image: ghcr.io/kernelkaribou/model-gaitor:latest
-    container_name: model-gaitor
+  gaitor:
+    image: ghcr.io/kernelkaribou/gaitor:latest
+    container_name: gaitor
     environment:
       - PUID=1000
       - PGID=1000

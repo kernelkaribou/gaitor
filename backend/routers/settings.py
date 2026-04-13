@@ -27,7 +27,7 @@ async def get_version(request: Request):
         async with httpx.AsyncClient(timeout=5) as client:
             resp = await client.get(
                 f"https://api.github.com/repos/{config.GITHUB_REPO}/releases/latest",
-                headers={"Accept": "application/vnd.github.v3+json", "User-Agent": "model-gaitor"},
+                headers={"Accept": "application/vnd.github.v3+json", "User-Agent": "gaitor"},
             )
             resp.raise_for_status()
             data = resp.json()
@@ -110,5 +110,5 @@ async def export_metadata():
     return Response(
         content=content,
         media_type="application/json",
-        headers={"Content-Disposition": "attachment; filename=model-gaitor-export.json"},
+        headers={"Content-Disposition": "attachment; filename=gaitor-export.json"},
     )

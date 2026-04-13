@@ -1,5 +1,5 @@
 /**
- * API client for Model gAItor backend.
+ * API client for gAItor backend.
  */
 const BASE_URL = '/api';
 

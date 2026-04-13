@@ -234,7 +234,7 @@
           </div>
           <a
             href={api.getExportUrl()}
-            download="model-gaitor-export.json"
+            download="gaitor-export.json"
             class="px-4 py-2 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors"
           >
             Export JSON
@@ -266,7 +266,7 @@
     <section class="mb-8 pt-4 border-t border-gray-700">
       <div class="flex items-center justify-between text-sm">
         <div>
-          <span class="text-gray-400">Model gAItor</span>
+          <span class="text-gray-400">gAItor</span>
           <span class="text-gray-600 ml-1">v{version?.version || '?'}</span>
         </div>
         {#if version?.update_available}

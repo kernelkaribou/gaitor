@@ -1,5 +1,5 @@
 /**
- * Shared utility functions for Model gAItor frontend.
+ * Shared utility functions for gAItor frontend.
  */
 
 /**

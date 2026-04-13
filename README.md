@@ -1,4 +1,4 @@
-# Model gAItor 🐊
+# gAItor 🐊
 
 AI model library manager and sync tool. A self-hosted, Docker-based web UI for managing AI model files across a **library** (NAS/source of truth) and one or more **destinations** (inferencing machines).
 
@@ -19,9 +19,9 @@ Think of it as a smart FTP specifically designed for AI models - browse, sync, r
 ```yaml
 # docker-compose.yml
 services:
-  modelgaitor:
-    image: ghcr.io/kernelkaribou/model-gaitor:latest
-    container_name: model-gaitor
+  gaitor:
+    image: ghcr.io/kernelkaribou/gaitor:latest
+    container_name: gaitor
     environment:
       - PUID=1000
       - PGID=1000

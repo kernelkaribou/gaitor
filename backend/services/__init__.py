@@ -1,1 +1,1 @@
-"""Service package for Model gAItor business logic."""
+"""Service package for gAItor business logic."""

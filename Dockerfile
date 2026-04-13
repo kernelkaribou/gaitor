@@ -24,10 +24,10 @@ COPY --from=frontend-build /build/dist ./frontend/dist/
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-LABEL org.opencontainers.image.title="Model gAItor" \
+LABEL org.opencontainers.image.title="gAItor" \
       org.opencontainers.image.description="AI model library manager and sync tool" \
       org.opencontainers.image.vendor="kernelkaribou" \
-      org.opencontainers.image.source="https://github.com/kernelkaribou/model-gAItor"
+      org.opencontainers.image.source="https://github.com/kernelkaribou/gaitor"
 
 ENV PYTHONUNBUFFERED=1
 ENV TZ=Etc/UTC

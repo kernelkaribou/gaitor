@@ -1,1 +1,1 @@
-"""Router package for Model gAItor API."""
+"""Router package for gAItor API."""

@@ -1,5 +1,5 @@
 """
-Main FastAPI application for Model gAItor.
+Main FastAPI application for gAItor.
 """
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
@@ -76,18 +76,18 @@ async def lifespan(app: FastAPI):
         initialize_library()
         logger.info("Library auto-initialized on first startup")
 
-    logger.info(f"Model gAItor v{app.version} starting")
+    logger.info(f"gAItor v{app.version} starting")
     logger.info(f"Library path: {config.LIBRARY_PATH}")
     logger.info(f"Destinations root: {config.DESTINATIONS_ROOT}")
     logger.info(f"Log level: {config.LOG_LEVEL}")
 
     yield
 
-    logger.info("Model gAItor shutting down")
+    logger.info("gAItor shutting down")
 
 
 app = FastAPI(
-    title="Model gAItor",
+    title="gAItor",
     description="AI model library manager and sync tool",
     version=get_app_version(),
     lifespan=lifespan,
@@ -192,7 +192,7 @@ async def frontend_catchall(path: str):
     if index_file.exists():
         return FileResponse(str(index_file), media_type="text/html")
     return HTMLResponse(
-        "<html><body><h1>Model gAItor</h1>"
+        "<html><body><h1>gAItor</h1>"
         "<p>Frontend not built yet. Run <code>cd frontend && npm run build</code></p>"
         "</body></html>",
         status_code=200,
