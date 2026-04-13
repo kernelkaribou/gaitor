@@ -34,6 +34,8 @@
     '#14b8a6', '#e879f9', '#facc15', '#fb923c', '#818cf8',
   ];
 
+  const OTHER_THRESHOLD = 2; // categories below this % are grouped into "Other"
+
   function buildPieSlices(byCategory) {
     if (!byCategory) return [];
     const entries = Object.entries(byCategory)
@@ -44,8 +46,28 @@
     const total = entries.reduce((s, e) => s + e.size, 0);
     if (total === 0) return [];
 
+    const major = [];
+    let otherSize = 0;
+    let otherCount = 0;
+    let otherNames = [];
+
+    for (const e of entries) {
+      const pct = (e.size / total) * 100;
+      if (pct >= OTHER_THRESHOLD || major.length < 8) {
+        major.push(e);
+      } else {
+        otherSize += e.size;
+        otherCount += e.count;
+        otherNames.push(e.cat);
+      }
+    }
+
+    if (otherSize > 0) {
+      major.push({ cat: `Other (${otherNames.length})`, size: otherSize, count: otherCount });
+    }
+
     let cumulative = 0;
-    return entries.map((e, i) => {
+    return major.map((e, i) => {
       const startAngle = (cumulative / total) * 360;
       const sliceAngle = (e.size / total) * 360;
       cumulative += e.size;
