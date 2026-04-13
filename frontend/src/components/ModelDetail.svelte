@@ -4,18 +4,42 @@
   let { model, categories, formatSize, onClose, onUpdated, onDelete } = $props();
 
   let editing = $state(false);
-  let editName = $state(model.name);
-  let editDescription = $state(model.description || '');
-  let editCategory = $state(model.category);
-  let editTags = $state((model.tags || []).join(', '));
-  let editSourceUrl = $state(model.source?.url || '');
-  let editBaseModel = $state(model.base_model || '');
-  let renaming = $state(false);
-  let renameNewName = $state(model.name);
-  let renameFile = $state(true);
-  let confirmingRename = $state(false);
   let saving = $state(false);
   let error = $state(null);
+
+  // Edit form state
+  let editName = $state('');
+  let editFilename = $state('');
+  let editCategory = $state('');
+  let editSubfolder = $state('');
+  let editDescription = $state('');
+  let editSourceUrl = $state('');
+  let editBaseModel = $state('');
+  let editTags = $state('');
+
+  // Original values snapshot for dirty tracking
+  let origName = $state('');
+  let origFilename = $state('');
+  let origCategory = $state('');
+  let origSubfolder = $state('');
+  let origDescription = $state('');
+  let origSourceUrl = $state('');
+  let origBaseModel = $state('');
+  let origTags = $state('');
+
+  // Path autocomplete
+  let knownSubfolders = $state([]);
+  let showPathSuggestions = $state(false);
+  let pathInputFocused = $state(false);
+
+  let filteredSuggestions = $derived(
+    editSubfolder.trim()
+      ? knownSubfolders.filter(s => s.toLowerCase().startsWith(editSubfolder.toLowerCase()) && s !== editSubfolder)
+      : []
+  );
+  let isNewPath = $derived(
+    editSubfolder.trim() !== '' && !knownSubfolders.includes(editSubfolder.trim()) && editSubfolder.trim() !== origSubfolder
+  );
 
   // Thumbnail
   let thumbUrl = $derived(model.thumbnail ? api.getThumbnailUrl(model.id) + '?t=' + Date.now() : null);
@@ -28,47 +52,99 @@
   let loadingDests = $state(false);
   let confirmSyncDest = $state(null);
 
-  // Move to subfolder
-  let showMovePicker = $state(false);
-  let moveSubfolder = $state('');
-  let movingModel = $state(false);
+  function getModelSubfolder() {
+    const parts = model.relative_path.split('/');
+    return parts.length > 2 ? parts.slice(1, -1).join('/') : '';
+  }
+
+  function getFilenameBase() {
+    const fn = model.filename || '';
+    const dot = fn.lastIndexOf('.');
+    return dot > 0 ? fn.substring(0, dot) : fn;
+  }
+
+  function getFilenameExt() {
+    const fn = model.filename || '';
+    const dot = fn.lastIndexOf('.');
+    return dot > 0 ? fn.substring(dot) : '';
+  }
+
+  function startEditing() {
+    editName = model.name;
+    editFilename = getFilenameBase();
+    editCategory = model.category;
+    editSubfolder = getModelSubfolder();
+    editDescription = model.description || '';
+    editSourceUrl = model.source?.url || '';
+    editBaseModel = model.base_model || '';
+    editTags = (model.tags || []).join(', ');
+
+    origName = editName;
+    origFilename = editFilename;
+    origCategory = editCategory;
+    origSubfolder = editSubfolder;
+    origDescription = editDescription;
+    origSourceUrl = editSourceUrl;
+    origBaseModel = editBaseModel;
+    origTags = editTags;
+
+    editing = true;
+    loadSubfolders(editCategory);
+  }
+
+  let hasChanges = $derived(
+    editName !== origName ||
+    editFilename !== origFilename ||
+    editCategory !== origCategory ||
+    editSubfolder !== origSubfolder ||
+    editDescription !== origDescription ||
+    editSourceUrl !== origSourceUrl ||
+    editBaseModel !== origBaseModel ||
+    editTags !== origTags
+  );
+
+  async function loadSubfolders(categoryId) {
+    try {
+      const data = await api.listSubfolders(categoryId);
+      knownSubfolders = data.subfolders || [];
+    } catch {
+      knownSubfolders = [];
+    }
+  }
+
+  function handleCategoryChange() {
+    loadSubfolders(editCategory);
+    if (editCategory !== origCategory) {
+      editSubfolder = '';
+    }
+  }
+
+  function selectSuggestion(suggestion) {
+    editSubfolder = suggestion;
+    showPathSuggestions = false;
+  }
 
   async function saveEdits() {
     saving = true;
     error = null;
     try {
-      const tags = editTags.split(',').map((t) => t.trim()).filter(Boolean);
-      await api.updateModel(model.id, {
-        name: editName,
-        description: editDescription,
-        category: editCategory,
-        tags,
-        source_url: editSourceUrl || null,
-        base_model: editBaseModel.trim() || '',
-      });
+      const tags = editTags.split(',').map(t => t.trim()).filter(Boolean);
+      const updates = {};
+
+      if (editName !== origName) updates.name = editName;
+      if (editDescription !== origDescription) updates.description = editDescription;
+      if (editCategory !== origCategory) updates.category = editCategory;
+      if (editTags !== origTags) updates.tags = tags;
+      if (editSourceUrl !== origSourceUrl) updates.source_url = editSourceUrl || null;
+      if (editBaseModel !== origBaseModel) updates.base_model = editBaseModel.trim() || '';
+      if (editFilename !== origFilename) updates.filename = editFilename + getFilenameExt();
+      if (editSubfolder !== origSubfolder) updates.subfolder = editSubfolder;
+
+      await api.updateModel(model.id, updates);
       editing = false;
       onUpdated();
     } catch (err) {
       error = err.message;
-    }
-    saving = false;
-  }
-
-  function requestRenameConfirm() {
-    confirmingRename = true;
-  }
-
-  async function handleRename() {
-    saving = true;
-    error = null;
-    try {
-      await api.renameModel(model.id, renameNewName, renameFile);
-      renaming = false;
-      confirmingRename = false;
-      onUpdated();
-    } catch (err) {
-      error = err.message;
-      confirmingRename = false;
     }
     saving = false;
   }
@@ -132,19 +208,6 @@
     syncingTo = { ...syncingTo, [destId]: false };
   }
 
-  async function handleMove() {
-    movingModel = true;
-    error = null;
-    try {
-      await api.moveModel(model.id, moveSubfolder);
-      showMovePicker = false;
-      onUpdated();
-    } catch (err) {
-      error = err.message;
-    }
-    movingModel = false;
-  }
-
   function formatHistoryEntry(entry) {
     const d = entry.details || {};
     switch (entry.action) {
@@ -162,6 +225,8 @@
       case 'metadata_updated': {
         const changes = [];
         if (d.category) changes.push(`category ${d.category.from} \u2192 ${d.category.to}`);
+        if (d.subfolder) changes.push(`path ${d.subfolder.from} \u2192 ${d.subfolder.to}`);
+        if (d.filename) changes.push(`file ${d.filename.from} \u2192 ${d.filename.to}`);
         if (d.tags) {
           const from = Array.isArray(d.tags.from) ? d.tags.from : [];
           const to = Array.isArray(d.tags.to) ? d.tags.to : [];
@@ -229,83 +294,88 @@
     </div>
 
     {#if editing}
-      <!-- Edit form -->
+      <!-- Unified Edit Form -->
       <div class="space-y-4">
         <div>
-          <label class="block text-sm text-gray-400 mb-1">Name</label>
+          <label class="block text-sm text-gray-400 mb-1">Display Name</label>
           <input bind:value={editName} class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500" />
+          <p class="text-xs text-gray-600 mt-0.5">How this model appears in the UI</p>
         </div>
+
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">Filename</label>
+          <div class="flex items-center gap-0">
+            <input bind:value={editFilename} class="flex-1 bg-gray-900 border border-gray-600 rounded-l px-3 py-2 text-sm text-gray-200 font-mono focus:outline-none focus:border-green-500" />
+            <span class="bg-gray-700 border border-l-0 border-gray-600 rounded-r px-3 py-2 text-sm text-gray-400 font-mono">{getFilenameExt()}</span>
+          </div>
+          <p class="text-xs text-gray-600 mt-0.5">Physical file name on disk</p>
+        </div>
+
         <div>
           <label class="block text-sm text-gray-400 mb-1">Category</label>
-          <select bind:value={editCategory} class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500">
+          <select bind:value={editCategory} onchange={handleCategoryChange} class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500">
             {#each categories as cat}
               <option value={cat.id}>{cat.label}</option>
             {/each}
           </select>
         </div>
+
+        <div class="relative">
+          <label class="block text-sm text-gray-400 mb-1">Path within category</label>
+          <input
+            bind:value={editSubfolder}
+            onfocus={() => { pathInputFocused = true; showPathSuggestions = true; }}
+            onblur={() => setTimeout(() => { pathInputFocused = false; showPathSuggestions = false; }, 200)}
+            class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 font-mono focus:outline-none focus:border-green-500"
+            placeholder="Leave empty for category root"
+          />
+          {#if isNewPath}
+            <p class="text-xs text-yellow-400 mt-0.5">{'\u2728'} New path will be created</p>
+          {/if}
+          {#if showPathSuggestions && filteredSuggestions.length > 0}
+            <div class="absolute z-10 mt-1 w-full bg-gray-900 border border-gray-600 rounded shadow-lg max-h-32 overflow-y-auto">
+              {#each filteredSuggestions as suggestion}
+                <button
+                  class="w-full text-left px-3 py-1.5 text-sm text-gray-300 font-mono hover:bg-gray-700 transition-colors"
+                  onmousedown={(e) => { e.preventDefault(); selectSuggestion(suggestion); }}
+                >{suggestion}</button>
+              {/each}
+            </div>
+          {/if}
+          <p class="text-xs text-gray-600 mt-0.5">Full path: <span class="font-mono text-gray-500">{editCategory}/{editSubfolder ? editSubfolder + '/' : ''}{editFilename}{getFilenameExt()}</span></p>
+        </div>
+
         <div>
           <label class="block text-sm text-gray-400 mb-1">Description</label>
-          <textarea bind:value={editDescription} rows="3" class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500 resize-none"></textarea>
+          <textarea bind:value={editDescription} rows="2" class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500 resize-none"></textarea>
         </div>
+
         <div>
           <label class="block text-sm text-gray-400 mb-1">Source URL</label>
           <input bind:value={editSourceUrl} class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500" placeholder="https://..." />
         </div>
+
         <div>
           <label class="block text-sm text-gray-400 mb-1">Base Model</label>
           <input bind:value={editBaseModel} class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500" placeholder="e.g. SDXL 1.0, Flux.1" />
-          <p class="text-xs text-gray-600 mt-0.5">Associate this model with a base (useful for LoRAs, VAEs, etc.)</p>
+          <p class="text-xs text-gray-600 mt-0.5">Associated base model (useful for LoRAs, VAEs, etc.)</p>
         </div>
+
         <div>
           <label class="block text-sm text-gray-400 mb-1">Tags (comma-separated)</label>
           <input bind:value={editTags} class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500" />
         </div>
-        <div class="flex gap-2">
-          <button class="px-4 py-2 text-sm rounded bg-green-600 hover:bg-green-500 text-white" onclick={saveEdits} disabled={saving}>
+
+        <div class="flex gap-2 pt-2 border-t border-gray-700">
+          <button
+            class="px-4 py-2 text-sm rounded text-white transition-colors {hasChanges ? 'bg-green-600 hover:bg-green-500' : 'bg-gray-700 text-gray-500 cursor-not-allowed'}"
+            onclick={saveEdits}
+            disabled={saving || !hasChanges}
+          >
             {saving ? 'Saving...' : 'Save'}
           </button>
           <button class="px-4 py-2 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={() => editing = false}>Cancel</button>
         </div>
-      </div>
-    {:else if renaming}
-      <!-- Rename form -->
-      <div class="space-y-4">
-        {#if confirmingRename}
-          <div class="bg-yellow-900/20 border border-yellow-700/50 rounded-lg p-3">
-            <p class="text-sm text-yellow-300 mb-2">Confirm rename:</p>
-            <p class="text-xs text-gray-400">Display name: <span class="text-gray-200">{renameNewName}</span></p>
-            {#if renameFile}
-              {@const ext = model.filename?.split('.').pop() || ''}
-              <p class="text-xs text-gray-400 mt-1">File will be renamed to: <span class="text-gray-200 font-mono">{renameNewName.replace(/[<>:"/\\|?*]/g, '_')}.{ext}</span></p>
-            {:else}
-              <p class="text-xs text-gray-400 mt-1">File stays: <span class="text-gray-200 font-mono">{model.filename}</span></p>
-            {/if}
-          </div>
-          <div class="flex gap-2">
-            <button class="px-4 py-2 text-sm rounded bg-green-600 hover:bg-green-500 text-white" onclick={handleRename} disabled={saving}>
-              {saving ? 'Renaming...' : 'Confirm Rename'}
-            </button>
-            <button class="px-4 py-2 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={() => confirmingRename = false}>Back</button>
-          </div>
-        {:else}
-          <div>
-            <label class="block text-sm text-gray-400 mb-1">New display name</label>
-            <input bind:value={renameNewName} class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500" />
-          </div>
-          <label class="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
-            <input type="checkbox" bind:checked={renameFile} class="rounded" />
-            Also rename the physical file on disk
-          </label>
-          {#if !renameFile}
-            <p class="text-xs text-gray-500">File will stay as: <span class="font-mono">{model.filename}</span></p>
-          {/if}
-          <div class="flex gap-2">
-            <button class="px-4 py-2 text-sm rounded bg-green-600 hover:bg-green-500 text-white" onclick={requestRenameConfirm} disabled={!renameNewName.trim()}>
-              Rename
-            </button>
-            <button class="px-4 py-2 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={() => renaming = false}>Cancel</button>
-          </div>
-        {/if}
       </div>
     {:else if showSyncPicker}
       <!-- Sync to target picker -->
@@ -352,33 +422,6 @@
             {/each}
           </div>
         {/if}
-      </div>
-    {:else if showMovePicker}
-      <!-- Move to subfolder -->
-      <div class="space-y-4">
-        <div class="flex items-center justify-between">
-          <h3 class="text-sm font-medium text-gray-300">Move to Subfolder</h3>
-          <button class="text-xs text-gray-500 hover:text-gray-300" onclick={() => showMovePicker = false}>Back</button>
-        </div>
-        <p class="text-xs text-gray-500">Current path: <span class="font-mono">{model.relative_path}</span></p>
-        <div>
-          <label class="block text-sm text-gray-400 mb-1">Subfolder (leave empty to move to category root)</label>
-          <input
-            bind:value={moveSubfolder}
-            class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500"
-            placeholder="e.g. sdxl_models"
-          />
-        </div>
-        <div class="flex gap-2">
-          <button
-            class="px-4 py-2 text-sm rounded bg-green-600 hover:bg-green-500 text-white disabled:opacity-50"
-            onclick={handleMove}
-            disabled={movingModel}
-          >
-            {movingModel ? 'Moving...' : 'Move'}
-          </button>
-          <button class="px-4 py-2 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={() => showMovePicker = false}>Cancel</button>
-        </div>
       </div>
     {:else}
       <!-- View mode -->
@@ -476,9 +519,7 @@
 
         <!-- Actions -->
         <div class="border-t border-gray-700 pt-4 flex flex-wrap gap-2">
-          <button class="px-3 py-1.5 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={() => { editing = true; editName = model.name; editDescription = model.description || ''; editCategory = model.category; editTags = (model.tags || []).join(', '); editSourceUrl = model.source?.url || ''; editBaseModel = model.base_model || ''; }}>Edit</button>
-          <button class="px-3 py-1.5 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={() => { renaming = true; renameNewName = model.name; renameFile = true; confirmingRename = false; }}>Rename</button>
-          <button class="px-3 py-1.5 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={() => { showMovePicker = true; moveSubfolder = ''; }}>Move</button>
+          <button class="px-3 py-1.5 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={startEditing}>Edit</button>
           <button class="px-3 py-1.5 text-sm rounded bg-green-700 hover:bg-green-600 text-white" onclick={openSyncPicker}>Sync to Target</button>
           <a
             href={api.getDownloadUrl(model.id)}

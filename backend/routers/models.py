@@ -58,6 +58,8 @@ class UpdateModelRequest(BaseModel):
     tags: Optional[list[str]] = None
     source_url: Optional[str] = None
     base_model: Optional[str] = None
+    filename: Optional[str] = None  # Rename the physical file
+    subfolder: Optional[str] = None  # Move within category (empty string = category root)
 
 
 class RenameRequest(BaseModel):

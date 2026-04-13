@@ -274,19 +274,17 @@ def update_model_metadata(
     model_id: str,
     updates: dict,
 ) -> ModelMetadata:
-    """Update a model's metadata fields. Changing category also moves the file."""
+    """Update a model's metadata. Handles category/subfolder moves and file renames."""
     model = load_model(model_id)
     if not model:
         raise ValueError(f"Model not found: {model_id}")
 
     now = to_iso(get_now())
     changed_fields = {}
-    old_category = model.category
 
     for field in ("name", "description", "category", "tags", "base_model"):
         if field in updates:
             new_val = updates[field]
-            # Normalize empty base_model to None
             if field == "base_model" and not new_val:
                 new_val = None
             if getattr(model, field) != new_val:
@@ -305,7 +303,6 @@ def update_model_metadata(
                 model.source = ModelSource()
             model.source.url = new_url
             if new_url and not model.source.provider:
-                # Auto-detect provider from URL
                 if "huggingface.co" in new_url or "hf.co" in new_url:
                     model.source.provider = "huggingface"
                 elif "civitai.com" in new_url:
@@ -322,27 +319,53 @@ def update_model_metadata(
         rebuild_index()
         return model
 
-    # If category changed, move the physical file
-    if "category" in changed_fields:
-        new_category = updates["category"]
-        old_path = safe_resolve(config.LIBRARY_PATH, model.relative_path)
-        if old_path.is_file():
-            # Determine subfolder within old category (if any)
-            rel_parts = Path(model.relative_path).parts
-            # rel_parts: ('old_cat', 'subfolder', ..., 'filename') or ('old_cat', 'filename')
-            if len(rel_parts) > 2:
-                subfolder = str(Path(*rel_parts[1:-1]))
-                new_dir = safe_resolve(config.LIBRARY_PATH, f"{new_category}/{subfolder}")
+    # Handle filename rename
+    new_filename = None
+    if "filename" in updates and updates["filename"] is not None:
+        raw = updates["filename"].strip()
+        if raw and raw != model.filename:
+            old_ext = model.filename.rsplit(".", 1)[-1] if "." in model.filename else ""
+            base = raw.rsplit(".", 1)[0] if "." in raw else raw
+            safe_base = sanitize_filename(base, "")
+            new_filename = f"{safe_base}.{old_ext}" if old_ext else safe_base
+            if new_filename != model.filename:
+                changed_fields["filename"] = {"from": model.filename, "to": new_filename}
             else:
-                new_dir = safe_resolve(config.LIBRARY_PATH, new_category)
-            new_dir.mkdir(parents=True, exist_ok=True)
-            new_path = new_dir / model.filename
-            if new_path.exists() and new_path != old_path:
-                raise ValueError(f"A file named '{model.filename}' already exists in {new_category}")
-            shutil.move(str(old_path), str(new_path))
-            model.relative_path = str(new_path.relative_to(config.LIBRARY_PATH))
-            # Clean up empty parent directories from old location
-            cleanup_empty_parents(old_path, config.LIBRARY_PATH)
+                new_filename = None
+
+    # Determine current subfolder from relative_path
+    rel_parts = Path(model.relative_path).parts
+    current_subfolder = str(Path(*rel_parts[1:-1])) if len(rel_parts) > 2 else ""
+
+    target_category = model.category
+    target_subfolder = current_subfolder
+    target_filename = new_filename or model.filename
+
+    if "subfolder" in updates and updates["subfolder"] is not None:
+        requested_sub = updates["subfolder"].strip().strip("/")
+        if requested_sub != current_subfolder:
+            changed_fields["subfolder"] = {"from": current_subfolder or "(root)", "to": requested_sub or "(root)"}
+            target_subfolder = requested_sub
+
+    # Build target path and move file if needed
+    if target_subfolder:
+        target_dir = safe_resolve(config.LIBRARY_PATH, f"{target_category}/{target_subfolder}")
+    else:
+        target_dir = safe_resolve(config.LIBRARY_PATH, target_category)
+    target_path = target_dir / target_filename
+
+    old_path = safe_resolve(config.LIBRARY_PATH, model.relative_path)
+    if old_path.is_file() and target_path != old_path:
+        target_dir.mkdir(parents=True, exist_ok=True)
+        if target_path.exists():
+            raise ValueError(f"A file named '{target_filename}' already exists at target location")
+        shutil.move(str(old_path), str(target_path))
+        cleanup_empty_parents(old_path, config.LIBRARY_PATH)
+        model.filename = target_filename
+        model.relative_path = str(target_path.relative_to(config.LIBRARY_PATH))
+    elif new_filename:
+        model.filename = target_filename
+        model.relative_path = str(target_path.relative_to(config.LIBRARY_PATH))
 
     if changed_fields:
         model.updated_at = now

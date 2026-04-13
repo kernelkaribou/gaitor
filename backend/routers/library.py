@@ -4,7 +4,9 @@ Library management API endpoints.
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
+from pathlib import Path
 import logging
+import os
 
 from ..services.library import get_library_status, scan_for_untracked
 from ..services.metadata import (
@@ -147,18 +149,21 @@ class SubfolderRequest(BaseModel):
 
 @router.get("/categories/{category_id}/subfolders")
 async def list_subfolders(category_id: str):
-    """List subfolders within a category."""
+    """List all subfolders (recursively) within a category."""
     import re
     if not re.match(r'^[a-zA-Z0-9_-]+$', category_id):
         raise HTTPException(status_code=400, detail="Invalid category ID")
     cat_dir = safe_resolve(config.LIBRARY_PATH, category_id)
     if not cat_dir.is_dir():
         raise HTTPException(status_code=404, detail="Category directory not found")
-    subfolders = sorted([
-        d.name for d in cat_dir.iterdir()
-        if d.is_dir() and not d.name.startswith('.')
-    ])
-    return {"subfolders": subfolders}
+    subfolders = []
+    for root, dirs, _files in os.walk(str(cat_dir)):
+        dirs[:] = [d for d in dirs if not d.startswith('.')]
+        root_path = Path(root)
+        for d in sorted(dirs):
+            rel = str((root_path / d).relative_to(cat_dir))
+            subfolders.append(rel)
+    return {"subfolders": sorted(subfolders)}
 
 
 @router.post("/categories/{category_id}/subfolders")
