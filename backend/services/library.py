@@ -1,0 +1,362 @@
+"""
+Library service — model scanning, file operations, hashing, upload handling.
+"""
+import hashlib
+import logging
+import os
+import shutil
+import uuid
+from pathlib import Path
+from typing import Optional
+
+from .. import config
+from ..utils import get_now, to_iso
+from ..schemas.model import ModelMetadata, ModelSource, ModelHistoryEntry
+from .metadata import (
+    ensure_metadata_dir,
+    is_library_initialized,
+    initialize_library,
+    load_all_models,
+    save_model,
+    load_model,
+    delete_model_metadata,
+    rebuild_index,
+    load_categories,
+    get_library_config,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def get_library_status() -> dict:
+    """Get current library status."""
+    lib_path = config.LIBRARY_PATH
+    initialized = is_library_initialized()
+
+    result = {
+        "path": str(lib_path),
+        "exists": lib_path.exists(),
+        "initialized": initialized,
+        "status": "initialized" if initialized else "not_initialized",
+    }
+
+    if initialized:
+        lib_config = get_library_config()
+        if lib_config:
+            result["name"] = lib_config.name
+        models = load_all_models()
+        result["model_count"] = len(models)
+
+        # Disk space
+        try:
+            stat = os.statvfs(str(lib_path))
+            result["disk_total"] = stat.f_blocks * stat.f_frsize
+            result["disk_free"] = stat.f_bavail * stat.f_frsize
+        except OSError:
+            pass
+
+    return result
+
+
+def scan_for_untracked() -> list[dict]:
+    """Scan library for model files that have no metadata entry."""
+    lib_path = config.LIBRARY_PATH
+    metadata_dir = config.METADATA_DIR_NAME
+
+    existing_models = load_all_models()
+    tracked_paths = {m.relative_path for m in existing_models}
+
+    untracked = []
+    for root, dirs, files in os.walk(lib_path):
+        # Skip the metadata directory
+        dirs[:] = [d for d in dirs if d != metadata_dir]
+
+        for filename in files:
+            filepath = Path(root) / filename
+            ext = filepath.suffix.lower()
+            if ext not in config.MODEL_EXTENSIONS:
+                continue
+
+            rel_path = str(filepath.relative_to(lib_path))
+            if rel_path in tracked_paths:
+                continue
+
+            # Guess category from parent folder name
+            parent = filepath.parent.name.lower()
+            categories = load_categories()
+            guessed_category = "other"
+            for cat in categories:
+                if cat.id == parent or cat.label.lower() == parent:
+                    guessed_category = cat.id
+                    break
+                if ext in cat.extensions and cat.id != "other":
+                    guessed_category = cat.id
+
+            try:
+                stat = filepath.stat()
+                size = stat.st_size
+            except OSError:
+                size = 0
+
+            untracked.append({
+                "filename": filename,
+                "relative_path": rel_path,
+                "size": size,
+                "extension": ext,
+                "guessed_category": guessed_category,
+                "parent_folder": filepath.parent.name,
+            })
+
+    logger.info(f"Scan found {len(untracked)} untracked model files")
+    return untracked
+
+
+def catalog_model(
+    relative_path: str,
+    name: str,
+    category: str = "other",
+    description: str = "",
+    tags: Optional[list[str]] = None,
+    source_provider: str = "manual",
+) -> ModelMetadata:
+    """Create a metadata entry for an existing file in the library."""
+    filepath = config.LIBRARY_PATH / relative_path
+
+    if not filepath.exists():
+        raise FileNotFoundError(f"File not found: {relative_path}")
+
+    stat = filepath.stat()
+    now = to_iso(get_now())
+
+    model = ModelMetadata(
+        id=str(uuid.uuid4()),
+        name=name,
+        filename=filepath.name,
+        category=category,
+        relative_path=relative_path,
+        size=stat.st_size,
+        source=ModelSource(provider=source_provider),
+        description=description,
+        tags=tags or [],
+        history=[
+            ModelHistoryEntry(
+                action="added",
+                timestamp=now,
+                details={"method": "catalog", "source": source_provider},
+            )
+        ],
+        created_at=now,
+        updated_at=now,
+    )
+
+    save_model(model)
+    rebuild_index()
+    logger.info(f"Cataloged model: {name} ({relative_path})")
+    return model
+
+
+def upload_model(
+    filename: str,
+    category: str,
+    name: str,
+    data_stream,
+    description: str = "",
+    tags: Optional[list[str]] = None,
+) -> ModelMetadata:
+    """Handle an uploaded model file — stream to disk, catalog it."""
+    ensure_metadata_dir()
+
+    # Place in category folder
+    dest_dir = config.LIBRARY_PATH / category
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest_path = dest_dir / filename
+
+    # Avoid overwriting
+    if dest_path.exists():
+        stem = dest_path.stem
+        suffix = dest_path.suffix
+        counter = 1
+        while dest_path.exists():
+            dest_path = dest_dir / f"{stem}_{counter}{suffix}"
+            counter += 1
+
+    # Stream to temp file then rename (atomic-ish)
+    tmp_path = dest_path.with_suffix(dest_path.suffix + ".uploading")
+    total_size = 0
+    try:
+        with open(tmp_path, "wb") as f:
+            while True:
+                chunk = data_stream.read(config.COPY_BUFFER_SIZE)
+                if not chunk:
+                    break
+                f.write(chunk)
+                total_size += len(chunk)
+        os.replace(str(tmp_path), str(dest_path))
+    except Exception:
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
+
+    relative_path = str(dest_path.relative_to(config.LIBRARY_PATH))
+    now = to_iso(get_now())
+
+    model = ModelMetadata(
+        id=str(uuid.uuid4()),
+        name=name or dest_path.stem,
+        filename=dest_path.name,
+        category=category,
+        relative_path=relative_path,
+        size=total_size,
+        source=ModelSource(provider="upload"),
+        description=description,
+        tags=tags or [],
+        history=[
+            ModelHistoryEntry(
+                action="added",
+                timestamp=now,
+                details={"method": "upload"},
+            )
+        ],
+        created_at=now,
+        updated_at=now,
+    )
+
+    save_model(model)
+    rebuild_index()
+    logger.info(f"Uploaded model: {name} ({relative_path}, {total_size} bytes)")
+    return model
+
+
+def update_model_metadata(
+    model_id: str,
+    updates: dict,
+) -> ModelMetadata:
+    """Update a model's metadata fields."""
+    model = load_model(model_id)
+    if not model:
+        raise ValueError(f"Model not found: {model_id}")
+
+    now = to_iso(get_now())
+    changed_fields = {}
+    for field in ("name", "description", "category", "tags"):
+        if field in updates and getattr(model, field) != updates[field]:
+            changed_fields[field] = {
+                "from": getattr(model, field),
+                "to": updates[field],
+            }
+            setattr(model, field, updates[field])
+
+    if changed_fields:
+        model.updated_at = now
+        model.history.append(
+            ModelHistoryEntry(
+                action="metadata_updated",
+                timestamp=now,
+                details=changed_fields,
+            )
+        )
+        save_model(model)
+        rebuild_index()
+
+    return model
+
+
+def rename_model(model_id: str, new_name: str, rename_file: bool = True) -> ModelMetadata:
+    """Rename a model — updates metadata and optionally the physical file."""
+    model = load_model(model_id)
+    if not model:
+        raise ValueError(f"Model not found: {model_id}")
+
+    old_name = model.name
+    old_filename = model.filename
+    now = to_iso(get_now())
+
+    model.name = new_name
+
+    if rename_file:
+        old_path = config.LIBRARY_PATH / model.relative_path
+        ext = old_path.suffix
+        # Sanitize filename
+        safe_name = "".join(c for c in new_name if c.isalnum() or c in " -_").strip()
+        new_filename = f"{safe_name}{ext}"
+        new_path = old_path.parent / new_filename
+
+        if old_path.exists() and not new_path.exists():
+            os.rename(str(old_path), str(new_path))
+            model.filename = new_filename
+            model.relative_path = str(new_path.relative_to(config.LIBRARY_PATH))
+
+    model.updated_at = now
+    model.history.append(
+        ModelHistoryEntry(
+            action="renamed",
+            timestamp=now,
+            details={
+                "from_name": old_name,
+                "to_name": new_name,
+                "from_filename": old_filename,
+                "to_filename": model.filename,
+            },
+        )
+    )
+
+    save_model(model)
+    rebuild_index()
+    logger.info(f"Renamed model: {old_name} → {new_name}")
+    return model
+
+
+def delete_library_model(model_id: str, delete_file: bool = True) -> dict:
+    """Delete a model from the library. Returns details of what was deleted."""
+    model = load_model(model_id)
+    if not model:
+        raise ValueError(f"Model not found: {model_id}")
+
+    result = {
+        "id": model.id,
+        "name": model.name,
+        "filename": model.filename,
+        "file_deleted": False,
+        "metadata_deleted": False,
+    }
+
+    if delete_file:
+        filepath = config.LIBRARY_PATH / model.relative_path
+        if filepath.exists():
+            filepath.unlink()
+            result["file_deleted"] = True
+            logger.info(f"Deleted model file: {filepath}")
+
+    result["metadata_deleted"] = delete_model_metadata(model_id)
+    rebuild_index()
+    logger.info(f"Deleted model from library: {model.name}")
+    return result
+
+
+def compute_hash(model_id: str) -> Optional[str]:
+    """Compute SHA-256 hash for a model file. Returns the hash string."""
+    model = load_model(model_id)
+    if not model:
+        return None
+
+    filepath = config.LIBRARY_PATH / model.relative_path
+    if not filepath.exists():
+        return None
+
+    sha256 = hashlib.sha256()
+    with open(filepath, "rb") as f:
+        while True:
+            chunk = f.read(config.COPY_BUFFER_SIZE)
+            if not chunk:
+                break
+            sha256.update(chunk)
+
+    hash_value = sha256.hexdigest()
+    model.hash = {"sha256": hash_value}
+    model.updated_at = to_iso(get_now())
+    save_model(model)
+    rebuild_index()
+    logger.info(f"Computed hash for {model.name}: {hash_value[:16]}...")
+    return hash_value

@@ -66,6 +66,13 @@ async def lifespan(app: FastAPI):
     config.LIBRARY_PATH.mkdir(parents=True, exist_ok=True)
     config.DESTINATIONS_ROOT.mkdir(parents=True, exist_ok=True)
 
+    # Auto-initialize library if not yet initialized
+    from .services.metadata import is_library_initialized, initialize_library, ensure_metadata_dir
+    ensure_metadata_dir()
+    if not is_library_initialized():
+        initialize_library()
+        logger.info("Library auto-initialized on first startup")
+
     logger.info(f"Model gAItor v{app.version} starting")
     logger.info(f"Library path: {config.LIBRARY_PATH}")
     logger.info(f"Destinations root: {config.DESTINATIONS_ROOT}")
