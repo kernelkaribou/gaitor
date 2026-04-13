@@ -1,7 +1,17 @@
 <script>
   let { model, formatSize, onSelect } = $props();
 
-  const extBadge = $derived(model.filename?.split('.').pop()?.toUpperCase() || '');
+  const ext = $derived(model.filename?.split('.').pop()?.toLowerCase() || '');
+  const extBadge = $derived(ext.toUpperCase());
+  const extColor = $derived(
+    ext === 'safetensors' ? 'bg-blue-900/50 text-blue-400' :
+    ext === 'gguf' ? 'bg-purple-900/50 text-purple-400' :
+    ext === 'ckpt' ? 'bg-yellow-900/50 text-yellow-400' :
+    ext === 'bin' ? 'bg-gray-700 text-gray-400' :
+    ext === 'pt' || ext === 'pth' ? 'bg-orange-900/50 text-orange-400' :
+    ext === 'onnx' ? 'bg-teal-900/50 text-teal-400' :
+    'bg-gray-700 text-gray-400'
+  );
 </script>
 
 <button
@@ -22,7 +32,7 @@
         <span class="text-green-500" title="Hash verified">✓</span>
       {/if}
       {#if extBadge}
-        <span class="px-1.5 py-0.5 rounded bg-gray-700 text-gray-400 font-mono text-[10px]">{extBadge}</span>
+        <span class="px-1.5 py-0.5 rounded {extColor} font-mono text-[10px]">{extBadge}</span>
       {/if}
     </div>
   </div>

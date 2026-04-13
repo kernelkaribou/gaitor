@@ -3,6 +3,7 @@
   import Library from './pages/Library.svelte';
   import Destination from './pages/Destination.svelte';
   import Retrieve from './pages/Retrieve.svelte';
+  import Settings from './pages/Settings.svelte';
   import UpdateBanner from './components/UpdateBanner.svelte';
 
   let currentPage = $state('library');
@@ -16,5 +17,7 @@
     <Destination onBack={() => currentPage = 'library'} />
   {:else if currentPage === 'retrieve'}
     <Retrieve />
+  {:else if currentPage === 'settings'}
+    <Settings />
   {/if}
 </Layout>

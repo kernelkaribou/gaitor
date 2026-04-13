@@ -18,6 +18,8 @@ async function request(path, options = {}) {
 export const api = {
   // Settings
   getVersion: () => request('/settings/version'),
+  getDiskUsage: () => request('/settings/disk'),
+  getAuthStatus: () => request('/settings/auth'),
 
   // Library
   getLibraryStatus: () => request('/library/status'),
