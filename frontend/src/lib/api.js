@@ -74,6 +74,16 @@ export const api = {
 
   // Destinations
   listDestinations: () => request('/destinations/'),
+  getDestinationModels: (destId) => request(`/destinations/${destId}/models`),
+  getDestinationSyncStatus: (destId) => request(`/destinations/${destId}/status`),
+  syncModelToDestination: (destId, modelId) =>
+    request(`/destinations/${destId}/sync`, { method: 'POST', body: JSON.stringify({ model_id: modelId }) }),
+  bulkSyncToDestination: (destId, modelIds) =>
+    request(`/destinations/${destId}/sync/bulk`, { method: 'POST', body: JSON.stringify({ model_ids: modelIds }) }),
+  removeFromDestination: (destId, modelId) =>
+    request(`/destinations/${destId}/remove`, { method: 'POST', body: JSON.stringify({ model_id: modelId }) }),
+  applyRenameOnDestination: (destId, modelId) =>
+    request(`/destinations/${destId}/apply-rename`, { method: 'POST', body: JSON.stringify({ model_id: modelId }) }),
 
   // Retrieve
   listProviders: () => request('/retrieve/providers'),
