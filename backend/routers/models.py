@@ -6,7 +6,10 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional
 from pathlib import Path
+from io import BytesIO
 import logging
+
+from PIL import Image
 
 from .. import config
 from ..services.library import (
@@ -41,6 +44,7 @@ class CatalogRequest(BaseModel):
     category: str = "other"
     description: str = ""
     tags: list[str] = []
+    target_subfolder: str = ""
 
 
 class BulkCatalogRequest(BaseModel):
@@ -53,6 +57,7 @@ class UpdateModelRequest(BaseModel):
     category: Optional[str] = None
     tags: Optional[list[str]] = None
     source_url: Optional[str] = None
+    base_model: Optional[str] = None
 
 
 class RenameRequest(BaseModel):
@@ -92,8 +97,8 @@ async def catalog_model_endpoint(req: CatalogRequest, background_tasks: Backgrou
             category=req.category,
             description=req.description,
             tags=req.tags,
+            target_subfolder=req.target_subfolder,
         )
-        # Compute hash in background
         background_tasks.add_task(compute_hash, model.id)
         return model.model_dump()
     except FileNotFoundError as e:
@@ -113,6 +118,7 @@ async def bulk_catalog_endpoint(req: BulkCatalogRequest, background_tasks: Backg
                 category=item.category,
                 description=item.description,
                 tags=item.tags,
+                target_subfolder=item.target_subfolder,
             )
             background_tasks.add_task(compute_hash, model.id)
             results.append(model.model_dump())
@@ -287,7 +293,7 @@ MAX_THUMBNAIL_SIZE = 5 * 1024 * 1024  # 5MB
 
 @router.post("/{model_id}/thumbnail")
 async def upload_thumbnail(model_id: str, file: UploadFile = File(...)):
-    """Upload a thumbnail image for a model."""
+    """Upload a thumbnail image for a model. Auto-converts to max 512x512 webp."""
     model_id = validate_model_id(model_id)
     model = load_model(model_id)
     if not model:
@@ -303,19 +309,25 @@ async def upload_thumbnail(model_id: str, file: UploadFile = File(...)):
     if len(content) > MAX_THUMBNAIL_SIZE:
         raise HTTPException(status_code=400, detail="Thumbnail must be under 5MB")
 
-    ext_map = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}
-    ext = ext_map.get(file.content_type, ".jpg")
+    try:
+        img = Image.open(BytesIO(content))
+        img.thumbnail((512, 512), Image.LANCZOS)
+        buf = BytesIO()
+        img.save(buf, format="WEBP", quality=85)
+        webp_data = buf.getvalue()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Could not process image")
+
     ensure_metadata_dir()
-    thumb_path = THUMBNAILS_DIR / f"{model_id}{ext}"
+    thumb_path = THUMBNAILS_DIR / f"{model_id}.webp"
 
     # Remove any existing thumbnail with different extension
     for old in THUMBNAILS_DIR.glob(f"{model_id}.*"):
         old.unlink(missing_ok=True)
 
-    thumb_path.write_bytes(content)
+    thumb_path.write_bytes(webp_data)
 
-    # Update model metadata with thumbnail path
-    rel_thumb = f"thumbnails/{model_id}{ext}"
+    rel_thumb = f"thumbnails/{model_id}.webp"
     update_model_metadata(model_id, {"thumbnail": rel_thumb})
 
     return {"thumbnail": rel_thumb}

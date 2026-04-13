@@ -9,6 +9,7 @@
   let editCategory = $state(model.category);
   let editTags = $state((model.tags || []).join(', '));
   let editSourceUrl = $state(model.source?.url || '');
+  let editBaseModel = $state(model.base_model || '');
   let renaming = $state(false);
   let renameNewName = $state(model.name);
   let renameFile = $state(true);
@@ -43,6 +44,7 @@
         category: editCategory,
         tags,
         source_url: editSourceUrl || null,
+        base_model: editBaseModel.trim() || '',
       });
       editing = false;
       onUpdated();
@@ -148,12 +150,12 @@
 <div class="fixed inset-0 bg-black/50 z-40" onclick={onClose}></div>
 
 <!-- Slide-over panel -->
-<div class="fixed right-0 top-0 bottom-0 w-full max-w-lg bg-gray-800 border-l border-gray-700 z-50 overflow-y-auto">
+<div class="fixed right-0 top-0 bottom-0 w-full max-w-xl bg-gray-800 border-l border-gray-700 z-50 overflow-y-auto">
   <div class="p-6">
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <h2 class="text-lg font-semibold text-gray-100">Model Details</h2>
-      <button class="text-gray-400 hover:text-gray-200 text-xl" onclick={onClose}>&#x2715;</button>
+      <button class="text-gray-400 hover:text-gray-200 text-xl" onclick={onClose}>{'\u2715'}</button>
     </div>
 
     {#if error}
@@ -203,12 +205,17 @@
           <textarea bind:value={editDescription} rows="3" class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500 resize-none"></textarea>
         </div>
         <div>
-          <label class="block text-sm text-gray-400 mb-1">Tags (comma-separated)</label>
-          <input bind:value={editTags} class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500" />
-        </div>
-        <div>
           <label class="block text-sm text-gray-400 mb-1">Source URL</label>
           <input bind:value={editSourceUrl} class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500" placeholder="https://..." />
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">Base Model</label>
+          <input bind:value={editBaseModel} class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500" placeholder="e.g. SDXL 1.0, Flux.1" />
+          <p class="text-xs text-gray-600 mt-0.5">Associate this model with a base (useful for LoRAs, VAEs, etc.)</p>
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">Tags (comma-separated)</label>
+          <input bind:value={editTags} class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500" />
         </div>
         <div class="flex gap-2">
           <button class="px-4 py-2 text-sm rounded bg-green-600 hover:bg-green-500 text-white" onclick={saveEdits} disabled={saving}>
@@ -361,20 +368,16 @@
             <p class="text-gray-300 text-sm mt-0.5">{model.description}</p>
           </div>
         {/if}
-        {#if model.tags?.length}
+        {#if model.base_model}
           <div>
-            <span class="text-xs text-gray-500 uppercase tracking-wider">Tags</span>
-            <div class="flex flex-wrap gap-1 mt-1">
-              {#each model.tags as tag}
-                <span class="px-2 py-0.5 rounded-full bg-gray-700 text-gray-300 text-xs">{tag}</span>
-              {/each}
-            </div>
+            <span class="text-xs text-gray-500 uppercase tracking-wider">Base Model</span>
+            <p class="text-gray-300 text-sm mt-0.5">{model.base_model}</p>
           </div>
         {/if}
         <div>
           <span class="text-xs text-gray-500 uppercase tracking-wider">Hash (SHA-256)</span>
           {#if model.hash?.sha256}
-            <p class="text-green-400 text-xs mt-0.5 font-mono truncate" title={model.hash.sha256}>&#x2713; {model.hash.sha256}</p>
+            <p class="text-green-400 text-xs mt-0.5 font-mono truncate" title={model.hash.sha256}>{'\u2713'} {model.hash.sha256}</p>
           {:else}
             <p class="text-gray-500 text-sm mt-0.5">
               Not computed
@@ -396,6 +399,16 @@
             <p class="text-gray-500 text-sm mt-0.5">Not specified</p>
           {/if}
         </div>
+        {#if model.tags?.length}
+          <div>
+            <span class="text-xs text-gray-500 uppercase tracking-wider">Tags</span>
+            <div class="flex flex-wrap gap-1 mt-1">
+              {#each model.tags as tag}
+                <span class="px-2 py-0.5 rounded-full bg-gray-700 text-gray-300 text-xs">{tag}</span>
+              {/each}
+            </div>
+          </div>
+        {/if}
         <div>
           <span class="text-xs text-gray-500 uppercase tracking-wider">Path</span>
           <p class="text-gray-500 text-xs mt-0.5 font-mono">{model.relative_path}</p>
@@ -421,7 +434,7 @@
 
         <!-- Actions -->
         <div class="border-t border-gray-700 pt-4 flex flex-wrap gap-2">
-          <button class="px-3 py-1.5 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={() => editing = true}>Edit</button>
+          <button class="px-3 py-1.5 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={() => { editing = true; editName = model.name; editDescription = model.description || ''; editCategory = model.category; editTags = (model.tags || []).join(', '); editSourceUrl = model.source?.url || ''; editBaseModel = model.base_model || ''; }}>Edit</button>
           <button class="px-3 py-1.5 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={() => { renaming = true; renameNewName = model.name; renameFile = true; confirmingRename = false; }}>Rename</button>
           <button class="px-3 py-1.5 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={() => { showMovePicker = true; moveSubfolder = ''; }}>Move</button>
           <button class="px-3 py-1.5 text-sm rounded bg-green-700 hover:bg-green-600 text-white" onclick={openSyncPicker}>Sync to Target</button>
@@ -431,9 +444,10 @@
             class="px-3 py-1.5 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200 inline-block"
           >Download</a>
           <button
-            class="px-3 py-1.5 text-sm rounded bg-red-900/50 hover:bg-red-800 text-red-300 ml-auto"
+            class="px-2 py-1.5 text-sm rounded bg-red-900/50 hover:bg-red-800 text-red-300 ml-auto"
             onclick={() => onDelete(model)}
-          >Delete</button>
+            title="Delete model"
+          >{'\uD83D\uDDD1'}</button>
         </div>
       </div>
     {/if}

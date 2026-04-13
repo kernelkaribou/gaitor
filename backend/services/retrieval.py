@@ -4,10 +4,12 @@ Handles URL detection, downloading with progress, and cataloging into the librar
 """
 import logging
 import os
+from io import BytesIO
 from pathlib import Path
 from typing import Optional, Callable
 
 import httpx
+from PIL import Image
 
 from .. import config
 from ..utils import get_now, to_iso, safe_resolve, sanitize_filename
@@ -194,23 +196,21 @@ async def download_model(
     import uuid
     model_id = str(uuid.uuid4())
 
-    # Download thumbnail if provided
+    # Download thumbnail if provided (convert to max 512x512 webp)
     thumb_rel = None
     if thumbnail_url:
         try:
             async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
                 resp = await client.get(thumbnail_url)
                 resp.raise_for_status()
-                ct = resp.headers.get("content-type", "")
-                ext = ".jpg"
-                if "png" in ct:
-                    ext = ".png"
-                elif "webp" in ct:
-                    ext = ".webp"
                 THUMBNAILS_DIR.mkdir(parents=True, exist_ok=True)
-                thumb_path = THUMBNAILS_DIR / f"{model_id}{ext}"
-                thumb_path.write_bytes(resp.content)
-                thumb_rel = f"thumbnails/{model_id}{ext}"
+                img = Image.open(BytesIO(resp.content))
+                img.thumbnail((512, 512), Image.LANCZOS)
+                buf = BytesIO()
+                img.save(buf, format="WEBP", quality=85)
+                thumb_path = THUMBNAILS_DIR / f"{model_id}.webp"
+                thumb_path.write_bytes(buf.getvalue())
+                thumb_rel = f"thumbnails/{model_id}.webp"
         except Exception as e:
             logger.warning(f"Failed to download thumbnail: {e}")
 

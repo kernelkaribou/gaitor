@@ -132,12 +132,34 @@ def catalog_model(
     description: str = "",
     tags: Optional[list[str]] = None,
     source_provider: str = "manual",
+    target_subfolder: str = "",
 ) -> ModelMetadata:
-    """Create a metadata entry for an existing file in the library."""
+    """Create a metadata entry for an existing file in the library.
+    If category differs from current folder or target_subfolder is set, moves the file."""
     filepath = safe_resolve(config.LIBRARY_PATH, relative_path)
 
     if not filepath.exists():
         raise FileNotFoundError(f"File not found: {relative_path}")
+
+    # Determine if file needs to be moved
+    rel_parts = Path(relative_path).parts
+    current_parent = rel_parts[0] if len(rel_parts) > 1 else ""
+    needs_move = (current_parent != category) or target_subfolder
+
+    if needs_move:
+        if target_subfolder:
+            new_dir = safe_resolve(config.LIBRARY_PATH, f"{category}/{target_subfolder}")
+        else:
+            new_dir = safe_resolve(config.LIBRARY_PATH, category)
+        new_dir.mkdir(parents=True, exist_ok=True)
+        new_path = new_dir / filepath.name
+        if new_path.exists() and new_path != filepath:
+            raise ValueError(f"A file named '{filepath.name}' already exists in target location")
+        if new_path != filepath:
+            shutil.move(str(filepath), str(new_path))
+            cleanup_empty_parents(filepath, config.LIBRARY_PATH)
+            filepath = new_path
+            relative_path = str(filepath.relative_to(config.LIBRARY_PATH))
 
     stat = filepath.stat()
     now = to_iso(get_now())
@@ -261,13 +283,18 @@ def update_model_metadata(
     changed_fields = {}
     old_category = model.category
 
-    for field in ("name", "description", "category", "tags"):
-        if field in updates and getattr(model, field) != updates[field]:
-            changed_fields[field] = {
-                "from": getattr(model, field),
-                "to": updates[field],
-            }
-            setattr(model, field, updates[field])
+    for field in ("name", "description", "category", "tags", "base_model"):
+        if field in updates:
+            new_val = updates[field]
+            # Normalize empty base_model to None
+            if field == "base_model" and not new_val:
+                new_val = None
+            if getattr(model, field) != new_val:
+                changed_fields[field] = {
+                    "from": getattr(model, field),
+                    "to": new_val,
+                }
+                setattr(model, field, new_val)
 
     # Handle source_url
     if "source_url" in updates:
