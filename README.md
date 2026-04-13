@@ -33,6 +33,9 @@ services:
     volumes:
       - /path/to/nas/models:/library
       - /path/to/local/models:/dest/local-gpu
+      # Add more destinations as volume mounts under /dest/:
+      # - /mnt/laptop/models:/dest/laptop
+      # - /mnt/server2/models:/dest/server2
     restart: unless-stopped
 ```
 
@@ -40,6 +43,22 @@ services:
 docker compose up -d
 # Open http://localhost:8487
 ```
+
+### Destinations
+
+Destinations are auto-discovered from subdirectories under `/dest/` inside the container. Each Docker volume mount creates a destination that appears in the UI.
+
+To add a destination, mount the remote machine's model directory (via NFS, SMB, or local path) under `/dest/<name>`:
+
+```yaml
+volumes:
+  - /path/to/nas/models:/library              # Source of truth
+  - /mnt/gpu-pc/models:/dest/gpu-pc           # Destination 1
+  - /mnt/laptop/ai-models:/dest/laptop        # Destination 2
+  - /mnt/render-node/models:/dest/render-node # Destination 3
+```
+
+The folder name after `/dest/` becomes the destination name in the UI. No configuration files are needed — just add or remove volume mounts and restart the container.
 
 ## Environment Variables
 
