@@ -16,6 +16,8 @@
   let activeCategory = $state(null);
   let currentView = $state('grid');
   let showExtended = $state(false);
+  let confirmRemove = $state(null);
+  let confirmBulkSync = $state(false);
 
   function formatSize(bytes) {
     if (!bytes) return '-';
@@ -327,12 +329,20 @@
               >&#x2630;</button>
             </div>
             {#if syncSummary().not_synced > 0}
-              <button
-                class="px-3 py-1.5 text-sm rounded-md bg-green-600 hover:bg-green-500 text-white"
-                onclick={bulkSync}
-              >
-                Sync All ({syncSummary().not_synced})
-              </button>
+              {#if confirmBulkSync}
+                <div class="flex items-center gap-2">
+                  <span class="text-sm text-yellow-300">Sync all {syncSummary().not_synced} models?</span>
+                  <button class="px-2 py-1 text-xs rounded bg-green-600 hover:bg-green-500 text-white" onclick={() => { confirmBulkSync = false; bulkSync(); }}>Yes</button>
+                  <button class="px-2 py-1 text-xs rounded bg-gray-700 text-gray-300" onclick={() => confirmBulkSync = false}>No</button>
+                </div>
+              {:else}
+                <button
+                  class="px-3 py-1.5 text-sm rounded-md bg-green-600 hover:bg-green-500 text-white"
+                  onclick={() => confirmBulkSync = true}
+                >
+                  Sync All ({syncSummary().not_synced})
+                </button>
+              {/if}
             {/if}
           </div>
         </div>
@@ -382,13 +392,20 @@
                         </button>
                       {/if}
                       {#if item.status === 'synced' || item.status === 'orphaned'}
-                        <button
-                          class="flex-1 px-2 py-1.5 text-xs rounded bg-gray-700 hover:bg-red-800 text-gray-400 hover:text-red-300 disabled:opacity-50"
-                          onclick={() => removeModel(item.model_id)}
-                          disabled={syncing[item.model_id]}
-                        >
-                          Remove
-                        </button>
+                        {#if confirmRemove === item.model_id}
+                          <div class="flex gap-1 flex-1">
+                            <button class="flex-1 px-2 py-1 text-xs rounded bg-red-700 text-white" onclick={() => { confirmRemove = null; removeModel(item.model_id); }}>Yes</button>
+                            <button class="flex-1 px-2 py-1 text-xs rounded bg-gray-700 text-gray-300" onclick={() => confirmRemove = null}>No</button>
+                          </div>
+                        {:else}
+                          <button
+                            class="flex-1 px-2 py-1.5 text-xs rounded bg-gray-700 hover:bg-red-800 text-gray-400 hover:text-red-300 disabled:opacity-50"
+                            onclick={() => confirmRemove = item.model_id}
+                            disabled={syncing[item.model_id]}
+                          >
+                            Remove
+                          </button>
+                        {/if}
                       {/if}
                     </div>
                   </div>
@@ -432,13 +449,20 @@
                         Apply Rename
                       </button>
                     {:else if item.status === 'synced' || item.status === 'orphaned'}
-                      <button
-                        class="px-2 py-1 text-xs rounded bg-gray-700 hover:bg-red-800 text-gray-400 hover:text-red-300 disabled:opacity-50"
-                        onclick={() => removeModel(item.model_id)}
-                        disabled={syncing[item.model_id]}
-                      >
-                        Remove
-                      </button>
+                      {#if confirmRemove === item.model_id}
+                        <div class="flex gap-1">
+                          <button class="px-2 py-1 text-xs rounded bg-red-700 text-white" onclick={() => { confirmRemove = null; removeModel(item.model_id); }}>Yes</button>
+                          <button class="px-2 py-1 text-xs rounded bg-gray-700 text-gray-300" onclick={() => confirmRemove = null}>No</button>
+                        </div>
+                      {:else}
+                        <button
+                          class="px-2 py-1 text-xs rounded bg-gray-700 hover:bg-red-800 text-gray-400 hover:text-red-300 disabled:opacity-50"
+                          onclick={() => confirmRemove = item.model_id}
+                          disabled={syncing[item.model_id]}
+                        >
+                          Remove
+                        </button>
+                      {/if}
                     {/if}
                   </div>
                 </div>

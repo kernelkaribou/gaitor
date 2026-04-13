@@ -4,6 +4,7 @@
 
   let toastList = $state([]);
   let cancelling = $state({});
+  let confirmCancel = $state({});
   toasts.subscribe(v => toastList = v);
 
   function formatSize(bytes) {
@@ -88,13 +89,27 @@
                 </div>
               </div>
               {#if toast.taskId}
-                <button
-                  class="mt-2 text-xs text-red-400 hover:text-red-300 disabled:opacity-50"
-                  onclick={() => cancelTask(toast.taskId)}
-                  disabled={cancelling[toast.taskId]}
-                >
-                  {cancelling[toast.taskId] ? 'Cancelling...' : 'Cancel'}
-                </button>
+                <div class="mt-2 flex items-center gap-2">
+                  {#if confirmCancel[toast.taskId]}
+                    <span class="text-xs text-yellow-400">Cancel this download?</span>
+                    <button
+                      class="text-xs text-red-400 hover:text-red-300 font-medium disabled:opacity-50"
+                      onclick={() => cancelTask(toast.taskId)}
+                      disabled={cancelling[toast.taskId]}
+                    >
+                      {cancelling[toast.taskId] ? 'Cancelling...' : 'Yes'}
+                    </button>
+                    <button
+                      class="text-xs text-gray-500 hover:text-gray-300"
+                      onclick={() => confirmCancel = { ...confirmCancel, [toast.taskId]: false }}
+                    >No</button>
+                  {:else}
+                    <button
+                      class="text-xs text-red-400 hover:text-red-300"
+                      onclick={() => confirmCancel = { ...confirmCancel, [toast.taskId]: true }}
+                    >Cancel</button>
+                  {/if}
+                </div>
               {/if}
             {/if}
           </div>

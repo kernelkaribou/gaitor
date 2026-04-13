@@ -32,6 +32,12 @@
   let renamingCat = $state(null);
   let renameCatId = $state('');
   let renameCatLabel = $state('');
+  let confirmingCatRename = $state(false);
+
+  // Subfolder management
+  let collapsedGroups = $state({});
+  let showAddSubfolder = $state(false);
+  let newSubfolderName = $state('');
 
   async function addNewCategory() {
     if (!newCatId.trim()) return;
@@ -48,10 +54,27 @@
     }
   }
 
+  async function addSubfolder() {
+    if (!newSubfolderName.trim() || !activeCategory) return;
+    try {
+      await api.createSubfolder(activeCategory, newSubfolderName.trim());
+      newSubfolderName = '';
+      showAddSubfolder = false;
+      await loadData();
+    } catch (err) {
+      error = err.message;
+    }
+  }
+
   function startRenameCategory(cat) {
     renamingCat = cat.id;
     renameCatId = cat.id;
     renameCatLabel = cat.label;
+    confirmingCatRename = false;
+  }
+
+  function requestCatRenameConfirm() {
+    confirmingCatRename = true;
   }
 
   async function confirmRenameCategory() {
@@ -64,9 +87,11 @@
         activeCategory = id;
       }
       renamingCat = null;
+      confirmingCatRename = false;
       await loadData();
     } catch (err) {
       error = err.message;
+      confirmingCatRename = false;
     }
   }
 
@@ -164,6 +189,21 @@
     return result;
   });
 
+  // Group models by subfolder when viewing a specific category
+  let groupedModels = $derived(() => {
+    const models = filteredModels();
+    if (!activeCategory) return null;  // No grouping when viewing all
+    const groups = {};
+    for (const m of models) {
+      // relative_path like "checkpoints/subfolder/file.safetensors"
+      const parts = (m.relative_path || '').split('/');
+      const subfolder = parts.length > 2 ? parts.slice(1, -1).join('/') : '';
+      if (!groups[subfolder]) groups[subfolder] = [];
+      groups[subfolder].push(m);
+    }
+    return groups;
+  });
+
   let categoryCountMap = $derived(() => {
     const map = {};
     for (const m of modelList) {
@@ -175,35 +215,38 @@
 
 <div class="flex gap-6">
   <!-- Category sidebar -->
-  <aside class="w-48 shrink-0">
-    <div class="flex items-center justify-between mb-2">
+  <aside class="w-52 shrink-0">
+    <div class="flex items-center justify-between mb-3">
       <h3 class="text-xs uppercase tracking-wider text-gray-500 font-semibold">Categories</h3>
       <button
-        class="text-xs text-gray-500 hover:text-green-400 transition-colors"
+        class="w-6 h-6 flex items-center justify-center rounded-full bg-green-700 hover:bg-green-600 text-white text-sm font-bold transition-colors"
         title="Add category"
         onclick={() => showAddCategory = !showAddCategory}
       >+</button>
     </div>
 
     {#if showAddCategory}
-      <div class="mb-2 p-2 bg-gray-800 border border-gray-700 rounded">
+      <div class="mb-3 p-3 bg-gray-800 border border-gray-700 rounded-lg">
+        <p class="text-xs text-gray-400 mb-2 font-medium">New Category</p>
+        <label class="block text-xs text-gray-500 mb-0.5">Folder name</label>
         <input
           type="text"
           bind:value={newCatId}
-          placeholder="folder_name"
-          class="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 mb-1 focus:outline-none focus:border-green-500"
+          placeholder="e.g. my_models"
+          class="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-xs text-gray-200 mb-2 focus:outline-none focus:border-green-500"
           onkeydown={(e) => e.key === 'Enter' && addNewCategory()}
         />
+        <label class="block text-xs text-gray-500 mb-0.5">Display title</label>
         <input
           type="text"
           bind:value={newCatLabel}
-          placeholder="Display Label (optional)"
-          class="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 mb-1 focus:outline-none focus:border-green-500"
+          placeholder="e.g. My Models (auto-generated if empty)"
+          class="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-xs text-gray-200 mb-2 focus:outline-none focus:border-green-500"
           onkeydown={(e) => e.key === 'Enter' && addNewCategory()}
         />
         <div class="flex gap-1">
-          <button class="flex-1 text-xs px-2 py-1 bg-green-700 hover:bg-green-600 text-white rounded" onclick={addNewCategory}>Add</button>
-          <button class="flex-1 text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded" onclick={() => { showAddCategory = false; newCatId = ''; newCatLabel = ''; }}>Cancel</button>
+          <button class="flex-1 text-xs px-2 py-1.5 bg-green-700 hover:bg-green-600 text-white rounded" onclick={addNewCategory}>Create</button>
+          <button class="flex-1 text-xs px-2 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded" onclick={() => { showAddCategory = false; newCatId = ''; newCatLabel = ''; }}>Cancel</button>
         </div>
       </div>
     {/if}
@@ -219,13 +262,25 @@
     {#each categories.filter(c => c.is_primary) as cat}
       {@const count = categoryCountMap()[cat.id] || 0}
       {#if renamingCat === cat.id}
-        <div class="mb-1 p-1.5 bg-gray-800 border border-gray-600 rounded">
-          <input type="text" bind:value={renameCatId} placeholder="folder_name" class="w-full bg-gray-900 border border-gray-600 rounded px-2 py-0.5 text-xs text-gray-200 mb-1 focus:outline-none focus:border-green-500" />
-          <input type="text" bind:value={renameCatLabel} placeholder="Label" class="w-full bg-gray-900 border border-gray-600 rounded px-2 py-0.5 text-xs text-gray-200 mb-1 focus:outline-none focus:border-green-500" onkeydown={(e) => e.key === 'Enter' && confirmRenameCategory()} />
-          <div class="flex gap-1">
-            <button class="flex-1 text-xs px-1 py-0.5 bg-green-700 text-white rounded" onclick={confirmRenameCategory}>Save</button>
-            <button class="flex-1 text-xs px-1 py-0.5 bg-gray-700 text-gray-300 rounded" onclick={() => renamingCat = null}>Cancel</button>
-          </div>
+        <div class="mb-1 p-2.5 bg-gray-800 border border-green-700/50 rounded-lg">
+          {#if confirmingCatRename}
+            <p class="text-xs text-yellow-400 mb-2">Renaming will move all files in this category. Continue?</p>
+            <p class="text-xs text-gray-400 mb-1">Title: <span class="text-gray-200">{renameCatLabel.trim() || renameCatId.trim()}</span></p>
+            <p class="text-xs text-gray-400 mb-2">Folder: <span class="text-gray-200 font-mono">{renameCatId.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_-]/g, '')}/</span></p>
+            <div class="flex gap-1">
+              <button class="flex-1 text-xs px-2 py-1.5 bg-green-700 hover:bg-green-600 text-white rounded" onclick={confirmRenameCategory}>Confirm</button>
+              <button class="flex-1 text-xs px-2 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded" onclick={() => confirmingCatRename = false}>Back</button>
+            </div>
+          {:else}
+            <label class="block text-xs text-gray-500 mb-0.5">Title</label>
+            <input type="text" bind:value={renameCatLabel} class="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 mb-1.5 focus:outline-none focus:border-green-500" />
+            <label class="block text-xs text-gray-500 mb-0.5">Folder</label>
+            <input type="text" bind:value={renameCatId} class="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 font-mono mb-2 focus:outline-none focus:border-green-500" />
+            <div class="flex gap-1">
+              <button class="flex-1 text-xs px-2 py-1.5 bg-green-700 hover:bg-green-600 text-white rounded" onclick={requestCatRenameConfirm}>Save</button>
+              <button class="flex-1 text-xs px-2 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded" onclick={() => renamingCat = null}>Cancel</button>
+            </div>
+          {/if}
         </div>
       {:else}
         <button
@@ -254,13 +309,25 @@
         {#each categories.filter(c => !c.is_primary) as cat}
           {@const count = categoryCountMap()[cat.id] || 0}
           {#if renamingCat === cat.id}
-            <div class="mb-1 p-1.5 bg-gray-800 border border-gray-600 rounded">
-              <input type="text" bind:value={renameCatId} placeholder="folder_name" class="w-full bg-gray-900 border border-gray-600 rounded px-2 py-0.5 text-xs text-gray-200 mb-1 focus:outline-none focus:border-green-500" />
-              <input type="text" bind:value={renameCatLabel} placeholder="Label" class="w-full bg-gray-900 border border-gray-600 rounded px-2 py-0.5 text-xs text-gray-200 mb-1 focus:outline-none focus:border-green-500" onkeydown={(e) => e.key === 'Enter' && confirmRenameCategory()} />
-              <div class="flex gap-1">
-                <button class="flex-1 text-xs px-1 py-0.5 bg-green-700 text-white rounded" onclick={confirmRenameCategory}>Save</button>
-                <button class="flex-1 text-xs px-1 py-0.5 bg-gray-700 text-gray-300 rounded" onclick={() => renamingCat = null}>Cancel</button>
-              </div>
+            <div class="mb-1 p-2.5 bg-gray-800 border border-green-700/50 rounded-lg">
+              {#if confirmingCatRename}
+                <p class="text-xs text-yellow-400 mb-2">Renaming will move all files. Continue?</p>
+                <p class="text-xs text-gray-400 mb-1">Title: <span class="text-gray-200">{renameCatLabel.trim() || renameCatId.trim()}</span></p>
+                <p class="text-xs text-gray-400 mb-2">Folder: <span class="text-gray-200 font-mono">{renameCatId.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_-]/g, '')}/</span></p>
+                <div class="flex gap-1">
+                  <button class="flex-1 text-xs px-2 py-1.5 bg-green-700 hover:bg-green-600 text-white rounded" onclick={confirmRenameCategory}>Confirm</button>
+                  <button class="flex-1 text-xs px-2 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded" onclick={() => confirmingCatRename = false}>Back</button>
+                </div>
+              {:else}
+                <label class="block text-xs text-gray-500 mb-0.5">Title</label>
+                <input type="text" bind:value={renameCatLabel} class="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 mb-1.5 focus:outline-none focus:border-green-500" />
+                <label class="block text-xs text-gray-500 mb-0.5">Folder</label>
+                <input type="text" bind:value={renameCatId} class="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 font-mono mb-2 focus:outline-none focus:border-green-500" />
+                <div class="flex gap-1">
+                  <button class="flex-1 text-xs px-2 py-1.5 bg-green-700 hover:bg-green-600 text-white rounded" onclick={requestCatRenameConfirm}>Save</button>
+                  <button class="flex-1 text-xs px-2 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded" onclick={() => renamingCat = null}>Cancel</button>
+                </div>
+              {/if}
             </div>
           {:else}
             <button
@@ -369,35 +436,116 @@
     {#if loading}
       <div class="text-center py-20 text-gray-500">Loading...</div>
     {:else if filteredModels().length > 0}
-      {#if currentView === 'grid'}
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {#each filteredModels() as model (model.id)}
-            <ModelCard
-              {model}
-              {formatSize}
-              onSelect={() => selectedModel = model}
+      {#if activeCategory && groupedModels()}
+        <!-- Subcategory add button -->
+        <div class="flex items-center gap-2 mb-3">
+          {#if showAddSubfolder}
+            <input
+              bind:value={newSubfolderName}
+              class="bg-gray-900 border border-gray-600 rounded px-2 py-1 text-sm text-gray-200 focus:outline-none focus:border-green-500"
+              placeholder="Subfolder name"
+              onkeydown={(e) => e.key === 'Enter' && addSubfolder()}
             />
-          {/each}
-        </div>
-      {:else}
-        <div class="bg-gray-800 rounded-lg border border-gray-700 divide-y divide-gray-700">
-          {#each filteredModels() as model (model.id)}
+            <button class="text-xs text-green-400 hover:text-green-300" onclick={addSubfolder}>Create</button>
+            <button class="text-xs text-gray-500 hover:text-gray-400" onclick={() => { showAddSubfolder = false; newSubfolderName = ''; }}>Cancel</button>
+          {:else}
             <button
-              class="w-full text-left px-4 py-3 hover:bg-gray-750 transition-colors flex items-center gap-4"
-              onclick={() => selectedModel = model}
+              class="text-xs text-gray-500 hover:text-gray-400 flex items-center gap-1"
+              onclick={() => showAddSubfolder = true}
             >
-              <div class="flex-1 min-w-0">
-                <span class="text-gray-100 font-medium">{model.name}</span>
-                <span class="text-gray-500 text-sm ml-2">{model.filename}</span>
-              </div>
-              <span class="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-400 shrink-0">{model.category}</span>
-              <span class="text-sm text-gray-500 shrink-0 w-20 text-right">{formatSize(model.size)}</span>
-              {#if model.hash?.sha256}
-                <span class="text-green-500 text-xs shrink-0" title="Verified">✓</span>
-              {/if}
+              <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-700 text-green-400 text-sm font-bold">+</span>
+              New subfolder
             </button>
-          {/each}
+          {/if}
         </div>
+        <!-- Grouped by subfolder -->
+        {#each Object.entries(groupedModels()).sort(([a], [b]) => a === '' ? -1 : b === '' ? 1 : a.localeCompare(b)) as [subfolder, models] (subfolder)}
+          {#if subfolder !== ''}
+            <div class="mb-4">
+              <button
+                class="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-200 mb-2 px-1"
+                onclick={() => collapsedGroups = { ...collapsedGroups, [subfolder]: !collapsedGroups[subfolder] }}
+              >
+                <span class="text-xs">{collapsedGroups[subfolder] ? '\u25B8' : '\u25BE'}</span>
+                <span class="font-medium text-gray-300">{subfolder}</span>
+                <span class="text-xs text-gray-600">({models.length})</span>
+              </button>
+              {#if !collapsedGroups[subfolder]}
+                {#if currentView === 'grid'}
+                  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 ml-4">
+                    {#each models as model (model.id)}
+                      <ModelCard {model} {formatSize} onSelect={() => selectedModel = model} />
+                    {/each}
+                  </div>
+                {:else}
+                  <div class="bg-gray-800 rounded-lg border border-gray-700 divide-y divide-gray-700 ml-4">
+                    {#each models as model (model.id)}
+                      <button class="w-full text-left px-4 py-3 hover:bg-gray-750 transition-colors flex items-center gap-4" onclick={() => selectedModel = model}>
+                        <div class="flex-1 min-w-0">
+                          <span class="text-gray-100 font-medium">{model.name}</span>
+                          <span class="text-gray-500 text-sm ml-2">{model.filename}</span>
+                        </div>
+                        <span class="text-sm text-gray-500 shrink-0 w-20 text-right">{formatSize(model.size)}</span>
+                        {#if model.hash?.sha256}<span class="text-green-500 text-xs shrink-0" title="Verified">{'\u2713'}</span>{/if}
+                      </button>
+                    {/each}
+                  </div>
+                {/if}
+              {/if}
+            </div>
+          {:else}
+            <!-- Root level models (no subfolder) -->
+            {#if currentView === 'grid'}
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-4">
+                {#each models as model (model.id)}
+                  <ModelCard {model} {formatSize} onSelect={() => selectedModel = model} />
+                {/each}
+              </div>
+            {:else}
+              <div class="bg-gray-800 rounded-lg border border-gray-700 divide-y divide-gray-700 mb-4">
+                {#each models as model (model.id)}
+                  <button class="w-full text-left px-4 py-3 hover:bg-gray-750 transition-colors flex items-center gap-4" onclick={() => selectedModel = model}>
+                    <div class="flex-1 min-w-0">
+                      <span class="text-gray-100 font-medium">{model.name}</span>
+                      <span class="text-gray-500 text-sm ml-2">{model.filename}</span>
+                    </div>
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-400 shrink-0">{model.category}</span>
+                    <span class="text-sm text-gray-500 shrink-0 w-20 text-right">{formatSize(model.size)}</span>
+                    {#if model.hash?.sha256}<span class="text-green-500 text-xs shrink-0" title="Verified">{'\u2713'}</span>{/if}
+                  </button>
+                {/each}
+              </div>
+            {/if}
+          {/if}
+        {/each}
+      {:else}
+        <!-- Flat view (all categories or search) -->
+        {#if currentView === 'grid'}
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {#each filteredModels() as model (model.id)}
+              <ModelCard {model} {formatSize} onSelect={() => selectedModel = model} />
+            {/each}
+          </div>
+        {:else}
+          <div class="bg-gray-800 rounded-lg border border-gray-700 divide-y divide-gray-700">
+            {#each filteredModels() as model (model.id)}
+              <button
+                class="w-full text-left px-4 py-3 hover:bg-gray-750 transition-colors flex items-center gap-4"
+                onclick={() => selectedModel = model}
+              >
+                <div class="flex-1 min-w-0">
+                  <span class="text-gray-100 font-medium">{model.name}</span>
+                  <span class="text-gray-500 text-sm ml-2">{model.filename}</span>
+                </div>
+                <span class="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-400 shrink-0">{model.category}</span>
+                <span class="text-sm text-gray-500 shrink-0 w-20 text-right">{formatSize(model.size)}</span>
+                {#if model.hash?.sha256}
+                  <span class="text-green-500 text-xs shrink-0" title="Verified">{'\u2713'}</span>
+                {/if}
+              </button>
+            {/each}
+          </div>
+        {/if}
       {/if}
     {:else}
       <div class="text-center py-20">

@@ -33,6 +33,10 @@ export const api = {
     request(`/library/categories/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   renameCategory: (id, newId, newLabel) =>
     request(`/library/categories/${id}/rename`, { method: 'POST', body: JSON.stringify({ new_id: newId, new_label: newLabel }) }),
+  listSubfolders: (categoryId) =>
+    request(`/library/categories/${categoryId}/subfolders`),
+  createSubfolder: (categoryId, name) =>
+    request(`/library/categories/${categoryId}/subfolders`, { method: 'POST', body: JSON.stringify({ name }) }),
   deleteCategory: (id) =>
     request(`/library/categories/${id}`, { method: 'DELETE' }),
 
@@ -49,6 +53,11 @@ export const api = {
     request(`/models/${id}/rename`, {
       method: 'POST',
       body: JSON.stringify({ new_name: newName, rename_file: renameFile }),
+    }),
+  moveModel: (id, subfolder) =>
+    request(`/models/${id}/move`, {
+      method: 'POST',
+      body: JSON.stringify({ subfolder }),
     }),
   deleteModel: (id, confirmName) =>
     request(`/models/${id}`, {

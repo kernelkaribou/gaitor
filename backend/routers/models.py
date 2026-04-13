@@ -9,7 +9,6 @@ from pathlib import Path
 import logging
 
 from .. import config
-from ..utils import validate_model_id
 from ..services.library import (
     catalog_model,
     upload_model,
@@ -25,7 +24,12 @@ from ..services.metadata import (
     is_library_initialized,
     THUMBNAILS_DIR,
     ensure_metadata_dir,
+    save_model,
+    rebuild_index,
 )
+from ..schemas.model import ModelHistoryEntry
+from ..utils import validate_model_id, safe_resolve
+from datetime import datetime
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -170,6 +174,53 @@ async def rename_model_endpoint(model_id: str, req: RenameRequest):
         raise HTTPException(status_code=404, detail=str(e))
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"File rename failed: {e}")
+
+
+class MoveRequest(BaseModel):
+    subfolder: str = ""  # empty string = move to category root
+
+
+@router.post("/{model_id}/move")
+async def move_model_endpoint(model_id: str, req: MoveRequest):
+    """Move a model to a subfolder within its category."""
+    model = load_model(model_id)
+    if not model:
+        raise HTTPException(status_code=404, detail="Model not found")
+
+    import re
+    subfolder = req.subfolder.strip()
+    if subfolder and not re.match(r'^[a-zA-Z0-9_\-/ ]+$', subfolder):
+        raise HTTPException(status_code=400, detail="Invalid subfolder name")
+
+    old_path = safe_resolve(config.LIBRARY_PATH, model.relative_path)
+    if not old_path.is_file():
+        raise HTTPException(status_code=404, detail="Model file not found on disk")
+
+    if subfolder:
+        new_dir = safe_resolve(config.LIBRARY_PATH, f"{model.category}/{subfolder}")
+    else:
+        new_dir = safe_resolve(config.LIBRARY_PATH, model.category)
+
+    new_dir.mkdir(parents=True, exist_ok=True)
+    new_path = new_dir / model.filename
+
+    if new_path.exists() and new_path != old_path:
+        raise HTTPException(status_code=409, detail="A file with that name already exists in the target folder")
+
+    if old_path != new_path:
+        import shutil
+        shutil.move(str(old_path), str(new_path))
+        model.relative_path = str(new_path.relative_to(config.LIBRARY_PATH))
+        model.updated_at = datetime.now().isoformat()
+        model.history.append(ModelHistoryEntry(
+            action="moved",
+            timestamp=model.updated_at,
+            details={"from": str(old_path.relative_to(config.LIBRARY_PATH)), "to": model.relative_path}
+        ))
+        save_model(model)
+        rebuild_index()
+
+    return model.model_dump()
 
 
 @router.delete("/{model_id}")

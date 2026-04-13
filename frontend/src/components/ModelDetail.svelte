@@ -9,7 +9,9 @@
   let editCategory = $state(model.category);
   let editTags = $state((model.tags || []).join(', '));
   let renaming = $state(false);
-  let renameName = $state(model.name);
+  let renameNewName = $state(model.name);
+  let renameFile = $state(true);
+  let confirmingRename = $state(false);
   let saving = $state(false);
   let error = $state(null);
 
@@ -17,11 +19,17 @@
   let thumbUrl = $derived(model.thumbnail ? api.getThumbnailUrl(model.id) + '?t=' + Date.now() : null);
   let uploadingThumb = $state(false);
 
-  // Sync to destination
+  // Sync to target
   let showSyncPicker = $state(false);
   let destinations = $state([]);
   let syncingTo = $state({});
   let loadingDests = $state(false);
+  let confirmSyncDest = $state(null);
+
+  // Move to subfolder
+  let showMovePicker = $state(false);
+  let moveSubfolder = $state('');
+  let movingModel = $state(false);
 
   async function saveEdits() {
     saving = true;
@@ -42,15 +50,21 @@
     saving = false;
   }
 
+  function requestRenameConfirm() {
+    confirmingRename = true;
+  }
+
   async function handleRename() {
     saving = true;
     error = null;
     try {
-      await api.renameModel(model.id, renameName, true);
+      await api.renameModel(model.id, renameNewName, renameFile);
       renaming = false;
+      confirmingRename = false;
       onUpdated();
     } catch (err) {
       error = err.message;
+      confirmingRename = false;
     }
     saving = false;
   }
@@ -92,6 +106,7 @@
   async function openSyncPicker() {
     showSyncPicker = true;
     loadingDests = true;
+    confirmSyncDest = null;
     try {
       const data = await api.listDestinations();
       destinations = data.destinations || [];
@@ -103,6 +118,7 @@
 
   async function syncToDestination(destId) {
     syncingTo = { ...syncingTo, [destId]: true };
+    confirmSyncDest = null;
     error = null;
     try {
       await api.syncModelToDestination(destId, model.id);
@@ -110,6 +126,19 @@
       error = err.message;
     }
     syncingTo = { ...syncingTo, [destId]: false };
+  }
+
+  async function handleMove() {
+    movingModel = true;
+    error = null;
+    try {
+      await api.moveModel(model.id, moveSubfolder);
+      showMovePicker = false;
+      onUpdated();
+    } catch (err) {
+      error = err.message;
+    }
+    movingModel = false;
   }
 </script>
 
@@ -185,16 +214,42 @@
     {:else if renaming}
       <!-- Rename form -->
       <div class="space-y-4">
-        <div>
-          <label class="block text-sm text-gray-400 mb-1">New Name (also renames the file)</label>
-          <input bind:value={renameName} class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500" />
-        </div>
-        <div class="flex gap-2">
-          <button class="px-4 py-2 text-sm rounded bg-green-600 hover:bg-green-500 text-white" onclick={handleRename} disabled={saving}>
-            {saving ? 'Renaming...' : 'Rename'}
-          </button>
-          <button class="px-4 py-2 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={() => renaming = false}>Cancel</button>
-        </div>
+        {#if confirmingRename}
+          <div class="bg-yellow-900/20 border border-yellow-700/50 rounded-lg p-3">
+            <p class="text-sm text-yellow-300 mb-2">Confirm rename:</p>
+            <p class="text-xs text-gray-400">Display name: <span class="text-gray-200">{renameNewName}</span></p>
+            {#if renameFile}
+              {@const ext = model.filename?.split('.').pop() || ''}
+              <p class="text-xs text-gray-400 mt-1">File will be renamed to: <span class="text-gray-200 font-mono">{renameNewName.replace(/[<>:"/\\|?*]/g, '_')}.{ext}</span></p>
+            {:else}
+              <p class="text-xs text-gray-400 mt-1">File stays: <span class="text-gray-200 font-mono">{model.filename}</span></p>
+            {/if}
+          </div>
+          <div class="flex gap-2">
+            <button class="px-4 py-2 text-sm rounded bg-green-600 hover:bg-green-500 text-white" onclick={handleRename} disabled={saving}>
+              {saving ? 'Renaming...' : 'Confirm Rename'}
+            </button>
+            <button class="px-4 py-2 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={() => confirmingRename = false}>Back</button>
+          </div>
+        {:else}
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">New display name</label>
+            <input bind:value={renameNewName} class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500" />
+          </div>
+          <label class="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
+            <input type="checkbox" bind:checked={renameFile} class="rounded" />
+            Also rename the physical file on disk
+          </label>
+          {#if !renameFile}
+            <p class="text-xs text-gray-500">File will stay as: <span class="font-mono">{model.filename}</span></p>
+          {/if}
+          <div class="flex gap-2">
+            <button class="px-4 py-2 text-sm rounded bg-green-600 hover:bg-green-500 text-white" onclick={requestRenameConfirm} disabled={!renameNewName.trim()}>
+              Rename
+            </button>
+            <button class="px-4 py-2 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={() => renaming = false}>Cancel</button>
+          </div>
+        {/if}
       </div>
     {:else if showSyncPicker}
       <!-- Sync to target picker -->
@@ -217,17 +272,57 @@
                     <p class="text-xs text-gray-500">{formatSize(dest.disk_free)} free</p>
                   {/if}
                 </div>
-                <button
-                  class="px-3 py-1.5 text-xs rounded bg-green-700 hover:bg-green-600 text-white disabled:opacity-50"
-                  onclick={() => syncToDestination(dest.id)}
-                  disabled={syncingTo[dest.id]}
-                >
-                  {syncingTo[dest.id] ? 'Syncing...' : 'Sync'}
-                </button>
+                {#if confirmSyncDest === dest.id}
+                  <div class="flex gap-1">
+                    <button
+                      class="px-2 py-1 text-xs rounded bg-green-700 hover:bg-green-600 text-white disabled:opacity-50"
+                      onclick={() => syncToDestination(dest.id)}
+                      disabled={syncingTo[dest.id]}
+                    >
+                      {syncingTo[dest.id] ? 'Syncing...' : 'Confirm'}
+                    </button>
+                    <button class="px-2 py-1 text-xs rounded bg-gray-700 text-gray-300" onclick={() => confirmSyncDest = null}>No</button>
+                  </div>
+                {:else}
+                  <button
+                    class="px-3 py-1.5 text-xs rounded bg-green-700 hover:bg-green-600 text-white disabled:opacity-50"
+                    onclick={() => confirmSyncDest = dest.id}
+                    disabled={syncingTo[dest.id]}
+                  >
+                    Sync
+                  </button>
+                {/if}
               </div>
             {/each}
           </div>
         {/if}
+      </div>
+    {:else if showMovePicker}
+      <!-- Move to subfolder -->
+      <div class="space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-medium text-gray-300">Move to Subfolder</h3>
+          <button class="text-xs text-gray-500 hover:text-gray-300" onclick={() => showMovePicker = false}>Back</button>
+        </div>
+        <p class="text-xs text-gray-500">Current path: <span class="font-mono">{model.relative_path}</span></p>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">Subfolder (leave empty to move to category root)</label>
+          <input
+            bind:value={moveSubfolder}
+            class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500"
+            placeholder="e.g. sdxl_models"
+          />
+        </div>
+        <div class="flex gap-2">
+          <button
+            class="px-4 py-2 text-sm rounded bg-green-600 hover:bg-green-500 text-white disabled:opacity-50"
+            onclick={handleMove}
+            disabled={movingModel}
+          >
+            {movingModel ? 'Moving...' : 'Move'}
+          </button>
+          <button class="px-4 py-2 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={() => showMovePicker = false}>Cancel</button>
+        </div>
       </div>
     {:else}
       <!-- View mode -->
@@ -317,7 +412,8 @@
         <!-- Actions -->
         <div class="border-t border-gray-700 pt-4 flex flex-wrap gap-2">
           <button class="px-3 py-1.5 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={() => editing = true}>Edit</button>
-          <button class="px-3 py-1.5 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={() => { renaming = true; renameName = model.name; }}>Rename</button>
+          <button class="px-3 py-1.5 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={() => { renaming = true; renameNewName = model.name; renameFile = true; confirmingRename = false; }}>Rename</button>
+          <button class="px-3 py-1.5 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={() => { showMovePicker = true; moveSubfolder = ''; }}>Move</button>
           <button class="px-3 py-1.5 text-sm rounded bg-green-700 hover:bg-green-600 text-white" onclick={openSyncPicker}>Sync to Target</button>
           <a
             href={api.getDownloadUrl(model.id)}
