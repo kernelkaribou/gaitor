@@ -23,7 +23,6 @@
   let error = $state(null);
   let activeCategory = $state(null);
   let currentView = $state('grid');
-  let showExtended = $state(false);
 
   // Category management
   let showAddCategory = $state(false);
@@ -259,7 +258,7 @@
       <span class="text-xs text-gray-500 ml-1">({modelList.length})</span>
     </button>
 
-    {#each categories.filter(c => c.is_primary) as cat}
+    {#each categories as cat}
       {@const count = categoryCountMap()[cat.id] || 0}
       {#if renamingCat === cat.id}
         <div class="mb-1 p-2.5 bg-gray-800 border border-green-700/50 rounded-lg">
@@ -296,55 +295,6 @@
         </button>
       {/if}
     {/each}
-
-    <!-- Extended categories (collapsible) -->
-    {#if categories.filter(c => !c.is_primary).length > 0}
-      <button
-        class="w-full text-left px-3 py-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors mt-2"
-        onclick={() => showExtended = !showExtended}
-      >
-        {showExtended ? '\u25BE' : '\u25B8'} More ({categories.filter(c => !c.is_primary).length})
-      </button>
-      {#if showExtended}
-        {#each categories.filter(c => !c.is_primary) as cat}
-          {@const count = categoryCountMap()[cat.id] || 0}
-          {#if renamingCat === cat.id}
-            <div class="mb-1 p-2.5 bg-gray-800 border border-green-700/50 rounded-lg">
-              {#if confirmingCatRename}
-                <p class="text-xs text-yellow-400 mb-2">Renaming will move all files. Continue?</p>
-                <p class="text-xs text-gray-400 mb-1">Title: <span class="text-gray-200">{renameCatLabel.trim() || renameCatId.trim()}</span></p>
-                <p class="text-xs text-gray-400 mb-2">Folder: <span class="text-gray-200 font-mono">{renameCatId.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_-]/g, '')}/</span></p>
-                <div class="flex gap-1">
-                  <button class="flex-1 text-xs px-2 py-1.5 bg-green-700 hover:bg-green-600 text-white rounded" onclick={confirmRenameCategory}>Confirm</button>
-                  <button class="flex-1 text-xs px-2 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded" onclick={() => confirmingCatRename = false}>Back</button>
-                </div>
-              {:else}
-                <label class="block text-xs text-gray-500 mb-0.5">Title</label>
-                <input type="text" bind:value={renameCatLabel} class="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 mb-1.5 focus:outline-none focus:border-green-500" />
-                <label class="block text-xs text-gray-500 mb-0.5">Folder</label>
-                <input type="text" bind:value={renameCatId} class="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 font-mono mb-2 focus:outline-none focus:border-green-500" />
-                <div class="flex gap-1">
-                  <button class="flex-1 text-xs px-2 py-1.5 bg-green-700 hover:bg-green-600 text-white rounded" onclick={requestCatRenameConfirm}>Save</button>
-                  <button class="flex-1 text-xs px-2 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded" onclick={() => renamingCat = null}>Cancel</button>
-                </div>
-              {/if}
-            </div>
-          {:else}
-            <button
-              class="w-full text-left px-3 py-1.5 rounded text-sm transition-colors mb-0.5 {activeCategory === cat.id ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}"
-              onclick={() => activeCategory = cat.id}
-              ondblclick={() => startRenameCategory(cat)}
-              title="Double-click to rename"
-            >
-              {cat.label}
-              {#if count > 0}
-                <span class="text-xs text-gray-500 ml-1">({count})</span>
-              {/if}
-            </button>
-          {/if}
-        {/each}
-      {/if}
-    {/if}
   </aside>
 
   <!-- Main content -->

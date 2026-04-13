@@ -15,7 +15,6 @@
   let search = $state('');
   let activeCategory = $state(null);
   let currentView = $state('grid');
-  let showExtended = $state(false);
   let confirmRemove = $state(null);
   let confirmBulkSync = $state(false);
 
@@ -217,7 +216,7 @@
           All Models
           <span class="text-xs text-gray-500 ml-1">({syncStatus.length})</span>
         </button>
-        {#each categories.filter(c => c.is_primary) as cat}
+        {#each categories as cat}
           {@const count = categoryCountMap()[cat.id] || 0}
           {#if count > 0}
             <button
@@ -229,29 +228,6 @@
             </button>
           {/if}
         {/each}
-        <!-- Extended categories with models -->
-        {#if categories.filter(c => !c.is_primary && (categoryCountMap()[c.id] || 0) > 0).length > 0}
-          <button
-            class="w-full text-left px-3 py-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors mt-2"
-            onclick={() => showExtended = !showExtended}
-          >
-            {showExtended ? '\u25BE' : '\u25B8'} More ({categories.filter(c => !c.is_primary && (categoryCountMap()[c.id] || 0) > 0).length})
-          </button>
-          {#if showExtended}
-            {#each categories.filter(c => !c.is_primary) as cat}
-              {@const count = categoryCountMap()[cat.id] || 0}
-              {#if count > 0}
-                <button
-                  class="w-full text-left px-3 py-1.5 rounded text-sm transition-colors mb-0.5 {activeCategory === cat.id ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}"
-                  onclick={() => activeCategory = cat.id}
-                >
-                  {cat.label}
-                  <span class="text-xs text-gray-500 ml-1">({count})</span>
-                </button>
-              {/if}
-            {/each}
-          {/if}
-        {/if}
 
         <!-- Sync status summary -->
         <div class="mt-6 pt-4 border-t border-gray-700">
