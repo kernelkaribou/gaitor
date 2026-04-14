@@ -40,8 +40,6 @@ export const api = {
     request(`/library/categories/${encodeURIComponent(id)}/rename`, { method: 'POST', body: JSON.stringify({ new_id: newId, new_label: newLabel }) }),
   listSubfolders: (categoryId) =>
     request(`/library/categories/${encodeURIComponent(categoryId)}/subfolders`),
-  createSubfolder: (categoryId, name) =>
-    request(`/library/categories/${encodeURIComponent(categoryId)}/subfolders`, { method: 'POST', body: JSON.stringify({ name }) }),
   deleteCategory: (id) =>
     request(`/library/categories/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 

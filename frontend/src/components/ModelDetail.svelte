@@ -341,7 +341,7 @@
             placeholder="Leave empty for category root"
           />
           {#if isNewPath}
-            <p class="text-xs text-yellow-400 mt-0.5">{'\u2728'} New path will be created</p>
+            <p class="text-xs text-yellow-400 mt-0.5">New path will be created</p>
           {/if}
           {#if showPathSuggestions && filteredSuggestions.length > 0}
             <div class="absolute z-10 mt-1 w-full bg-gray-900 border border-gray-600 rounded shadow-lg max-h-32 overflow-y-auto">

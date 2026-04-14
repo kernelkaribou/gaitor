@@ -33,7 +33,9 @@
   <div class="p-4">
     <div class="flex items-start justify-between mb-2">
       <h3 class="font-medium text-gray-100 truncate text-sm">{model.name}</h3>
-      <span class="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-300 shrink-0 ml-2">
+    </div>
+    <div class="mb-2">
+      <span class="text-xs font-medium px-2.5 py-1 rounded bg-green-900/40 text-green-400 border border-green-700/40">
         {model.category}
       </span>
     </div>

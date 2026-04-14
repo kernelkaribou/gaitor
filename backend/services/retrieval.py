@@ -202,7 +202,7 @@ async def download_model(
     thumb_rel = None
     if thumbnail_url:
         try:
-            MAX_THUMB_DOWNLOAD = 10 * 1024 * 1024  # 10MB
+            MAX_THUMB_DOWNLOAD = 12 * 1024 * 1024  # 12MB
             async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
                 resp = await client.get(thumbnail_url)
                 resp.raise_for_status()
@@ -247,6 +247,13 @@ async def download_model(
 
     save_model(model)
     rebuild_index()
+
+    # Compute hash in background (same thread since we're already in a background task)
+    try:
+        from .library import compute_hash
+        compute_hash(model.id)
+    except Exception as e:
+        logger.warning(f"Failed to compute hash after download: {e}")
 
     logger.info(f"Retrieved model: {model.name} from {url}")
     return model

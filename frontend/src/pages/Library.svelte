@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { api } from '../lib/api.js';
   import { formatSize } from '../lib/utils.js';
   import ModelCard from '../components/ModelCard.svelte';
@@ -35,8 +35,6 @@
 
   // Subfolder management
   let collapsedGroups = $state({});
-  let showAddSubfolder = $state(false);
-  let newSubfolderName = $state('');
 
   // Bulk selection
   let selectMode = $state(false);
@@ -125,18 +123,6 @@
     }
   }
 
-  async function addSubfolder() {
-    if (!newSubfolderName.trim() || !activeCategory) return;
-    try {
-      await api.createSubfolder(activeCategory, newSubfolderName.trim());
-      newSubfolderName = '';
-      showAddSubfolder = false;
-      await loadData();
-    } catch (err) {
-      error = err.message;
-    }
-  }
-
   function startRenameCategory(cat) {
     renamingCat = cat.id;
     renameCatId = cat.id;
@@ -188,6 +174,16 @@
   }
 
   onMount(loadData);
+
+  function onTaskComplete() {
+    loadData();
+  }
+  onMount(() => {
+    window.addEventListener('gaitor:task-complete', onTaskComplete);
+  });
+  onDestroy(() => {
+    window.removeEventListener('gaitor:task-complete', onTaskComplete);
+  });
 
   async function handleScan() {
     scanning = true;
@@ -551,27 +547,6 @@
       <div class="text-center py-20 text-gray-500">Loading...</div>
     {:else if filteredModels.length > 0}
       {#if activeCategory && groupedModels}
-        <!-- Subcategory add button -->
-        <div class="flex items-center gap-2 mb-3">
-          {#if showAddSubfolder}
-            <input
-              bind:value={newSubfolderName}
-              class="bg-gray-900 border border-gray-600 rounded px-2 py-1 text-sm text-gray-200 focus:outline-none focus:border-green-500"
-              placeholder="Subfolder name"
-              onkeydown={(e) => e.key === 'Enter' && addSubfolder()}
-            />
-            <button class="text-xs text-green-400 hover:text-green-300" onclick={addSubfolder}>Create</button>
-            <button class="text-xs text-gray-500 hover:text-gray-400" onclick={() => { showAddSubfolder = false; newSubfolderName = ''; }}>Cancel</button>
-          {:else}
-            <button
-              class="text-xs text-gray-500 hover:text-gray-400 flex items-center gap-1"
-              onclick={() => showAddSubfolder = true}
-            >
-              <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-700 text-green-400 text-sm font-bold">+</span>
-              New subfolder
-            </button>
-          {/if}
-        </div>
         <!-- Grouped by subfolder -->
         {#each Object.entries(groupedModels).sort(([a], [b]) => a === '' ? -1 : b === '' ? 1 : a.localeCompare(b)) as [subfolder, models] (subfolder)}
           {#if subfolder !== ''}
