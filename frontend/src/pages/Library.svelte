@@ -108,6 +108,18 @@
     }
   }
 
+  async function bulkGroup() {
+    if (selectedIds.size < 2) return;
+    const ids = [...selectedIds];
+    try {
+      await api.setModelGroup(ids[0], ids.slice(1));
+      exitSelectMode();
+      await loadData();
+    } catch (err) {
+      error = err.message;
+    }
+  }
+
   async function addNewCategory() {
     if (!newCatId.trim()) return;
     const id = newCatId.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_-]/g, '');
@@ -470,6 +482,12 @@
         <span class="text-sm text-gray-500">{selectedIds.size} selected</span>
         {#if selectedIds.size > 0}
           <div class="flex items-center gap-2 ml-auto">
+            <button
+              class="px-3 py-1.5 text-xs rounded bg-blue-900/50 hover:bg-blue-800 text-blue-300 disabled:opacity-50"
+              onclick={bulkGroup}
+              disabled={selectedIds.size < 2}
+              title={selectedIds.size < 2 ? 'Select at least 2 models to group' : ''}
+            >Group</button>
             <button
               class="px-3 py-1.5 text-xs rounded bg-gray-700 hover:bg-gray-600 text-gray-200"
               onclick={() => { showBulkCategory = true; showBulkTags = false; }}
