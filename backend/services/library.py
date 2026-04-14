@@ -313,7 +313,7 @@ def update_model_metadata(
                     model.source.provider = None
             changed_fields["source_url"] = {"from": old_url, "to": new_url}
 
-    # Handle thumbnail separately (no history entry needed)
+    # Handle thumbnail separately
     if "thumbnail" in updates:
         model.thumbnail = updates["thumbnail"]
         model.updated_at = now

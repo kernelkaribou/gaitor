@@ -6,14 +6,14 @@
 
 AI local model asset manager and sync tool. A self-hosted, Docker-based web UI for managing AI model files across a **library** (NAS/source of truth) and one or more **hosts** (inferencing machines).
 
-Think of it as a smart FTP specifically designed for AI models - browse, sync, retrieve from Hugging Face / CivitAI and other URL's, manage with history tracking, and deploy models across your local AI infrastructure.
+Think of it as a smart FTP specifically designed for AI models - browse, sync, retrieve from Hugging Face / CivitAI and other URL's, and deploy models across your local AI infrastructure.
 
 ## Features
 
 - **Library Management** - Centralized model library with metadata, categories (ComfyUI-style), search, and tagging
 - **Host Sync** - Copy models to inferencing machines with real-time progress tracking
 - **External Retrieval** - Download models from Hugging Face and CivitAI directly into your library
-- **Rename Tracking** - Rename models in the library with full history; hosts track rename lineage
+- **Rename Tracking** - Rename models in the library; hosts detect renames and can apply them
 - **Web Upload & Scan** - Upload models through the browser or scan for files added directly to storage
 - **File Integrity** - SHA-256 hashing for verifying large model file transfers
 - **Docker Native** - Single container, volume mounts for library and hosts, PUID/PGID support for NAS
