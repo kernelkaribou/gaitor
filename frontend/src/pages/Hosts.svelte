@@ -3,6 +3,7 @@
   import { api } from '../lib/api.js';
   import { formatSize, formatHostName } from '../lib/utils.js';
   import ModelCard from '../components/ModelCard.svelte';
+  import ModelDetail from '../components/ModelDetail.svelte';
   import HostScanResults from '../components/HostScanResults.svelte';
 
   let { onBack } = $props();
@@ -21,6 +22,7 @@
   let scanResults = $state(null);
   let scanKey = $state(0);
   let linking = $state({});
+  let selectedModel = $state(null);
 
   function usagePercent(total, free) {
     if (!total) return 0;
@@ -169,6 +171,23 @@
   function dismissScan() {
     scanResults = null;
     // Refresh sync status since linking/importing may have changed it
+    if (selectedHost) selectHost(selectedHost);
+  }
+
+  async function openModelDetail(item) {
+    if (item.status === 'orphaned') {
+      error = 'This model no longer exists in the library.';
+      return;
+    }
+    try {
+      const model = await api.getModel(item.model_id);
+      selectedModel = model;
+    } catch {
+      error = 'Could not load model details from the library.';
+    }
+  }
+
+  function handleModelUpdated() {
     if (selectedHost) selectHost(selectedHost);
   }
 
@@ -425,7 +444,7 @@
                     base_model: item.base_model || null,
                   }}
                   {formatSize}
-                  onSelect={() => {}}
+                  onSelect={() => openModelDetail(item)}
                 />
                 <!-- Status overlay -->
                 <div class="absolute top-2 right-2 flex items-center gap-1">
@@ -457,7 +476,7 @@
                     <span class="text-xs text-gray-500">{item.synced_at ? new Date(item.synced_at).toLocaleDateString() : ''}</span>
                     {#if confirmRemove === item.model_id}
                       <div class="flex gap-1">
-                        <button class="px-2 py-1 text-xs rounded bg-red-700 text-white" onclick={() => { confirmRemove = null; removeModel(item.model_id); }}>Remove</button>
+                        <button class="px-2 py-1 text-xs rounded bg-red-700 text-white" onclick={() => { confirmRemove = null; removeModel(item.model_id); }}>Confirm</button>
                         <button class="px-2 py-1 text-xs rounded bg-gray-700 text-gray-300" onclick={() => confirmRemove = null}>Cancel</button>
                       </div>
                     {:else}
@@ -491,3 +510,15 @@
     </div>
   {/if}
 </div>
+
+{#if selectedModel}
+  <ModelDetail
+    model={selectedModel}
+    {categories}
+    {formatSize}
+    onClose={() => selectedModel = null}
+    onUpdated={handleModelUpdated}
+    onDelete={() => { selectedModel = null; if (selectedHost) selectHost(selectedHost); }}
+    onSelectModel={(id) => { api.getModel(id).then(m => selectedModel = m).catch(() => {}); }}
+  />
+{/if}
