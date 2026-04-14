@@ -13,6 +13,9 @@ from ..services.sync import (
     sync_model_to_host,
     remove_from_host,
     apply_rename_on_host,
+    scan_host,
+    link_host_model,
+    import_from_host,
 )
 from ..services.metadata import load_model
 from ..services.tasks import task_manager
@@ -35,6 +38,27 @@ class BulkSyncRequest(BaseModel):
 
 class RemoveRequest(BaseModel):
     model_id: str
+
+
+class LinkRequest(BaseModel):
+    relative_path: str
+    library_model_id: str
+
+
+class ImportRequest(BaseModel):
+    relative_path: str
+    name: str
+    category: str = "other"
+    description: str = ""
+    tags: list[str] = []
+
+
+class BulkLinkRequest(BaseModel):
+    links: list[LinkRequest]
+
+    def model_post_init(self, __context):
+        if len(self.links) > 100:
+            raise ValueError("Bulk link limited to 100 models at a time")
 
 
 @router.get("/")
@@ -139,3 +163,81 @@ async def apply_rename(host_id: str, req: SyncRequest):
         return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/{host_id}/scan")
+async def scan_host_endpoint(host_id: str):
+    """Scan a host for unmanaged model files and match against library."""
+    try:
+        result = await asyncio.to_thread(scan_host, host_id)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/{host_id}/link")
+async def link_model_endpoint(host_id: str, req: LinkRequest):
+    """Link an existing host file to a library model (hash verified)."""
+    try:
+        result = await asyncio.to_thread(
+            link_host_model, host_id, req.relative_path, req.library_model_id
+        )
+        return result
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        detail = str(e)
+        status = 409 if "Hash mismatch" in detail else 404
+        raise HTTPException(status_code=status, detail=detail)
+
+
+@router.post("/{host_id}/link/bulk")
+async def bulk_link_endpoint(host_id: str, req: BulkLinkRequest):
+    """Link multiple existing host files to library models."""
+    task_id = task_manager.create_task("link", f"Linking {len(req.links)} models on {host_id}")
+
+    async def _do_bulk_link():
+        results = []
+        errors = []
+        for item in req.links:
+            try:
+                result = await asyncio.to_thread(
+                    link_host_model, host_id, item.relative_path, item.library_model_id
+                )
+                results.append(result)
+            except Exception as e:
+                errors.append({"relative_path": item.relative_path, "error": str(e)})
+        task_manager.complete_task(
+            task_id, f"Linked {len(results)}/{len(req.links)} models"
+        )
+        return {"linked": results, "errors": errors}
+
+    atask = asyncio.create_task(_do_bulk_link())
+    task_manager.set_asyncio_task(task_id, atask)
+    return {"task_id": task_id, "message": f"Linking {len(req.links)} models on {host_id}"}
+
+
+@router.post("/{host_id}/import")
+async def import_model_endpoint(host_id: str, req: ImportRequest):
+    """Import a model from a host into the library (reverse sync)."""
+    task_id = task_manager.create_task("import", f"Importing {req.name} from {host_id}")
+
+    async def _do_import():
+        try:
+            def progress_cb(copied, total):
+                task_manager.update_progress(task_id, copied, total)
+            result = await asyncio.to_thread(
+                import_from_host,
+                host_id, req.relative_path, req.name,
+                req.category, req.description, req.tags,
+                progress_cb,
+            )
+            task_manager.complete_task(task_id, f"Imported {req.name}")
+            return result
+        except Exception as e:
+            task_manager.fail_task(task_id, str(e))
+            raise
+
+    atask = asyncio.create_task(_do_import())
+    task_manager.set_asyncio_task(task_id, atask)
+    return {"task_id": task_id, "message": f"Importing {req.name} from {host_id}"}

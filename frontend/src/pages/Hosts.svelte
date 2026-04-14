@@ -3,6 +3,7 @@
   import { api } from '../lib/api.js';
   import { formatSize } from '../lib/utils.js';
   import ModelCard from '../components/ModelCard.svelte';
+  import HostScanResults from '../components/HostScanResults.svelte';
 
   let { onBack } = $props();
 
@@ -19,6 +20,10 @@
   let confirmRemove = $state(null);
   let selectedModels = $state(new Set());
   let confirmBulkAction = $state(false);
+  let scanning = $state(false);
+  let scanResults = $state(null);
+  let scanKey = $state(0);
+  let linking = $state({});
 
   function usagePercent(total, free) {
     if (!total) return 0;
@@ -142,6 +147,79 @@
       await removeModel(id);
     }
     selectedModels = new Set();
+  }
+
+  async function handleHostScan() {
+    scanning = true;
+    error = null;
+    try {
+      const result = await api.scanHost(selectedHost.id);
+      scanResults = result;
+      scanKey += 1;
+    } catch (err) {
+      error = err.message;
+    }
+    scanning = false;
+  }
+
+  async function linkModel(relativePath, libraryModelId) {
+    linking = { ...linking, [relativePath]: true };
+    error = null;
+    try {
+      await api.linkHostModel(selectedHost.id, relativePath, libraryModelId);
+      // Re-scan to refresh results
+      const result = await api.scanHost(selectedHost.id);
+      scanResults = result;
+      scanKey += 1;
+    } catch (err) {
+      error = err.message;
+    }
+    linking = { ...linking, [relativePath]: false };
+  }
+
+  async function bulkLinkMatched() {
+    if (!scanResults) return;
+    const matched = scanResults.unmanaged.filter(u => u.match && u.match.confidence === 'high');
+    if (matched.length === 0) return;
+    error = null;
+    linking = { ...linking, _bulk: true };
+    try {
+      const links = matched.map(u => ({
+        relative_path: u.relative_path,
+        library_model_id: u.match.library_model_id,
+      }));
+      await api.bulkLinkHostModels(selectedHost.id, links);
+      const result = await api.scanHost(selectedHost.id);
+      scanResults = result;
+      scanKey += 1;
+    } catch (err) {
+      error = err.message;
+    }
+    linking = { ...linking, _bulk: false };
+  }
+
+  async function importModel(item, importName, importCategory) {
+    linking = { ...linking, [item.relative_path]: true };
+    error = null;
+    try {
+      await api.importFromHost(selectedHost.id, {
+        relative_path: item.relative_path,
+        name: importName,
+        category: importCategory,
+      });
+      const result = await api.scanHost(selectedHost.id);
+      scanResults = result;
+      scanKey += 1;
+    } catch (err) {
+      error = err.message;
+    }
+    linking = { ...linking, [item.relative_path]: false };
+  }
+
+  function dismissScan() {
+    scanResults = null;
+    // Refresh sync status since linking/importing may have changed it
+    if (selectedHost) selectHost(selectedHost);
   }
 
   const statusColors = {
@@ -325,6 +403,13 @@
             <span class="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-400">
               {syncStatus.length} models | {syncSummary.synced} synced
             </span>
+            <button
+              class="px-3 py-1.5 text-sm rounded-md bg-yellow-600 hover:bg-yellow-500 text-white disabled:opacity-50"
+              onclick={handleHostScan}
+              disabled={scanning}
+            >
+              {scanning ? 'Scanning...' : 'Scan Host'}
+            </button>
           </div>
           <div class="flex items-center gap-2">
             <div class="relative">
@@ -396,6 +481,30 @@
           </div>
         {/if}
 
+        <!-- Host scan results -->
+        {#if scanResults && scanResults.count > 0}
+          {#key scanKey}
+            <HostScanResults
+              results={scanResults}
+              {categories}
+              {linking}
+              onLink={linkModel}
+              onBulkLink={bulkLinkMatched}
+              onImport={importModel}
+              onDismiss={dismissScan}
+            />
+          {/key}
+        {:else if scanResults && scanResults.count === 0}
+          <div class="bg-gray-800 border border-gray-700 rounded-md px-4 py-3 mb-4 text-gray-400 text-sm">
+            No unmanaged models found. All model files on this host are already managed.
+            {#if scanResults.already_managed > 0}
+              ({scanResults.already_managed} managed files detected)
+            {/if}
+            <button class="ml-2 underline text-gray-500" onclick={dismissScan}>dismiss</button>
+          </div>
+        {/if}
+
+        {#if !(scanResults && scanResults.count > 0)}
         {#if loading}
           <div class="text-center py-10 text-gray-500">Loading sync status...</div>
         {:else if filteredItems.length > 0}
@@ -535,6 +644,7 @@
               {/if}
             </p>
           </div>
+        {/if}
         {/if}
       </div>
     </div>

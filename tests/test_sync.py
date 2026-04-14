@@ -249,3 +249,172 @@ class TestApplyRename:
     def test_apply_rename_missing_model(self, setup_library, host_path):
         with pytest.raises(ValueError, match="Invalid model ID format"):
             apply_rename_on_host("no-such-model", "test-gpu")
+
+
+class TestScanHost:
+    def test_scan_empty_host(self, setup_library, host_path):
+        from backend.services.sync import scan_host
+        result = scan_host("test-gpu")
+        assert result["count"] == 0
+        assert result["already_managed"] == 0
+        assert result["unmanaged"] == []
+
+    def test_scan_finds_unmanaged_model(self, setup_library, host_path):
+        from backend.services.sync import scan_host
+        # Place a model file on the host without a sidecar
+        model_dir = host_path / "checkpoints"
+        model_dir.mkdir()
+        (model_dir / "test_model.safetensors").write_bytes(b"data" * 50)
+
+        result = scan_host("test-gpu")
+        assert result["count"] == 1
+        assert result["already_managed"] == 0
+        item = result["unmanaged"][0]
+        assert item["filename"] == "test_model.safetensors"
+        assert item["guessed_category"] == "checkpoints"
+        assert item["match"] is None
+
+    def test_scan_skips_managed_files(self, sample_model, host_path):
+        from backend.services.sync import scan_host
+        # Sync a model to create a sidecar
+        sync_model_to_host(sample_model.id, "test-gpu")
+
+        result = scan_host("test-gpu")
+        assert result["count"] == 0
+        assert result["already_managed"] == 1
+
+    def test_scan_matches_library_model(self, sample_model, host_path):
+        from backend.services.sync import scan_host
+        # Place an identical file on the host (same name and size)
+        model_dir = host_path / "checkpoints"
+        model_dir.mkdir()
+        (model_dir / "sdxl.safetensors").write_bytes(b"model-data" * 100)
+
+        result = scan_host("test-gpu")
+        assert result["count"] == 1
+        item = result["unmanaged"][0]
+        assert item["match"] is not None
+        assert item["match"]["library_model_id"] == sample_model.id
+        assert item["match"]["match_type"] == "filename_and_size"
+        assert item["match"]["confidence"] == "high"
+
+    def test_scan_filename_only_match(self, sample_model, host_path):
+        from backend.services.sync import scan_host
+        # Same filename but different size
+        model_dir = host_path / "checkpoints"
+        model_dir.mkdir()
+        (model_dir / "sdxl.safetensors").write_bytes(b"different-data")
+
+        result = scan_host("test-gpu")
+        assert result["count"] == 1
+        item = result["unmanaged"][0]
+        assert item["match"] is not None
+        assert item["match"]["match_type"] == "filename"
+        assert item["match"]["confidence"] == "medium"
+
+    def test_scan_skips_non_model_files(self, setup_library, host_path):
+        from backend.services.sync import scan_host
+        (host_path / "readme.txt").write_text("not a model")
+        (host_path / "config.yaml").write_text("config: true")
+
+        result = scan_host("test-gpu")
+        assert result["count"] == 0
+
+
+class TestLinkHostModel:
+    def test_link_matching_file(self, sample_model, host_path):
+        from backend.services.sync import link_host_model
+        from backend.services.metadata import load_model as _load
+        # Place identical file on host
+        model_dir = host_path / "checkpoints"
+        model_dir.mkdir()
+        host_file = model_dir / "sdxl.safetensors"
+        host_file.write_bytes(b"model-data" * 100)
+
+        result = link_host_model("test-gpu", "checkpoints/sdxl.safetensors", sample_model.id)
+        assert result["hash_verified"] is True
+        assert result["model_id"] == sample_model.id
+
+        # Check sidecar was created
+        sidecar = model_dir / f".sdxl.safetensors{SIDECAR_SUFFIX}"
+        assert sidecar.exists()
+        with open(sidecar) as f:
+            data = json.load(f)
+        assert data["library_model_id"] == sample_model.id
+
+        # Check history was recorded
+        updated = _load(sample_model.id)
+        assert any(h.action == "linked" for h in updated.history)
+
+    def test_link_hash_mismatch(self, sample_model, host_path):
+        from backend.services.sync import link_host_model
+        # Place file with different content
+        model_dir = host_path / "checkpoints"
+        model_dir.mkdir()
+        (model_dir / "sdxl.safetensors").write_bytes(b"totally-different")
+
+        with pytest.raises(ValueError, match="Hash mismatch"):
+            link_host_model("test-gpu", "checkpoints/sdxl.safetensors", sample_model.id)
+
+    def test_link_file_not_found(self, sample_model, host_path):
+        from backend.services.sync import link_host_model
+        with pytest.raises(FileNotFoundError):
+            link_host_model("test-gpu", "checkpoints/nonexistent.safetensors", sample_model.id)
+
+
+class TestImportFromHost:
+    def test_import_model(self, setup_library, host_path):
+        from backend.services.sync import import_from_host
+        from backend.services.metadata import load_model as _load
+        # Place a model on the host
+        model_dir = host_path / "loras"
+        model_dir.mkdir()
+        host_file = model_dir / "my_lora.safetensors"
+        host_file.write_bytes(b"lora-data" * 50)
+
+        result = import_from_host(
+            "test-gpu", "loras/my_lora.safetensors",
+            name="My LoRA", category="loras", description="A test lora",
+        )
+        assert result["library_path"] == "loras/my_lora.safetensors"
+        assert result["model_id"] is not None
+
+        # Check file was copied to library
+        lib_file = config.LIBRARY_PATH / "loras" / "my_lora.safetensors"
+        assert lib_file.exists()
+        assert lib_file.read_bytes() == b"lora-data" * 50
+
+        # Check library metadata was created
+        model = _load(result["model_id"])
+        assert model.name == "My LoRA"
+        assert model.category == "loras"
+        assert model.source.provider == "host_import"
+        assert any(h.action == "imported" for h in model.history)
+
+        # Check sidecar was created on host
+        sidecar = model_dir / f".my_lora.safetensors{SIDECAR_SUFFIX}"
+        assert sidecar.exists()
+
+    def test_import_duplicate_fails(self, setup_library, host_path):
+        from backend.services.sync import import_from_host
+        # Create file in both places
+        model_dir = host_path / "checkpoints"
+        model_dir.mkdir()
+        (model_dir / "dup.safetensors").write_bytes(b"data")
+        lib_dir = config.LIBRARY_PATH / "checkpoints"
+        lib_dir.mkdir(parents=True, exist_ok=True)
+        (lib_dir / "dup.safetensors").write_bytes(b"other-data")
+
+        with pytest.raises(ValueError, match="already exists"):
+            import_from_host(
+                "test-gpu", "checkpoints/dup.safetensors",
+                name="Dup", category="checkpoints",
+            )
+
+    def test_import_file_not_found(self, setup_library, host_path):
+        from backend.services.sync import import_from_host
+        with pytest.raises(FileNotFoundError):
+            import_from_host(
+                "test-gpu", "loras/nonexistent.safetensors",
+                name="Missing", category="loras",
+            )

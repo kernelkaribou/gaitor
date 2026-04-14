@@ -148,6 +148,14 @@ export const api = {
     request(`/hosts/${encodeURIComponent(hostId)}/remove`, { method: 'POST', body: JSON.stringify({ model_id: modelId }) }),
   applyRenameOnHost: (hostId, modelId) =>
     request(`/hosts/${encodeURIComponent(hostId)}/apply-rename`, { method: 'POST', body: JSON.stringify({ model_id: modelId }) }),
+  scanHost: (hostId) =>
+    request(`/hosts/${encodeURIComponent(hostId)}/scan`, { method: 'POST' }),
+  linkHostModel: (hostId, relativePath, libraryModelId) =>
+    request(`/hosts/${encodeURIComponent(hostId)}/link`, { method: 'POST', body: JSON.stringify({ relative_path: relativePath, library_model_id: libraryModelId }) }),
+  bulkLinkHostModels: (hostId, links) =>
+    request(`/hosts/${encodeURIComponent(hostId)}/link/bulk`, { method: 'POST', body: JSON.stringify({ links }) }),
+  importFromHost: (hostId, data) =>
+    request(`/hosts/${encodeURIComponent(hostId)}/import`, { method: 'POST', body: JSON.stringify(data) }),
 
   // Download (formerly Retrieve)
   getProviders: () => request('/retrieve/providers'),
