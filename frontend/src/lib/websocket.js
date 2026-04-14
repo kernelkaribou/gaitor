@@ -64,7 +64,7 @@ function handleTaskUpdate(task) {
       removeToast(existingToastId);
       taskToastMap.delete(task.task_id);
     }
-    addToast({ type: 'success', title: task.title, message: task.message, duration: 6000 });
+    addToast({ type: 'success', title: task.message || task.title, duration: 6000 });
     window.dispatchEvent(new CustomEvent('gaitor:task-complete', { detail: task }));
   } else if (task.status === 'failed') {
     if (existingToastId) {

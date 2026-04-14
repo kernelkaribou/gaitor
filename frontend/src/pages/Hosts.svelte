@@ -411,8 +411,9 @@
         {:else if filteredItems.length > 0}
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {#each filteredItems as item (item.model_id)}
-              <div class="relative pb-9">
+              <div class="relative bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
                 <ModelCard
+                  hostMode={true}
                   model={{
                     id: item.model_id,
                     name: item.model_name,
@@ -433,7 +434,7 @@
                   </span>
                 </div>
                 <!-- Action bar -->
-                <div class="absolute bottom-0 left-0 right-0 bg-gray-900/90 backdrop-blur-sm px-3 py-2 flex items-center justify-between rounded-b-lg">
+                <div class="bg-gray-900/90 backdrop-blur-sm px-3 py-2 flex items-center justify-between border-t border-gray-700">
                   {#if item.status === 'rename_pending'}
                     <span class="text-xs text-blue-400 truncate mr-2">Host: {item.host_filename}</span>
                     <button

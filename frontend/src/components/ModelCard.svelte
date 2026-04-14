@@ -2,7 +2,7 @@
   import { api } from '../lib/api.js';
   import defaultThumb from '../assets/default-thumb.webp';
 
-  let { model, formatSize, onSelect, isDuplicate } = $props();
+  let { model, formatSize, onSelect, isDuplicate, hostMode } = $props();
 
   const ext = $derived(model.filename?.split('.').pop()?.toLowerCase() || '');
   const extBadge = $derived(ext.toUpperCase());
@@ -19,7 +19,7 @@
 </script>
 
 <button
-  class="bg-gray-800 rounded-lg border border-gray-700 hover:border-green-600/50 transition-colors cursor-pointer text-left w-full overflow-hidden"
+  class="{hostMode ? '' : 'bg-gray-800 rounded-lg border border-gray-700 hover:border-green-600/50'} transition-colors cursor-pointer text-left w-full overflow-hidden"
   onclick={onSelect}
 >
   {#if thumbUrl}
