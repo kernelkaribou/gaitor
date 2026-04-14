@@ -34,6 +34,7 @@ class ModelMetadata(BaseModel):
     description: str = ""
     tags: list[str] = Field(default_factory=list)
     base_model: Optional[str] = None  # Associated base model (e.g. "SDXL 1.0" for a LoRA)
+    group_id: Optional[str] = None  # Shared UUID linking related models (e.g. LLM + mmproj)
     preview_image: Optional[str] = None
     thumbnail: Optional[str] = None  # Relative path to thumbnail within .gaitor/thumbnails/
     history: list[ModelHistoryEntry] = Field(default_factory=list)

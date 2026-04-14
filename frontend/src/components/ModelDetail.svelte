@@ -16,6 +16,7 @@
     document.addEventListener('keydown', handleKeydown);
     window.addEventListener('gaitor:task-complete', handleTaskComplete);
     loadHostStatuses();
+    loadGroup();
   });
   onDestroy(() => {
     document.removeEventListener('keydown', handleKeydown);
@@ -79,6 +80,70 @@
       error = err.message;
     }
     loadingHosts = false;
+  }
+
+  // Model grouping
+  let groupMembers = $state([]);
+  let groupId = $state(null);
+  let loadingGroup = $state(false);
+  let showGroupPicker = $state(false);
+  let groupSearch = $state('');
+  let allModels = $state([]);
+
+  async function loadGroup() {
+    loadingGroup = true;
+    try {
+      const data = await api.getModelGroup(model.id);
+      groupId = data.group_id;
+      groupMembers = data.members || [];
+    } catch (err) {
+      error = err.message;
+    }
+    loadingGroup = false;
+  }
+
+  async function openGroupPicker() {
+    showGroupPicker = true;
+    groupSearch = '';
+    try {
+      const data = await api.listModels();
+      // Exclude current model and existing group members
+      const excludeIds = new Set([model.id, ...groupMembers.map(m => m.id)]);
+      allModels = (data.models || []).filter(m => !excludeIds.has(m.id));
+    } catch (err) {
+      error = err.message;
+    }
+  }
+
+  let filteredGroupCandidates = $derived.by(() => {
+    if (!groupSearch) return allModels.slice(0, 20);
+    const q = groupSearch.toLowerCase();
+    return allModels.filter(m =>
+      m.name?.toLowerCase().includes(q) || m.filename?.toLowerCase().includes(q)
+    ).slice(0, 20);
+  });
+
+  async function addToGroup(otherId) {
+    error = null;
+    try {
+      const ids = [...groupMembers.map(m => m.id), otherId];
+      await api.setModelGroup(model.id, ids);
+      showGroupPicker = false;
+      await loadGroup();
+    } catch (err) {
+      error = err.message;
+    }
+  }
+
+  async function removeFromGroup() {
+    error = null;
+    try {
+      await api.removeFromGroup(model.id);
+      groupId = null;
+      groupMembers = [];
+    } catch (err) {
+      error = err.message;
+    }
   }
 
   function getModelSubfolder() {
@@ -551,6 +616,69 @@
                   {/if}
                 </div>
               {/each}
+            </div>
+          {/if}
+        </div>
+
+        <!-- Group -->
+        <div class="border-t border-gray-700 pt-4">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs text-gray-500 uppercase tracking-wider">Group</span>
+            {#if !showGroupPicker}
+              <button class="text-xs text-gray-600 hover:text-gray-400" onclick={openGroupPicker}>
+                {groupMembers.length > 0 ? 'Add' : 'Create Group'}
+              </button>
+            {/if}
+          </div>
+          {#if loadingGroup}
+            <p class="text-xs text-gray-500">Loading...</p>
+          {:else if groupMembers.length === 0 && !showGroupPicker}
+            <p class="text-xs text-gray-600 italic">Not grouped with other models</p>
+          {:else}
+            <div class="space-y-1.5 mb-2">
+              {#each groupMembers as gm (gm.id)}
+                <div class="flex items-center gap-2 bg-gray-900 rounded px-3 py-1.5 border border-gray-700">
+                  {#if gm.thumbnail}
+                    <img src={api.getThumbnailUrl(gm.id)} alt="" class="w-6 h-6 rounded object-cover shrink-0" />
+                  {/if}
+                  <div class="min-w-0 flex-1">
+                    <p class="text-sm text-gray-200 truncate">{gm.name}</p>
+                    <p class="text-xs text-gray-500 truncate">{gm.filename}</p>
+                  </div>
+                  <span class="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-400 shrink-0">{gm.category}</span>
+                </div>
+              {/each}
+            </div>
+            {#if groupId}
+              <button class="text-xs text-red-400 hover:text-red-300" onclick={removeFromGroup}>Remove from group</button>
+            {/if}
+          {/if}
+          {#if showGroupPicker}
+            <div class="mt-2 bg-gray-900 border border-gray-700 rounded-lg p-3">
+              <input
+                type="text"
+                bind:value={groupSearch}
+                placeholder="Search models to group with..."
+                class="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-green-500 mb-2"
+              />
+              <div class="max-h-48 overflow-y-auto space-y-1">
+                {#each filteredGroupCandidates as candidate (candidate.id)}
+                  <button
+                    class="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-800 text-left"
+                    onclick={() => addToGroup(candidate.id)}
+                  >
+                    <div class="min-w-0 flex-1">
+                      <p class="text-sm text-gray-200 truncate">{candidate.name}</p>
+                      <p class="text-xs text-gray-500 truncate">{candidate.filename}</p>
+                    </div>
+                    <span class="text-xs text-gray-500 shrink-0">{candidate.category}</span>
+                  </button>
+                {/each}
+                {#if filteredGroupCandidates.length === 0}
+                  <p class="text-xs text-gray-500 text-center py-2">No matching models</p>
+                {/if}
+              </div>
+              <button class="text-xs text-gray-500 hover:text-gray-300 mt-2" onclick={() => showGroupPicker = false}>Cancel</button>
             </div>
           {/if}
         </div>

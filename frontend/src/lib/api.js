@@ -77,6 +77,12 @@ export const api = {
   getThumbnailUrl: (id) => `${BASE_URL}/models/${encodeURIComponent(id)}/thumbnail`,
   getModelHosts: (id) =>
     request(`/models/${encodeURIComponent(id)}/hosts`),
+  getModelGroup: (id) =>
+    request(`/models/${encodeURIComponent(id)}/group`),
+  setModelGroup: (id, modelIds) =>
+    request(`/models/${encodeURIComponent(id)}/group`, { method: 'PUT', body: JSON.stringify({ model_ids: modelIds }) }),
+  removeFromGroup: (id) =>
+    request(`/models/${encodeURIComponent(id)}/group`, { method: 'DELETE' }),
 
   async uploadThumbnail(modelId, file) {
     const formData = new FormData();

@@ -5,6 +5,7 @@ import asyncio
 import re
 import shutil
 import logging
+import uuid
 from io import BytesIO
 from pathlib import Path
 from typing import Optional
@@ -152,6 +153,106 @@ async def get_model_hosts(model_id: str):
         raise HTTPException(status_code=400, detail="Invalid model ID format")
     status = await asyncio.to_thread(get_model_host_status, model_id)
     return {"hosts": status}
+
+
+@router.get("/{model_id}/group")
+async def get_model_group(model_id: str):
+    """Get all models in the same group as this model."""
+    try:
+        model_id = validate_model_id(model_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid model ID format")
+    model = load_model(model_id)
+    if not model:
+        raise HTTPException(status_code=404, detail="Model not found")
+    if not model.group_id:
+        return {"group_id": None, "members": []}
+
+    index = load_index()
+    members = [
+        {"id": m["id"], "name": m.get("name", ""), "filename": m.get("filename", ""), "category": m.get("category", ""), "size": m.get("size", 0), "thumbnail": m.get("thumbnail")}
+        for m in index if m.get("group_id") == model.group_id and m["id"] != model_id
+    ]
+    return {"group_id": model.group_id, "members": members}
+
+
+class GroupRequest(BaseModel):
+    model_ids: list[str]
+
+
+@router.put("/{model_id}/group")
+async def set_model_group(model_id: str, req: GroupRequest):
+    """Group this model with other models. Creates a new group or merges into an existing one."""
+    try:
+        model_id = validate_model_id(model_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid model ID format")
+    model = load_model(model_id)
+    if not model:
+        raise HTTPException(status_code=404, detail="Model not found")
+
+    all_ids = list(set([model_id] + req.model_ids))
+    if len(all_ids) < 2:
+        raise HTTPException(status_code=400, detail="Need at least two models to form a group")
+
+    # Find existing group_id from any of the models, or create new
+    group_id = model.group_id
+    if not group_id:
+        for mid in req.model_ids:
+            other = load_model(mid)
+            if other and other.group_id:
+                group_id = other.group_id
+                break
+    if not group_id:
+        group_id = str(uuid.uuid4())
+
+    now = datetime.now().isoformat()
+    for mid in all_ids:
+        try:
+            mid = validate_model_id(mid)
+        except ValueError:
+            continue
+        m = load_model(mid)
+        if not m:
+            continue
+        if m.group_id != group_id:
+            m.group_id = group_id
+            m.updated_at = now
+            save_model(m)
+
+    rebuild_index()
+    return {"group_id": group_id, "model_ids": all_ids}
+
+
+@router.delete("/{model_id}/group")
+async def remove_from_group(model_id: str):
+    """Remove this model from its group. If only one member remains, dissolve the group."""
+    try:
+        model_id = validate_model_id(model_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid model ID format")
+    model = load_model(model_id)
+    if not model:
+        raise HTTPException(status_code=404, detail="Model not found")
+    if not model.group_id:
+        return {"removed": True}
+
+    old_group_id = model.group_id
+    now = datetime.now().isoformat()
+
+    model.group_id = None
+    model.updated_at = now
+    save_model(model)
+
+    # Check remaining members — dissolve if only one left
+    remaining = [m for m in load_all_models() if m.group_id == old_group_id]
+    if len(remaining) == 1:
+        remaining[0].group_id = None
+        remaining[0].updated_at = now
+        save_model(remaining[0])
+
+    rebuild_index()
+    return {"removed": True}
 
 
 @router.post("/catalog")

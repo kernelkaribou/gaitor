@@ -49,6 +49,9 @@
     <div class="flex items-center justify-between text-xs text-gray-500">
       <span>{formatSize(model.size)}</span>
       <div class="flex items-center gap-2">
+        {#if model.group_id}
+          <span class="text-blue-400" title="Grouped with other models">&#x26D3;</span>
+        {/if}
         {#if isDuplicate}
           <span class="text-yellow-500" title="Duplicate hash detected">DUP</span>
         {/if}
