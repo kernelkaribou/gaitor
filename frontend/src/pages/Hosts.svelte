@@ -1,7 +1,7 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
   import { api } from '../lib/api.js';
-  import { formatSize } from '../lib/utils.js';
+  import { formatSize, formatHostName } from '../lib/utils.js';
   import ModelCard from '../components/ModelCard.svelte';
   import HostScanResults from '../components/HostScanResults.svelte';
 
@@ -258,7 +258,7 @@
             disabled={isOffline}
           >
             <div class="flex items-center justify-between mb-2">
-              <h3 class="font-medium text-gray-100">{host.name}</h3>
+              <h3 class="font-medium text-gray-100">{formatHostName(host.name)}</h3>
               <span class="text-xs px-2 py-0.5 rounded-full {isHealthy ? 'bg-green-900/40 text-green-400' : isDegraded ? 'bg-yellow-900/40 text-yellow-400' : 'bg-red-900/40 text-red-400'}">
                 {isHealthy ? 'Healthy' : isDegraded ? 'Read-only' : 'Offline'}
               </span>
@@ -352,7 +352,7 @@
         <!-- Controls bar -->
         <div class="flex items-center justify-between mb-4">
           <div class="flex items-center gap-3">
-            <h2 class="text-lg font-semibold text-gray-200">{selectedHost.name}</h2>
+            <h2 class="text-lg font-semibold text-gray-200">{formatHostName(selectedHost.name)}</h2>
             <span class="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-400">
               {hostModels.length} model{hostModels.length !== 1 ? 's' : ''} on host
             </span>

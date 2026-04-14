@@ -1,6 +1,6 @@
 <script>
   import { api } from '../lib/api.js';
-  import { isSafeUrl } from '../lib/utils.js';
+  import { isSafeUrl, formatHostName } from '../lib/utils.js';
   import { onMount, onDestroy } from 'svelte';
 
   let { model, categories, formatSize, onClose, onUpdated, onDelete, onSelectModel } = $props();
@@ -536,7 +536,7 @@
               {#each hostStatuses as hs (hs.host_id)}
                 <div class="flex items-center justify-between bg-gray-900 rounded px-3 py-2 border border-gray-700">
                   <div class="min-w-0">
-                    <p class="text-sm text-gray-200 font-medium truncate">{hs.host_name}</p>
+                    <p class="text-sm text-gray-200 font-medium truncate">{formatHostName(hs.host_name)}</p>
                     {#if hs.disk_free}
                       <p class="text-xs text-gray-600">{formatSize(hs.disk_free)} free</p>
                     {/if}

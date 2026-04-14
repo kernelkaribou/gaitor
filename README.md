@@ -62,7 +62,7 @@ volumes:
   - /mnt/render-node/models:/hosts/render-node    # Host 3
 ```
 
-The folder name after `/hosts/` becomes the host name in the UI. No configuration files are needed — just add or remove volume mounts and restart the container.
+The folder name after `/hosts/` becomes the host name in the UI. Names are formatted for display: underscores become spaces and each word is capitalized (e.g. `gpu_workstation` → "Gpu Workstation", `render-node` → "Render-Node"). No configuration files are needed — just add or remove volume mounts and restart the container.
 
 ## Environment Variables
 
