@@ -223,7 +223,7 @@
   const statusLabels = {
     synced: 'Synced',
     not_synced: 'Not synced',
-    outdated: 'Outdated',
+    outdated: 'Out of sync',
     rename_pending: 'Rename pending',
     orphaned: 'Orphaned',
   };
@@ -362,7 +362,7 @@
               <p class="text-green-400">{syncSummary.synced} synced</p>
             {/if}
             {#if syncSummary.outdated > 0}
-              <p class="text-yellow-400">{syncSummary.outdated} outdated</p>
+              <p class="text-yellow-400">{syncSummary.outdated} out of sync</p>
             {/if}
             {#if syncSummary.rename_pending > 0}
               <p class="text-blue-400">{syncSummary.rename_pending} rename pending</p>

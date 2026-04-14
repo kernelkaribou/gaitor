@@ -540,7 +540,7 @@
                 'bg-gray-700 text-gray-400 border-gray-600'
               }">
                 {hostContext.status === 'synced' ? 'Synced' :
-                 hostContext.status === 'outdated' ? 'Outdated' :
+                 hostContext.status === 'outdated' ? 'Out of sync' :
                  hostContext.status === 'rename_pending' ? 'Rename pending' :
                  hostContext.status}
               </span>
@@ -579,7 +579,7 @@
                         onclick={() => syncToHost(hs.host_id)}
                         disabled={syncingTo[hs.host_id]}
                       >
-                        {syncingTo[hs.host_id] ? 'Syncing...' : 'Update'}
+                        {syncingTo[hs.host_id] ? 'Syncing...' : 'Re-sync'}
                       </button>
                     {:else if hs.status === 'error'}
                       <span class="text-xs text-red-500">Unavailable</span>
