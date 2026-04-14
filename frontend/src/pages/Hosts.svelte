@@ -562,6 +562,6 @@
     onClose={() => selectedModel = null}
     onUpdated={handleModelUpdated}
     onDelete={() => { selectedModel = null; if (selectedHost) selectHost(selectedHost); }}
-    onSelectModel={(id) => { api.getModel(id).then(m => selectedModel = m).catch(() => {}); }}
+    onSelectModel={(id) => { api.getModel(id).then(m => selectedModel = m).catch(() => { error = 'Could not load model details.'; }); }}
   />
 {/if}
