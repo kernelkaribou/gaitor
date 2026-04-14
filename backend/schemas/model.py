@@ -14,13 +14,6 @@ class ModelSource(BaseModel):
     downloaded_at: Optional[str] = None
 
 
-class ModelHistoryEntry(BaseModel):
-    """A single history event for a model."""
-    action: str  # "added", "renamed", "metadata_updated", "synced"
-    timestamp: str
-    details: dict = Field(default_factory=dict)
-
-
 class ModelMetadata(BaseModel):
     """Full metadata for a library model. Stored as {uuid}.json."""
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -37,7 +30,6 @@ class ModelMetadata(BaseModel):
     group_id: Optional[str] = None  # Shared UUID linking related models (e.g. LLM + mmproj)
     preview_image: Optional[str] = None
     thumbnail: Optional[str] = None  # Relative path to thumbnail within .gaitor/thumbnails/
-    history: list[ModelHistoryEntry] = Field(default_factory=list)
     created_at: str = ""
     updated_at: str = ""
 
@@ -49,4 +41,3 @@ class SyncMetadata(BaseModel):
     current_filename: str
     synced_at: str
     hash: Optional[str] = None
-    rename_history: list[dict] = Field(default_factory=list)

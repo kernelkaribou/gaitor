@@ -11,7 +11,7 @@ from typing import Optional
 
 from .. import config
 from ..utils import get_now, to_iso, safe_resolve, sanitize_filename
-from ..schemas.model import ModelMetadata, ModelSource, ModelHistoryEntry
+from ..schemas.model import ModelMetadata, ModelSource
 from .metadata import (
     ensure_metadata_dir,
     is_library_initialized,
@@ -185,13 +185,6 @@ def catalog_model(
         source=ModelSource(provider=source_provider),
         description=description,
         tags=tags or [],
-        history=[
-            ModelHistoryEntry(
-                action="added",
-                timestamp=now,
-                details={"method": "catalog", "source": source_provider},
-            )
-        ],
         created_at=now,
         updated_at=now,
     )
@@ -269,13 +262,6 @@ def upload_model(
         description=description,
         tags=tags or [],
         base_model=base_model or None,
-        history=[
-            ModelHistoryEntry(
-                action="added",
-                timestamp=now,
-                details={"method": "upload"},
-            )
-        ],
         created_at=now,
         updated_at=now,
     )
@@ -385,13 +371,6 @@ def update_model_metadata(
 
     if changed_fields:
         model.updated_at = now
-        model.history.append(
-            ModelHistoryEntry(
-                action="metadata_updated",
-                timestamp=now,
-                details=changed_fields,
-            )
-        )
         save_model(model)
         rebuild_index()
 
@@ -430,18 +409,6 @@ def rename_model(model_id: str, new_name: str, rename_file: bool = True) -> Mode
             raise ValueError(f"A file named '{new_filename}' already exists")
 
     model.updated_at = now
-    model.history.append(
-        ModelHistoryEntry(
-            action="renamed",
-            timestamp=now,
-            details={
-                "from_name": old_name,
-                "to_name": new_name,
-                "from_filename": old_filename,
-                "to_filename": model.filename,
-            },
-        )
-    )
 
     save_model(model)
     rebuild_index()

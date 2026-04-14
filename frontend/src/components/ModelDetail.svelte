@@ -304,48 +304,6 @@
     }
   }
 
-  function formatHistoryEntry(entry) {
-    const d = entry.details || {};
-    switch (entry.action) {
-      case 'added':
-        if (d.method === 'upload') return 'Uploaded to library';
-        if (d.method === 'catalog') return 'Cataloged from scan';
-        if (d.method === 'download') return `Downloaded from ${d.source ? sourceDomain(d.source) : 'external source'}`;
-        return 'Added to library';
-      case 'renamed': {
-        const parts = [];
-        if (d.from_name) parts.push(`"${d.from_name}" \u2192 "${d.to_name}"`);
-        if (d.from_filename) parts.push(`file: ${d.from_filename} \u2192 ${d.to_filename}`);
-        return parts.length ? `Renamed: ${parts.join(', ')}` : 'Renamed';
-      }
-      case 'metadata_updated': {
-        const changes = [];
-        if (d.category) changes.push(`category ${d.category.from} \u2192 ${d.category.to}`);
-        if (d.subfolder) changes.push(`path ${d.subfolder.from} \u2192 ${d.subfolder.to}`);
-        if (d.filename) changes.push(`file ${d.filename.from} \u2192 ${d.filename.to}`);
-        if (d.tags) {
-          const from = Array.isArray(d.tags.from) ? d.tags.from : [];
-          const to = Array.isArray(d.tags.to) ? d.tags.to : [];
-          const added = to.filter(t => !from.includes(t));
-          const removed = from.filter(t => !to.includes(t));
-          if (added.length) changes.push(`tags added: ${added.join(', ')}`);
-          if (removed.length) changes.push(`tags removed: ${removed.join(', ')}`);
-          if (!added.length && !removed.length) changes.push('tags updated');
-        }
-        if (d.name) changes.push(`name "${d.name.from}" \u2192 "${d.name.to}"`);
-        if (d.description) changes.push('description updated');
-        if (d.source_url) changes.push(`source URL ${d.source_url.to ? 'set' : 'cleared'}`);
-        if (d.base_model) changes.push(`base model ${d.base_model.to ? `set to "${d.base_model.to}"` : 'cleared'}`);
-        return changes.length ? changes.join('; ') : 'Metadata updated';
-      }
-      case 'synced':
-        return `Synced to ${d.host || 'host'}`;
-      case 'moved':
-        return `Moved to ${d.to || 'new location'}`;
-      default:
-        return entry.action;
-    }
-  }
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
@@ -553,21 +511,6 @@
           <span class="text-xs text-gray-500 uppercase tracking-wider">Path</span>
           <p class="text-gray-500 text-xs mt-0.5 font-mono">{model.relative_path}</p>
         </div>
-
-        <!-- History -->
-        {#if model.history?.length}
-          <div>
-            <span class="text-xs text-gray-500 uppercase tracking-wider">History</span>
-            <div class="mt-1 space-y-1">
-              {#each model.history.slice().reverse() as entry}
-                <div class="text-xs text-gray-500">
-                  <span class="text-gray-400">{formatHistoryEntry(entry)}</span>
-                  <span class="text-gray-600 ml-1">{new Date(entry.timestamp).toLocaleString()}</span>
-                </div>
-              {/each}
-            </div>
-          </div>
-        {/if}
 
         <!-- Hosts -->
         <div class="border-t border-gray-700 pt-4">

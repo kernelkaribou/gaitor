@@ -16,7 +16,7 @@ Image.MAX_IMAGE_PIXELS = 25_000_000  # ~5000x5000, prevent decompression bombs
 
 from .. import config
 from ..utils import get_now, to_iso, safe_resolve, sanitize_filename
-from ..schemas.model import ModelMetadata, ModelHistoryEntry, ModelSource
+from ..schemas.model import ModelMetadata, ModelSource
 from .metadata import save_model, rebuild_index, ensure_metadata_dir, THUMBNAILS_DIR
 from . import huggingface, civitai
 
@@ -245,13 +245,6 @@ async def download_model(
             provider=provider or detect_provider(url) or "url",
             downloaded_at=now,
         ),
-        history=[
-            ModelHistoryEntry(
-                action="retrieved",
-                timestamp=now,
-                details={"source": source_url, "provider": provider or "url"},
-            )
-        ],
         created_at=now,
         updated_at=now,
     )

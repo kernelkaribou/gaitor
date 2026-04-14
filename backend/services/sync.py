@@ -13,7 +13,7 @@ from typing import Optional, Callable
 
 from .. import config
 from ..utils import get_now, to_iso, safe_resolve, validate_host_id, sanitize_filename
-from ..schemas.model import ModelMetadata, ModelSource, SyncMetadata, ModelHistoryEntry
+from ..schemas.model import ModelMetadata, ModelSource, SyncMetadata
 from .metadata import load_model, save_model, rebuild_index, load_all_models, load_categories
 from .library import cleanup_empty_parents
 
@@ -330,19 +330,10 @@ def sync_model_to_host(
         current_filename=model.filename,
         synced_at=now,
         hash=f"sha256:{model.hash['sha256']}" if model.hash and model.hash.get("sha256") else None,
-        rename_history=[],
     )
     sidecar_path = host_model_dir / f".{model.filename}{SIDECAR_SUFFIX}"
     _atomic_write_sidecar(sidecar_path, sidecar.model_dump())
 
-    # Record sync in model history
-    model.history.append(
-        ModelHistoryEntry(
-            action="synced",
-            timestamp=now,
-            details={"host": host_id, "path": str(dest_file.relative_to(host_path))},
-        )
-    )
     model.updated_at = now
     save_model(model)
     rebuild_index()
@@ -436,13 +427,6 @@ def apply_rename_on_host(model_id: str, host_id: str) -> dict:
                 # Update sidecar
                 data["current_filename"] = new_filename
                 data["library_name"] = model.name
-                rename_history = data.get("rename_history", [])
-                rename_history.append({
-                    "from": old_filename,
-                    "to": new_filename,
-                    "at": now,
-                })
-                data["rename_history"] = rename_history
 
                 # Write updated sidecar with new name
                 sidecar_path.unlink()
@@ -627,19 +611,10 @@ def link_host_model(host_id: str, relative_path: str, library_model_id: str) -> 
         current_filename=host_file.name,
         synced_at=now,
         hash=f"sha256:{host_hash}",
-        rename_history=[],
     )
     sidecar_path = host_file.parent / f".{host_file.name}{SIDECAR_SUFFIX}"
     _atomic_write_sidecar(sidecar_path, sidecar.model_dump())
 
-    # Record in library model history
-    model.history.append(
-        ModelHistoryEntry(
-            action="linked",
-            timestamp=now,
-            details={"host": host_id, "path": relative_path},
-        )
-    )
     model.updated_at = now
     save_model(model)
     rebuild_index()
@@ -711,13 +686,6 @@ def import_from_host(
         source=ModelSource(provider="host_import"),
         description=description,
         tags=tags or [],
-        history=[
-            ModelHistoryEntry(
-                action="imported",
-                timestamp=now,
-                details={"host": host_id, "original_path": relative_path},
-            )
-        ],
         created_at=now,
         updated_at=now,
     )
@@ -730,7 +698,6 @@ def import_from_host(
         library_name=model.name,
         current_filename=src_file.name,
         synced_at=now,
-        rename_history=[],
     )
     sidecar_path = src_file.parent / f".{src_file.name}{SIDECAR_SUFFIX}"
     _atomic_write_sidecar(sidecar_path, sidecar.model_dump())

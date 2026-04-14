@@ -110,7 +110,6 @@ class TestGetHostModels:
             "current_filename": "test.safetensors",
             "synced_at": "2025-01-01T00:00:00Z",
             "hash": "sha256:deadbeef",
-            "rename_history": [],
         }
         (host_path / "checkpoints").mkdir()
         (host_path / "checkpoints" / "test.safetensors").write_bytes(b"x" * 50)
@@ -141,10 +140,10 @@ class TestSyncModel:
         assert data["library_model_id"] == sample_model.id
         assert data["current_filename"] == "sdxl.safetensors"
 
-    def test_sync_records_history(self, sample_model, host_path):
+    def test_sync_updates_timestamp(self, sample_model, host_path):
         sync_model_to_host(sample_model.id, "test-gpu")
         updated = load_model(sample_model.id)
-        assert any(h.action == "synced" for h in updated.history)
+        assert updated.updated_at is not None
 
     def test_sync_missing_model(self, setup_library, host_path):
         with pytest.raises(ValueError, match="Invalid model ID format"):
@@ -193,7 +192,6 @@ class TestSyncStatus:
             "current_filename": "ghost.safetensors",
             "synced_at": "2025-01-01T00:00:00Z",
             "hash": None,
-            "rename_history": [],
         }
         (host_path / "checkpoints").mkdir()
         (host_path / "checkpoints" / "ghost.safetensors").write_bytes(b"x")
@@ -244,7 +242,6 @@ class TestApplyRename:
         with open(new_sidecar) as f:
             data = json.load(f)
         assert data["current_filename"] == updated_model.filename
-        assert len(data["rename_history"]) == 1
 
     def test_apply_rename_missing_model(self, setup_library, host_path):
         with pytest.raises(ValueError, match="Invalid model ID format"):
@@ -342,9 +339,9 @@ class TestLinkHostModel:
             data = json.load(f)
         assert data["library_model_id"] == sample_model.id
 
-        # Check history was recorded
+        # Check library model was updated
         updated = _load(sample_model.id)
-        assert any(h.action == "linked" for h in updated.history)
+        assert updated.updated_at is not None
 
     def test_link_hash_mismatch(self, sample_model, host_path):
         from backend.services.sync import link_host_model
@@ -389,7 +386,6 @@ class TestImportFromHost:
         assert model.name == "My LoRA"
         assert model.category == "loras"
         assert model.source.provider == "host_import"
-        assert any(h.action == "imported" for h in model.history)
 
         # Check sidecar was created on host
         sidecar = model_dir / f".my_lora.safetensors{SIDECAR_SUFFIX}"

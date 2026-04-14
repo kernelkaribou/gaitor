@@ -122,6 +122,6 @@ make test
 
 MIT - see [LICENSE](LICENSE)
 
-## Disclaimer
+## Disclosure
 
-It may surprise you I built a local AI model management tool with AI but I did. I had this idea as I was messing with local AI models and passing them across a few machines and wanted a better way to manage it. I did not write the code, ai did, I gave it the idea. I plan to update and keep it functioning as long as I use it and tweak futures here and there but its pretty defined scope tool that already went a little overboard. YOu can do whatever you want with this tool, I dont care. Maybe someone will make something better after seeing this...or already has.
+It may surprise you I built a local AI model management tool with AI but I did. I had this idea as I was messing with local AI models and passing them across a few machines and wanted a better way to manage it. I did not write the code, ai did, I gave it the idea. I plan to update and keep it functioning as long as I use it and tweak features here and there but its pretty defined scope tool that already went a little overboard. You can do whatever you want with this tool, I dont care. Maybe someone will make something better after seeing this...or already has.

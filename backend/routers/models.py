@@ -37,7 +37,6 @@ from ..services.metadata import (
     save_model,
     rebuild_index,
 )
-from ..schemas.model import ModelHistoryEntry
 from ..services.sync import get_model_host_status
 from ..utils import validate_model_id, safe_resolve
 from datetime import datetime
@@ -477,11 +476,6 @@ async def move_model_endpoint(model_id: str, req: MoveRequest):
         shutil.move(str(old_path), str(new_path))
         model.relative_path = str(new_path.relative_to(config.LIBRARY_PATH))
         model.updated_at = datetime.now().isoformat()
-        model.history.append(ModelHistoryEntry(
-            action="moved",
-            timestamp=model.updated_at,
-            details={"from": str(old_path.relative_to(config.LIBRARY_PATH)), "to": model.relative_path}
-        ))
         save_model(model)
         rebuild_index()
         cleanup_empty_parents(old_path, config.LIBRARY_PATH)
