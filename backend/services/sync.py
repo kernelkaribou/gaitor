@@ -175,18 +175,8 @@ def get_host_models(host_id: str) -> list[dict]:
 
 
 def _host_relative_path(host_model: dict) -> str:
-    """Get the host-side relative path for a synced model.
-    Prefers the explicit library_relative_path from the sidecar (the path at sync time),
-    falls back to deriving from sidecar filesystem location for older sidecars."""
-    synced_path = host_model.get("library_relative_path")
-    if synced_path:
-        return synced_path
-    sidecar_rel = host_model.get("sidecar_path", "")
-    current_fn = host_model.get("current_filename", "")
-    if sidecar_rel and current_fn:
-        sidecar_dir = str(Path(sidecar_rel).parent)
-        return f"{sidecar_dir}/{current_fn}" if sidecar_dir != "." else current_fn
-    return ""
+    """Get the library relative path recorded in the sidecar at sync time."""
+    return host_model.get("library_relative_path", "")
 
 
 def get_sync_status(host_id: str) -> list[dict]:

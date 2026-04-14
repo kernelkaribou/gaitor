@@ -38,7 +38,7 @@ class SyncMetadata(BaseModel):
     """Sidecar metadata placed alongside a model on a host."""
     library_model_id: str
     library_name: str
-    library_relative_path: str = ""
+    library_relative_path: str
     current_filename: str
     synced_at: str
     hash: Optional[str] = None
