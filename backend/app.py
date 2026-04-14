@@ -148,8 +148,8 @@ async def websocket_tasks(websocket: WebSocket):
             await websocket.send_text(json.dumps({"type": "update", **msg}))
     except WebSocketDisconnect:
         pass
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"WebSocket error: {e}")
     finally:
         task_manager.unsubscribe(queue)
 

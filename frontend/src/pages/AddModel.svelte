@@ -79,7 +79,9 @@
     try {
       resolved = await api.resolveUrl(url);
       if (resolved.description) {
-        retrieveDescription = resolved.description.replace(/<[^>]*>/g, '').slice(0, 500);
+        // Safely strip HTML using the browser's DOM parser instead of regex
+        const doc = new DOMParser().parseFromString(resolved.description, 'text/html');
+        retrieveDescription = (doc.body.textContent || '').slice(0, 500);
       }
       if (resolved.model_type && civitaiTypeMap[resolved.model_type]) {
         retrieveCategory = civitaiTypeMap[resolved.model_type];

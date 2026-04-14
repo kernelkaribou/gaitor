@@ -21,6 +21,21 @@ logger = logging.getLogger(__name__)
 SIDECAR_SUFFIX = ".gaitor.json"
 
 
+def _load_sidecar(path: Path) -> Optional[dict]:
+    """Load and validate a sidecar JSON file. Returns None if invalid."""
+    try:
+        with open(path) as f:
+            data = json.load(f)
+        # Validate required fields
+        if not isinstance(data, dict) or "library_model_id" not in data:
+            logger.warning(f"Invalid sidecar (missing library_model_id): {path}")
+            return None
+        return data
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning(f"Failed to load sidecar {path}: {e}")
+        return None
+
+
 def _atomic_write_sidecar(path: Path, data: dict) -> None:
     """Write sidecar JSON atomically: temp file + rename."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -120,10 +135,11 @@ def get_host_models(host_id: str) -> list[dict]:
                 continue
 
             sidecar_path = Path(root) / filename
-            try:
-                with open(sidecar_path) as f:
-                    sidecar_data = json.load(f)
+            sidecar_data = _load_sidecar(sidecar_path)
+            if sidecar_data is None:
+                continue
 
+            try:
                 model_filename = sidecar_data.get("current_filename", "")
                 model_path = (Path(root) / model_filename).resolve()
                 if not model_path.is_relative_to(host_path.resolve()):
@@ -297,9 +313,10 @@ def remove_from_host(model_id: str, host_id: str) -> dict:
             if not filename.endswith(SIDECAR_SUFFIX):
                 continue
             sidecar_path = Path(root) / filename
+            data = _load_sidecar(sidecar_path)
+            if data is None:
+                continue
             try:
-                with open(sidecar_path) as f:
-                    data = json.load(f)
                 if data.get("library_model_id") == model_id:
                     current_filename = data.get("current_filename", "")
                     model_file = (Path(root) / current_filename).resolve()
@@ -314,7 +331,7 @@ def remove_from_host(model_id: str, host_id: str) -> dict:
                     result["sidecar_deleted"] = True
                     logger.info(f"Removed {data.get('library_name', model_id)} from {host_id}")
                     return result
-            except (json.JSONDecodeError, OSError):
+            except OSError:
                 continue
 
     raise ValueError(f"Model {model_id} not found on host {host_id}")
@@ -336,9 +353,10 @@ def apply_rename_on_host(model_id: str, host_id: str) -> dict:
             if not filename.endswith(SIDECAR_SUFFIX):
                 continue
             sidecar_path = Path(root) / filename
+            data = _load_sidecar(sidecar_path)
+            if data is None:
+                continue
             try:
-                with open(sidecar_path) as f:
-                    data = json.load(f)
                 if data.get("library_model_id") != model_id:
                     continue
 
@@ -379,7 +397,7 @@ def apply_rename_on_host(model_id: str, host_id: str) -> dict:
                     "old_filename": old_filename,
                     "new_filename": new_filename,
                 }
-            except (json.JSONDecodeError, OSError) as e:
+            except (OSError) as e:
                 logger.error(f"Error processing sidecar {sidecar_path}: {e}")
                 continue
 
@@ -400,16 +418,14 @@ def scan_host(host_id: str) -> dict:
             if not filename.endswith(SIDECAR_SUFFIX):
                 continue
             sidecar_path = Path(root) / filename
-            try:
-                with open(sidecar_path) as f:
-                    data = json.load(f)
-                managed_name = data.get("current_filename", "")
-                if managed_name:
-                    managed_abs = (Path(root) / managed_name).resolve()
-                    if managed_abs.is_relative_to(host_path.resolve()):
-                        managed_files.add(str(managed_abs))
-            except (json.JSONDecodeError, OSError):
+            data = _load_sidecar(sidecar_path)
+            if data is None:
                 continue
+            managed_name = data.get("current_filename", "")
+            if managed_name:
+                managed_abs = (Path(root) / managed_name).resolve()
+                if managed_abs.is_relative_to(host_path.resolve()):
+                    managed_files.add(str(managed_abs))
 
     # Load library models for matching
     library_models = load_all_models()

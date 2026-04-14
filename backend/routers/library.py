@@ -1,13 +1,15 @@
 """
 Library management API endpoints.
 """
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-from typing import Optional
-from pathlib import Path
 import asyncio
 import logging
 import os
+import re
+from pathlib import Path
+from typing import Optional
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 from ..services.library import get_library_status, scan_for_untracked
 from ..services.metadata import (
@@ -120,7 +122,6 @@ async def rename_category_endpoint(category_id: str, req: CategoryRenameRequest)
     """Rename a category (renames folder and updates all model metadata)."""
     if category_id in DEFAULT_CATEGORY_IDS:
         raise HTTPException(status_code=403, detail="Default categories cannot be renamed")
-    import re
     if not re.match(r'^[a-zA-Z0-9_-]+$', req.new_id):
         raise HTTPException(status_code=400, detail="Category ID must be alphanumeric with dashes/underscores only")
     try:
@@ -149,7 +150,6 @@ async def delete_category_endpoint(category_id: str):
 @router.get("/categories/{category_id}/subfolders")
 async def list_subfolders(category_id: str):
     """List all subfolders (recursively) within a category."""
-    import re
     if not re.match(r'^[a-zA-Z0-9_-]+$', category_id):
         raise HTTPException(status_code=400, detail="Invalid category ID")
     cat_dir = safe_resolve(config.LIBRARY_PATH, category_id)

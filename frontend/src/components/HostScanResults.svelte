@@ -106,13 +106,13 @@
                   </button>
                   <button
                     class="text-xs text-gray-500 hover:text-gray-300"
-                    onclick={() => { item.showImport = false; items = items; }}
+                    onclick={() => { item.showImport = false; }}
                   >Cancel</button>
                 </div>
               {:else}
                 <button
                   class="px-3 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 text-gray-300"
-                  onclick={() => { item.showImport = true; items = items; }}
+                  onclick={() => { item.showImport = true; }}
                 >
                   Import to Library
                 </button>

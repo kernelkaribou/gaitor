@@ -14,13 +14,17 @@ logger = logging.getLogger(__name__)
 HF_API_BASE = "https://huggingface.co/api"
 
 _client: httpx.AsyncClient | None = None
+_client_token: str | None = None
 
 
 def _get_client() -> httpx.AsyncClient:
-    """Get or create a shared httpx client for HuggingFace API calls."""
-    global _client
-    if _client is None:
+    """Get or create a shared httpx client for HuggingFace API calls.
+    Recreates client if auth token has changed."""
+    global _client, _client_token
+    current_token = config.HUGGINGFACE_TOKEN
+    if _client is None or current_token != _client_token:
         _client = httpx.AsyncClient(timeout=15, headers=_get_headers())
+        _client_token = current_token
     return _client
 
 

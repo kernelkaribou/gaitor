@@ -4,6 +4,7 @@ Handles URL detection, downloading with progress, and cataloging into the librar
 """
 import logging
 import os
+import uuid
 from io import BytesIO
 from pathlib import Path
 from typing import Optional, Callable
@@ -96,11 +97,12 @@ async def resolve_url(url: str) -> dict:
             async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
                 resp = await client.head(url)
                 size = int(resp.headers.get("content-length", 0))
-                # Try content-disposition for filename
                 cd = resp.headers.get("content-disposition", "")
                 if "filename=" in cd:
                     fn = cd.split("filename=")[-1].strip('"').strip("'")
-                    if fn:
+                    # Sanitize: strip path components and control chars
+                    fn = fn.split("/")[-1].split("\\")[-1].strip()
+                    if fn and not any(c in fn for c in ('\x00', '\n', '\r')):
                         filename = fn
         except Exception:
             pass
@@ -198,7 +200,6 @@ async def download_model(
 
     actual_size = dest_path.stat().st_size
     now = to_iso(get_now())
-    import uuid
     model_id = str(uuid.uuid4())
 
     # Download thumbnail if provided (convert to max 400x400 webp)
