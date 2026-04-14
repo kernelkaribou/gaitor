@@ -5,18 +5,47 @@
   import AddModel from './pages/AddModel.svelte';
   import Settings from './pages/Settings.svelte';
   import UpdateBanner from './components/UpdateBanner.svelte';
+  import { onMount, onDestroy } from 'svelte';
 
-  let currentPage = $state('library');
+  const validPages = ['library', 'hosts', 'add', 'settings'];
+
+  function pageFromHash() {
+    const hash = location.hash.replace('#', '');
+    return validPages.includes(hash) ? hash : 'library';
+  }
+
+  let currentPage = $state(pageFromHash());
+
+  function navigate(page) {
+    if (!validPages.includes(page)) page = 'library';
+    currentPage = page;
+    const target = '#' + page;
+    if (location.hash !== target) {
+      history.pushState(null, '', target);
+    }
+  }
+
+  function onHashChange() {
+    currentPage = pageFromHash();
+  }
+
+  onMount(() => {
+    window.addEventListener('hashchange', onHashChange);
+    if (!location.hash) history.replaceState(null, '', '#library');
+  });
+  onDestroy(() => {
+    window.removeEventListener('hashchange', onHashChange);
+  });
 </script>
 
-<Layout bind:currentPage>
+<Layout {currentPage} {navigate}>
   <UpdateBanner />
   {#if currentPage === 'library'}
-    <Library onNavigate={(page) => currentPage = page} />
+    <Library onNavigate={navigate} />
   {:else if currentPage === 'hosts'}
-    <Hosts onBack={() => currentPage = 'library'} />
+    <Hosts onBack={() => navigate('library')} />
   {:else if currentPage === 'add'}
-    <AddModel onBack={() => currentPage = 'library'} />
+    <AddModel onBack={() => navigate('library')} />
   {:else if currentPage === 'settings'}
     <Settings />
   {/if}
