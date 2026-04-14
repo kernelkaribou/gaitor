@@ -8,10 +8,10 @@
 <div class="min-h-screen bg-gray-900 text-gray-100">
   <!-- Header -->
   <header class="bg-gray-800 border-b border-gray-700 px-6 py-3 flex items-center justify-between">
-    <div class="flex items-center gap-3">
+    <button class="flex items-center gap-3 hover:opacity-80 transition-opacity" onclick={() => navigate('library')}>
       <img src={logoUrl} alt="gAItor logo" class="h-10 w-10 rounded-full" />
       <h1 class="text-xl font-bold text-green-400">gAItor</h1>
-    </div>
+    </button>
     <nav class="flex items-center gap-4">
       <button
         class="px-3 py-1.5 text-sm rounded-md transition-colors {currentPage === 'library' ? 'bg-gray-700 text-gray-200' : 'hover:bg-gray-700 text-gray-400'}"
