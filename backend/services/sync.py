@@ -204,9 +204,20 @@ def get_sync_status(host_id: str) -> list[dict]:
             host_hash_raw = host_model.get("hash") or ""
             host_hash = host_hash_raw.replace("sha256:", "")
 
-            if lib_model.filename != host_model.get("current_filename"):
+            # Derive host-side relative path from sidecar location
+            sidecar_rel = host_model.get("sidecar_path", "")
+            current_fn = host_model.get("current_filename", "")
+            if sidecar_rel and current_fn:
+                sidecar_dir = str(Path(sidecar_rel).parent)
+                host_rel = f"{sidecar_dir}/{current_fn}" if sidecar_dir != "." else current_fn
+            else:
+                host_rel = ""
+
+            if lib_model.filename != current_fn:
                 sync_status = "rename_pending"
             elif lib_hash and host_hash and lib_hash != host_hash:
+                sync_status = "outdated"
+            elif host_rel and host_rel != lib_model.relative_path:
                 sync_status = "outdated"
             else:
                 sync_status = "synced"
@@ -215,7 +226,7 @@ def get_sync_status(host_id: str) -> list[dict]:
                 **base_fields,
                 "status": sync_status,
                 "synced_at": host_model.get("synced_at"),
-                "host_filename": host_model.get("current_filename"),
+                "host_filename": current_fn,
             })
 
     # Check for orphaned models on host (exist on host but not in library)
@@ -282,9 +293,19 @@ def get_model_host_status(model_id: str) -> list[dict]:
             host_hash_raw = host_model.get("hash") or ""
             host_hash = host_hash_raw.replace("sha256:", "")
 
-            if model.filename != host_model.get("current_filename"):
+            sidecar_rel = host_model.get("sidecar_path", "")
+            current_fn = host_model.get("current_filename", "")
+            if sidecar_rel and current_fn:
+                sidecar_dir = str(Path(sidecar_rel).parent)
+                host_rel = f"{sidecar_dir}/{current_fn}" if sidecar_dir != "." else current_fn
+            else:
+                host_rel = ""
+
+            if model.filename != current_fn:
                 status = "rename_pending"
             elif lib_hash and host_hash and lib_hash != host_hash:
+                status = "outdated"
+            elif host_rel and host_rel != model.relative_path:
                 status = "outdated"
             else:
                 status = "synced"
@@ -294,7 +315,7 @@ def get_model_host_status(model_id: str) -> list[dict]:
                 "host_name": host["name"],
                 "status": status,
                 "synced_at": host_model.get("synced_at"),
-                "host_filename": host_model.get("current_filename"),
+                "host_filename": current_fn,
                 "disk_free": host.get("disk_free", 0),
             })
 
