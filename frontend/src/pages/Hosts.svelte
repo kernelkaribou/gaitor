@@ -297,7 +297,7 @@
           onclick={() => activeCategory = null}
         >
           All Models
-          <span class="text-xs text-gray-500 ml-1">({syncStatus.length})</span>
+          <span class="text-xs text-gray-500 ml-1">({hostModels.length})</span>
         </button>
         {#each categories as cat}
           {@const count = categoryCountMap[cat.id] || 0}
@@ -411,7 +411,7 @@
         {:else if filteredItems.length > 0}
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {#each filteredItems as item (item.model_id)}
-              <div class="relative">
+              <div class="relative pb-9">
                 <ModelCard
                   model={{
                     id: item.model_id,
