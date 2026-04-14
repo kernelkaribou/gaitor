@@ -3,7 +3,7 @@
   import { isSafeUrl } from '../lib/utils.js';
   import { onMount, onDestroy } from 'svelte';
 
-  let { model, categories, formatSize, onClose, onUpdated, onDelete } = $props();
+  let { model, categories, formatSize, onClose, onUpdated, onDelete, onSelectModel } = $props();
 
   function handleKeydown(e) {
     if (e.key === 'Escape') onClose();
@@ -580,7 +580,10 @@
           {:else}
             <div class="space-y-1.5 mb-2">
               {#each groupMembers as gm (gm.id)}
-                <div class="flex items-center gap-2 bg-gray-900 rounded px-3 py-1.5 border border-gray-700">
+                <button
+                  class="w-full flex items-center gap-2 bg-gray-900 rounded px-3 py-1.5 border border-gray-700 hover:border-gray-500 hover:bg-gray-800 transition-colors text-left"
+                  onclick={() => onSelectModel?.(gm.id)}
+                >
                   {#if gm.thumbnail}
                     <img src={api.getThumbnailUrl(gm.id)} alt="" class="w-6 h-6 rounded object-cover shrink-0" />
                   {/if}
@@ -589,11 +592,11 @@
                     <p class="text-xs text-gray-500 truncate">{gm.filename}</p>
                   </div>
                   <span class="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-400 shrink-0">{gm.category}</span>
-                </div>
+                </button>
               {/each}
             </div>
             {#if groupId}
-              <button class="text-xs text-red-400 hover:text-red-300" onclick={removeFromGroup}>Remove from group</button>
+              <button class="text-xs text-red-400 hover:text-red-300" onclick={removeFromGroup}>Leave group</button>
             {/if}
           {/if}
           {#if showGroupPicker}

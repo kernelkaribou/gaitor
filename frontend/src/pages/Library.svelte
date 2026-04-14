@@ -691,6 +691,7 @@
     onClose={() => selectedModel = null}
     onUpdated={handleModelUpdated}
     onDelete={handleDelete}
+    onSelectModel={(id) => { const m = modelList.find(x => x.id === id); if (m) selectedModel = m; }}
   />
 {/if}
 
