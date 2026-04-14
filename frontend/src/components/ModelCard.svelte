@@ -27,7 +27,7 @@
     </div>
   {:else}
     <div class="w-full h-40 bg-gray-900/50 flex items-center justify-center">
-      <span class="text-4xl text-gray-700">{'\uD83E\uDDE0'}</span>
+      <img src="/default-thumb.webp" alt="Model" class="w-16 h-16 opacity-40" />
     </div>
   {/if}
   <div class="p-4">
