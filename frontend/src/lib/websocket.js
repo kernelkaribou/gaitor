@@ -10,6 +10,12 @@ const taskToastMap = new Map();
 export function connectWebSocket() {
   if (ws && ws.readyState <= 1) return;
 
+  // Clear any pending reconnect timer to prevent accumulation
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const url = `${protocol}//${window.location.host}/ws/tasks`;
 
@@ -38,6 +44,18 @@ export function connectWebSocket() {
   ws.onerror = () => {};
 }
 
+export function disconnectWebSocket() {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  if (ws) {
+    ws.onclose = null; // prevent reconnect on intentional close
+    ws.close();
+    ws = null;
+  }
+}
+
 function handleTaskUpdate(task) {
   const existingToastId = taskToastMap.get(task.task_id);
 
@@ -46,7 +64,8 @@ function handleTaskUpdate(task) {
       removeToast(existingToastId);
       taskToastMap.delete(task.task_id);
     }
-    addToast({ type: 'success', title: task.title, message: task.message, duration: 6000 });
+    addToast({ type: 'success', title: task.message || task.title, duration: 6000 });
+    window.dispatchEvent(new CustomEvent('gaitor:task-complete', { detail: task }));
   } else if (task.status === 'failed') {
     if (existingToastId) {
       removeToast(existingToastId);

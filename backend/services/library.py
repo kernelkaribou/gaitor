@@ -11,7 +11,7 @@ from typing import Optional
 
 from .. import config
 from ..utils import get_now, to_iso, safe_resolve, sanitize_filename
-from ..schemas.model import ModelMetadata, ModelSource, ModelHistoryEntry
+from ..schemas.model import ModelMetadata, ModelSource
 from .metadata import (
     ensure_metadata_dir,
     is_library_initialized,
@@ -81,6 +81,7 @@ def scan_for_untracked() -> list[dict]:
     tracked_paths = {m.relative_path for m in existing_models}
 
     untracked = []
+    all_categories = load_categories()
     for root, dirs, files in os.walk(lib_path):
         # Skip the metadata directory
         dirs[:] = [d for d in dirs if d != metadata_dir]
@@ -95,16 +96,25 @@ def scan_for_untracked() -> list[dict]:
             if rel_path in tracked_paths:
                 continue
 
-            # Guess category from parent folder name
-            parent = filepath.parent.name.lower()
-            categories = load_categories()
+            # Guess category from top-level folder (the category directory)
+            rel_parts = Path(rel_path).parts
             guessed_category = "other"
-            for cat in categories:
-                if cat.id == parent or cat.label.lower() == parent:
-                    guessed_category = cat.id
-                    break
-                if ext in cat.extensions and cat.id != "other":
-                    guessed_category = cat.id
+            folder_matched = False
+
+            if len(rel_parts) > 1:
+                top_folder = rel_parts[0].lower()
+                for cat in all_categories:
+                    if cat.id == top_folder or cat.label.lower() == top_folder:
+                        guessed_category = cat.id
+                        folder_matched = True
+                        break
+
+            # Extension-based fallback only if file isn't in a known category folder
+            if not folder_matched:
+                for cat in all_categories:
+                    if cat.id != "other" and ext in cat.extensions:
+                        guessed_category = cat.id
+                        break
 
             try:
                 stat = filepath.stat()
@@ -175,13 +185,6 @@ def catalog_model(
         source=ModelSource(provider=source_provider),
         description=description,
         tags=tags or [],
-        history=[
-            ModelHistoryEntry(
-                action="added",
-                timestamp=now,
-                details={"method": "catalog", "source": source_provider},
-            )
-        ],
         created_at=now,
         updated_at=now,
     )
@@ -200,6 +203,8 @@ def upload_model(
     data_stream,
     description: str = "",
     tags: Optional[list[str]] = None,
+    subfolder: Optional[str] = None,
+    base_model: Optional[str] = None,
 ) -> ModelMetadata:
     """Handle an uploaded model file - stream to disk, catalog it."""
     ensure_metadata_dir()
@@ -207,8 +212,9 @@ def upload_model(
     # Sanitize filename to prevent path traversal
     safe_name = sanitize_filename(Path(filename).stem, Path(filename).suffix)
 
-    # Validate category and destination stay within library
-    dest_dir = safe_resolve(config.LIBRARY_PATH, category)
+    # Validate category and subfolder stay within library
+    sub_path = f"{category}/{subfolder}" if subfolder else category
+    dest_dir = safe_resolve(config.LIBRARY_PATH, sub_path)
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest_path = dest_dir / safe_name
 
@@ -255,13 +261,7 @@ def upload_model(
         source=ModelSource(provider="upload"),
         description=description,
         tags=tags or [],
-        history=[
-            ModelHistoryEntry(
-                action="added",
-                timestamp=now,
-                details={"method": "upload"},
-            )
-        ],
+        base_model=base_model or None,
         created_at=now,
         updated_at=now,
     )
@@ -313,7 +313,7 @@ def update_model_metadata(
                     model.source.provider = None
             changed_fields["source_url"] = {"from": old_url, "to": new_url}
 
-    # Handle thumbnail separately (no history entry needed)
+    # Handle thumbnail separately
     if "thumbnail" in updates:
         model.thumbnail = updates["thumbnail"]
         model.updated_at = now
@@ -371,13 +371,6 @@ def update_model_metadata(
 
     if changed_fields:
         model.updated_at = now
-        model.history.append(
-            ModelHistoryEntry(
-                action="metadata_updated",
-                timestamp=now,
-                details=changed_fields,
-            )
-        )
         save_model(model)
         rebuild_index()
 
@@ -416,18 +409,6 @@ def rename_model(model_id: str, new_name: str, rename_file: bool = True) -> Mode
             raise ValueError(f"A file named '{new_filename}' already exists")
 
     model.updated_at = now
-    model.history.append(
-        ModelHistoryEntry(
-            action="renamed",
-            timestamp=now,
-            details={
-                "from_name": old_name,
-                "to_name": new_name,
-                "from_filename": old_filename,
-                "to_filename": model.filename,
-            },
-        )
-    )
 
     save_model(model)
     rebuild_index()
@@ -436,7 +417,9 @@ def rename_model(model_id: str, new_name: str, rename_file: bool = True) -> Mode
 
 
 def delete_library_model(model_id: str, delete_file: bool = True) -> dict:
-    """Delete a model from the library. Returns details of what was deleted."""
+    """Delete a model from the library and cascade-remove from all hosts."""
+    from .sync import list_hosts, get_host_models, remove_from_host
+
     model = load_model(model_id)
     if not model:
         raise ValueError(f"Model not found: {model_id}")
@@ -447,7 +430,21 @@ def delete_library_model(model_id: str, delete_file: bool = True) -> dict:
         "filename": model.filename,
         "file_deleted": False,
         "metadata_deleted": False,
+        "hosts_cleaned": [],
+        "hosts_failed": [],
     }
+
+    # Cascade-remove from all hosts first
+    for host in list_hosts():
+        host_id = host["id"]
+        try:
+            host_models = get_host_models(host_id)
+            if any(hm.get("library_model_id") == model_id for hm in host_models):
+                remove_from_host(model_id, host_id)
+                result["hosts_cleaned"].append(host_id)
+        except Exception as e:
+            logger.warning(f"Failed to remove {model.name} from host {host_id}: {e}")
+            result["hosts_failed"].append(host_id)
 
     if delete_file:
         filepath = safe_resolve(config.LIBRARY_PATH, model.relative_path)

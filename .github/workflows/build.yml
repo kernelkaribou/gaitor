@@ -35,7 +35,7 @@ jobs:
         chmod 777 /tmp/test-library /tmp/test-dest
         docker run -d --name test-container -p 8487:8487 \
           -v /tmp/test-library:/library \
-          -v /tmp/test-dest:/dest/local \
+          -v /tmp/test-dest:/hosts/local \
           test-image
         for i in $(seq 1 30); do
           if curl -sf http://localhost:8487/health; then

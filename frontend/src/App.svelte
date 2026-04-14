@@ -1,22 +1,57 @@
 <script>
   import Layout from './components/Layout.svelte';
   import Library from './pages/Library.svelte';
-  import Destination from './pages/Destination.svelte';
-  import Download from './pages/Download.svelte';
+  import Hosts from './pages/Hosts.svelte';
+  import AddModel from './pages/AddModel.svelte';
   import Settings from './pages/Settings.svelte';
   import UpdateBanner from './components/UpdateBanner.svelte';
+  import { onMount, onDestroy } from 'svelte';
 
-  let currentPage = $state('library');
+  const validPages = ['library', 'hosts', 'add', 'settings'];
+
+  function pageFromHash() {
+    const hash = location.hash.replace('#', '');
+    return validPages.includes(hash) ? hash : 'library';
+  }
+
+  let currentPage = $state(pageFromHash());
+  let hostsResetFn = $state(null);
+
+  function navigate(page) {
+    if (!validPages.includes(page)) page = 'library';
+    // If already on hosts and clicking hosts again, reset view
+    if (page === 'hosts' && currentPage === 'hosts' && hostsResetFn) {
+      hostsResetFn(true);
+      return;
+    }
+    currentPage = page;
+    const target = '#' + page;
+    if (location.hash !== target) {
+      history.pushState(null, '', target);
+    }
+  }
+
+  function onHashChange() {
+    currentPage = pageFromHash();
+  }
+
+  onMount(() => {
+    window.addEventListener('hashchange', onHashChange);
+    if (!location.hash) history.replaceState(null, '', '#library');
+  });
+  onDestroy(() => {
+    window.removeEventListener('hashchange', onHashChange);
+  });
 </script>
 
-<Layout bind:currentPage>
+<Layout {currentPage} {navigate}>
   <UpdateBanner />
   {#if currentPage === 'library'}
-    <Library onNavigate={(page) => currentPage = page} />
-  {:else if currentPage === 'targets'}
-    <Destination onBack={() => currentPage = 'library'} />
-  {:else if currentPage === 'download'}
-    <Download />
+    <Library onNavigate={navigate} />
+  {:else if currentPage === 'hosts'}
+    <Hosts onBack={() => navigate('library')} onResetRef={(fn) => hostsResetFn = fn} />
+  {:else if currentPage === 'add'}
+    <AddModel onBack={() => navigate('library')} />
   {:else if currentPage === 'settings'}
     <Settings />
   {/if}

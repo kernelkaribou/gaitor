@@ -14,13 +14,17 @@ logger = logging.getLogger(__name__)
 CIVITAI_API_BASE = "https://civitai.com/api/v1"
 
 _client: httpx.AsyncClient | None = None
+_client_key: str | None = None
 
 
 def _get_client() -> httpx.AsyncClient:
-    """Get or create a shared httpx client for CivitAI API calls."""
-    global _client
-    if _client is None:
+    """Get or create a shared httpx client for CivitAI API calls.
+    Recreates client if API key has changed."""
+    global _client, _client_key
+    current_key = config.CIVITAI_API_KEY
+    if _client is None or current_key != _client_key:
         _client = httpx.AsyncClient(timeout=15, headers=_get_headers())
+        _client_key = current_key
     return _client
 
 

@@ -4,6 +4,7 @@ Handles URL detection, downloading with progress, and cataloging into the librar
 """
 import logging
 import os
+import uuid
 from io import BytesIO
 from pathlib import Path
 from typing import Optional, Callable
@@ -15,7 +16,7 @@ Image.MAX_IMAGE_PIXELS = 25_000_000  # ~5000x5000, prevent decompression bombs
 
 from .. import config
 from ..utils import get_now, to_iso, safe_resolve, sanitize_filename
-from ..schemas.model import ModelMetadata, ModelHistoryEntry, ModelSource
+from ..schemas.model import ModelMetadata, ModelSource
 from .metadata import save_model, rebuild_index, ensure_metadata_dir, THUMBNAILS_DIR
 from . import huggingface, civitai
 
@@ -96,11 +97,12 @@ async def resolve_url(url: str) -> dict:
             async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
                 resp = await client.head(url)
                 size = int(resp.headers.get("content-length", 0))
-                # Try content-disposition for filename
                 cd = resp.headers.get("content-disposition", "")
                 if "filename=" in cd:
                     fn = cd.split("filename=")[-1].strip('"').strip("'")
-                    if fn:
+                    # Sanitize: strip path components and control chars
+                    fn = fn.split("/")[-1].split("\\")[-1].strip()
+                    if fn and not any(c in fn for c in ('\x00', '\n', '\r')):
                         filename = fn
         except Exception:
             pass
@@ -145,6 +147,9 @@ async def download_model(
     provider: Optional[str] = None,
     progress_callback: Optional[Callable] = None,
     thumbnail_url: Optional[str] = None,
+    subfolder: Optional[str] = None,
+    base_model: Optional[str] = None,
+    page_url: Optional[str] = None,
 ) -> ModelMetadata:
     """Download a model file from an external URL into the library.
 
@@ -157,7 +162,8 @@ async def download_model(
 
     # Sanitize filename and validate path stays within library
     safe_name = sanitize_filename(Path(filename).stem, Path(filename).suffix)
-    category_dir = safe_resolve(config.LIBRARY_PATH, category)
+    sub_path = f"{category}/{subfolder}" if subfolder else category
+    category_dir = safe_resolve(config.LIBRARY_PATH, sub_path)
     category_dir.mkdir(parents=True, exist_ok=True)
     dest_path = category_dir / safe_name
 
@@ -195,14 +201,13 @@ async def download_model(
 
     actual_size = dest_path.stat().st_size
     now = to_iso(get_now())
-    import uuid
     model_id = str(uuid.uuid4())
 
     # Download thumbnail if provided (convert to max 400x400 webp)
     thumb_rel = None
     if thumbnail_url:
         try:
-            MAX_THUMB_DOWNLOAD = 10 * 1024 * 1024  # 10MB
+            MAX_THUMB_DOWNLOAD = 12 * 1024 * 1024  # 12MB
             async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
                 resp = await client.get(thumbnail_url)
                 resp.raise_for_status()
@@ -219,34 +224,40 @@ async def download_model(
         except Exception as e:
             logger.warning(f"Failed to download thumbnail: {e}")
 
+    relative_path = str(dest_path.relative_to(config.LIBRARY_PATH))
+
+    # Use page_url (human-readable) for source, fall back to download url
+    source_url = page_url or url
+
     model = ModelMetadata(
         id=model_id,
         name=name or filename.rsplit(".", 1)[0],
         filename=safe_name,
         category=category,
-        relative_path=f"{category}/{safe_name}",
+        relative_path=relative_path,
         size=actual_size,
         description=description or "",
         tags=tags or [],
+        base_model=base_model or None,
         thumbnail=thumb_rel,
         source=ModelSource(
-            url=url,
+            url=source_url,
             provider=provider or detect_provider(url) or "url",
             downloaded_at=now,
         ),
-        history=[
-            ModelHistoryEntry(
-                action="retrieved",
-                timestamp=now,
-                details={"source": url, "provider": provider or "url"},
-            )
-        ],
         created_at=now,
         updated_at=now,
     )
 
     save_model(model)
     rebuild_index()
+
+    # Compute hash in background (same thread since we're already in a background task)
+    try:
+        from .library import compute_hash
+        compute_hash(model.id)
+    except Exception as e:
+        logger.warning(f"Failed to compute hash after download: {e}")
 
     logger.info(f"Retrieved model: {model.name} from {url}")
     return model

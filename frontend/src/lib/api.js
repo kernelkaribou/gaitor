@@ -40,8 +40,6 @@ export const api = {
     request(`/library/categories/${encodeURIComponent(id)}/rename`, { method: 'POST', body: JSON.stringify({ new_id: newId, new_label: newLabel }) }),
   listSubfolders: (categoryId) =>
     request(`/library/categories/${encodeURIComponent(categoryId)}/subfolders`),
-  createSubfolder: (categoryId, name) =>
-    request(`/library/categories/${encodeURIComponent(categoryId)}/subfolders`, { method: 'POST', body: JSON.stringify({ name }) }),
   deleteCategory: (id) =>
     request(`/library/categories/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
@@ -77,6 +75,14 @@ export const api = {
     request('/models/bulk/delete', { method: 'POST', body: JSON.stringify({ model_ids: modelIds, confirm_text: confirmText }) }),
   getDownloadUrl: (id) => `${BASE_URL}/models/${encodeURIComponent(id)}/download`,
   getThumbnailUrl: (id) => `${BASE_URL}/models/${encodeURIComponent(id)}/thumbnail`,
+  getModelHosts: (id) =>
+    request(`/models/${encodeURIComponent(id)}/hosts`),
+  getModelGroup: (id) =>
+    request(`/models/${encodeURIComponent(id)}/group`),
+  setModelGroup: (id, modelIds) =>
+    request(`/models/${encodeURIComponent(id)}/group`, { method: 'PUT', body: JSON.stringify({ model_ids: modelIds }) }),
+  removeFromGroup: (id) =>
+    request(`/models/${encodeURIComponent(id)}/group`, { method: 'DELETE' }),
 
   async uploadThumbnail(modelId, file) {
     const formData = new FormData();
@@ -94,7 +100,7 @@ export const api = {
 
   deleteThumbnail: (id) => request(`/models/${encodeURIComponent(id)}/thumbnail`, { method: 'DELETE' }),
 
-  async uploadModel(file, name, category, description = '', tags = '', onProgress = null) {
+  async uploadModel(file, name, category, description = '', tags = '', onProgress = null, subfolder = '', baseModel = '', customFilename = '') {
     return new Promise((resolve, reject) => {
       const formData = new FormData();
       formData.append('file', file);
@@ -102,6 +108,9 @@ export const api = {
       formData.append('category', category);
       formData.append('description', description);
       formData.append('tags', tags);
+      formData.append('subfolder', subfolder);
+      formData.append('base_model', baseModel);
+      formData.append('custom_filename', customFilename);
 
       const xhr = new XMLHttpRequest();
       xhr.open('POST', `${BASE_URL}/models/upload`);
@@ -136,18 +145,26 @@ export const api = {
     });
   },
 
-  // Destinations
-  listDestinations: () => request('/destinations/'),
-  getDestinationModels: (destId) => request(`/destinations/${encodeURIComponent(destId)}/models`),
-  getDestinationSyncStatus: (destId) => request(`/destinations/${encodeURIComponent(destId)}/status`),
-  syncModelToDestination: (destId, modelId) =>
-    request(`/destinations/${encodeURIComponent(destId)}/sync`, { method: 'POST', body: JSON.stringify({ model_id: modelId }) }),
-  bulkSyncToDestination: (destId, modelIds) =>
-    request(`/destinations/${encodeURIComponent(destId)}/sync/bulk`, { method: 'POST', body: JSON.stringify({ model_ids: modelIds }) }),
-  removeFromDestination: (destId, modelId) =>
-    request(`/destinations/${encodeURIComponent(destId)}/remove`, { method: 'POST', body: JSON.stringify({ model_id: modelId }) }),
-  applyRenameOnDestination: (destId, modelId) =>
-    request(`/destinations/${encodeURIComponent(destId)}/apply-rename`, { method: 'POST', body: JSON.stringify({ model_id: modelId }) }),
+  // Hosts
+  listHosts: () => request('/hosts/'),
+  getHostModels: (hostId) => request(`/hosts/${encodeURIComponent(hostId)}/models`),
+  getHostSyncStatus: (hostId) => request(`/hosts/${encodeURIComponent(hostId)}/status`),
+  syncModelToHost: (hostId, modelId) =>
+    request(`/hosts/${encodeURIComponent(hostId)}/sync`, { method: 'POST', body: JSON.stringify({ model_id: modelId }) }),
+  bulkSyncToHost: (hostId, modelIds) =>
+    request(`/hosts/${encodeURIComponent(hostId)}/sync/bulk`, { method: 'POST', body: JSON.stringify({ model_ids: modelIds }) }),
+  removeFromHost: (hostId, modelId) =>
+    request(`/hosts/${encodeURIComponent(hostId)}/remove`, { method: 'POST', body: JSON.stringify({ model_id: modelId }) }),
+  applyRenameOnHost: (hostId, modelId) =>
+    request(`/hosts/${encodeURIComponent(hostId)}/apply-rename`, { method: 'POST', body: JSON.stringify({ model_id: modelId }) }),
+  scanHost: (hostId) =>
+    request(`/hosts/${encodeURIComponent(hostId)}/scan`, { method: 'POST' }),
+  linkHostModel: (hostId, relativePath, libraryModelId) =>
+    request(`/hosts/${encodeURIComponent(hostId)}/link`, { method: 'POST', body: JSON.stringify({ relative_path: relativePath, library_model_id: libraryModelId }) }),
+  bulkLinkHostModels: (hostId, links) =>
+    request(`/hosts/${encodeURIComponent(hostId)}/link/bulk`, { method: 'POST', body: JSON.stringify({ links }) }),
+  importFromHost: (hostId, data) =>
+    request(`/hosts/${encodeURIComponent(hostId)}/import`, { method: 'POST', body: JSON.stringify(data) }),
 
   // Download (formerly Retrieve)
   getProviders: () => request('/retrieve/providers'),
@@ -155,8 +172,6 @@ export const api = {
     request('/retrieve/resolve', { method: 'POST', body: JSON.stringify({ url }) }),
   startDownload: (params) =>
     request('/retrieve/download', { method: 'POST', body: JSON.stringify(params) }),
-  searchModels: (query, provider = 'huggingface', limit = 20) =>
-    request('/retrieve/search', { method: 'POST', body: JSON.stringify({ query, provider, limit }) }),
   listHfFiles: (repoId) => request(`/retrieve/hf/${encodeURIComponent(repoId)}/files`),
   getCivitaiModel: (modelId) => request(`/retrieve/civitai/${encodeURIComponent(modelId)}`),
 

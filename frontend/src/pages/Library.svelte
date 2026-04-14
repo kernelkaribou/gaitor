@@ -1,10 +1,9 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { api } from '../lib/api.js';
   import { formatSize } from '../lib/utils.js';
   import ModelCard from '../components/ModelCard.svelte';
   import ModelDetail from '../components/ModelDetail.svelte';
-  import UploadDialog from '../components/UploadDialog.svelte';
   import ScanResults from '../components/ScanResults.svelte';
   import ConfirmDialog from '../components/ConfirmDialog.svelte';
 
@@ -16,8 +15,8 @@
   let libraryStats = $state(null);
   let search = $state('');
   let selectedModel = $state(null);
-  let showUpload = $state(false);
   let scanResults = $state(null);
+  let scanKey = $state(0);
   let scanning = $state(false);
   let deleteTarget = $state(null);
   let loading = $state(true);
@@ -36,8 +35,14 @@
 
   // Subfolder management
   let collapsedGroups = $state({});
-  let showAddSubfolder = $state(false);
-  let newSubfolderName = $state('');
+
+  // Sorting
+  let sortBy = $state('date');
+
+  // Reset to default sort if category sort is selected but a category filter is active
+  $effect(() => {
+    if (activeCategory && sortBy === 'category') sortBy = 'date';
+  });
 
   // Bulk selection
   let selectMode = $state(false);
@@ -111,6 +116,18 @@
     }
   }
 
+  async function bulkGroup() {
+    if (selectedIds.size < 2) return;
+    const ids = [...selectedIds];
+    try {
+      await api.setModelGroup(ids[0], ids.slice(1));
+      exitSelectMode();
+      await loadData();
+    } catch (err) {
+      error = err.message;
+    }
+  }
+
   async function addNewCategory() {
     if (!newCatId.trim()) return;
     const id = newCatId.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_-]/g, '');
@@ -120,18 +137,6 @@
       newCatId = '';
       newCatLabel = '';
       showAddCategory = false;
-      await loadData();
-    } catch (err) {
-      error = err.message;
-    }
-  }
-
-  async function addSubfolder() {
-    if (!newSubfolderName.trim() || !activeCategory) return;
-    try {
-      await api.createSubfolder(activeCategory, newSubfolderName.trim());
-      newSubfolderName = '';
-      showAddSubfolder = false;
       await loadData();
     } catch (err) {
       error = err.message;
@@ -190,11 +195,33 @@
 
   onMount(loadData);
 
+  function onTaskComplete() {
+    loadData();
+  }
+  function onSelectLibraryModel(e) {
+    const modelId = e.detail;
+    const m = modelList.find(x => x.id === modelId);
+    if (m) {
+      selectedModel = m;
+    } else {
+      api.getModel(modelId).then(model => { selectedModel = model; }).catch(() => {});
+    }
+  }
+  onMount(() => {
+    window.addEventListener('gaitor:task-complete', onTaskComplete);
+    window.addEventListener('gaitor:select-library-model', onSelectLibraryModel);
+  });
+  onDestroy(() => {
+    window.removeEventListener('gaitor:task-complete', onTaskComplete);
+    window.removeEventListener('gaitor:select-library-model', onSelectLibraryModel);
+  });
+
   async function handleScan() {
     scanning = true;
     try {
       const result = await api.scanLibrary();
       scanResults = result;
+      scanKey += 1;
     } catch (err) {
       error = err.message;
     }
@@ -203,11 +230,6 @@
 
   async function handleCataloged() {
     scanResults = null;
-    await loadData();
-  }
-
-  async function handleUploaded() {
-    showUpload = false;
     await loadData();
   }
 
@@ -248,7 +270,19 @@
           (m.tags || []).some((t) => t.toLowerCase().includes(q))
       );
     }
-    return result;
+    return [...result].sort((a, b) => {
+      switch (sortBy) {
+        case 'name':
+          return (a.name || '').localeCompare(b.name || '');
+        case 'size':
+          return (b.size || 0) - (a.size || 0);
+        case 'category':
+          return (a.category || '').localeCompare(b.category || '') || (a.name || '').localeCompare(b.name || '');
+        case 'date':
+        default:
+          return (b.created_at || '').localeCompare(a.created_at || '');
+      }
+    });
   });
 
   // Group models by subfolder when viewing a specific category
@@ -437,13 +471,18 @@
             aria-label="List view"
           >☰</button>
         </div>
-        <button
-          class="px-3 py-1.5 text-sm rounded-md bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors"
-          onclick={handleScan}
-          disabled={scanning}
+        <!-- Sort -->
+        <select
+          bind:value={sortBy}
+          class="bg-gray-800 border border-gray-600 rounded-md px-2 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-green-500"
         >
-          {scanning ? 'Scanning...' : 'Scan'}
-        </button>
+          <option value="date">Date Added</option>
+          <option value="name">Name</option>
+          <option value="size">Size</option>
+          {#if !activeCategory}
+            <option value="category">Category</option>
+          {/if}
+        </select>
         <button
           class="px-3 py-1.5 text-sm rounded-md transition-colors {selectMode ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-200'}"
           onclick={() => selectMode ? exitSelectMode() : (selectMode = true)}
@@ -452,9 +491,16 @@
         </button>
         <button
           class="px-3 py-1.5 text-sm rounded-md bg-green-600 hover:bg-green-500 text-white transition-colors"
-          onclick={() => showUpload = true}
+          onclick={() => onNavigate?.('add')}
         >
-          Upload
+          Add Model
+        </button>
+        <button
+          class="px-3 py-1.5 text-sm rounded-md bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors"
+          onclick={handleScan}
+          disabled={scanning}
+        >
+          {scanning ? 'Scanning...' : 'Scan'}
         </button>
       </div>
     </div>
@@ -478,6 +524,12 @@
         <span class="text-sm text-gray-500">{selectedIds.size} selected</span>
         {#if selectedIds.size > 0}
           <div class="flex items-center gap-2 ml-auto">
+            <button
+              class="px-3 py-1.5 text-xs rounded bg-blue-900/50 hover:bg-blue-800 text-blue-300 disabled:opacity-50"
+              onclick={bulkGroup}
+              disabled={selectedIds.size < 2}
+              title={selectedIds.size < 2 ? 'Select at least 2 models to group' : ''}
+            >Group</button>
             <button
               class="px-3 py-1.5 text-xs rounded bg-gray-700 hover:bg-gray-600 text-gray-200"
               onclick={() => { showBulkCategory = true; showBulkTags = false; }}
@@ -535,12 +587,14 @@
 
     <!-- Scan results -->
     {#if scanResults && scanResults.count > 0}
-      <ScanResults
-        results={scanResults}
-        {categories}
-        onCataloged={handleCataloged}
-        onDismiss={() => scanResults = null}
-      />
+      {#key scanKey}
+        <ScanResults
+          results={scanResults}
+          {categories}
+          onCataloged={handleCataloged}
+          onDismiss={() => scanResults = null}
+        />
+      {/key}
     {:else if scanResults && scanResults.count === 0}
       <div class="bg-gray-800 border border-gray-700 rounded-md px-4 py-3 mb-4 text-gray-400 text-sm">
         No untracked models found. All files are already cataloged.
@@ -548,32 +602,12 @@
       </div>
     {/if}
 
-    <!-- Model grid/list -->
-    {#if loading}
+    <!-- Model grid/list (hidden while scan results are showing) -->
+    {#if !(scanResults && scanResults.count > 0)}
+      {#if loading}
       <div class="text-center py-20 text-gray-500">Loading...</div>
     {:else if filteredModels.length > 0}
       {#if activeCategory && groupedModels}
-        <!-- Subcategory add button -->
-        <div class="flex items-center gap-2 mb-3">
-          {#if showAddSubfolder}
-            <input
-              bind:value={newSubfolderName}
-              class="bg-gray-900 border border-gray-600 rounded px-2 py-1 text-sm text-gray-200 focus:outline-none focus:border-green-500"
-              placeholder="Subfolder name"
-              onkeydown={(e) => e.key === 'Enter' && addSubfolder()}
-            />
-            <button class="text-xs text-green-400 hover:text-green-300" onclick={addSubfolder}>Create</button>
-            <button class="text-xs text-gray-500 hover:text-gray-400" onclick={() => { showAddSubfolder = false; newSubfolderName = ''; }}>Cancel</button>
-          {:else}
-            <button
-              class="text-xs text-gray-500 hover:text-gray-400 flex items-center gap-1"
-              onclick={() => showAddSubfolder = true}
-            >
-              <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gray-700 text-green-400 text-sm font-bold">+</span>
-              New subfolder
-            </button>
-          {/if}
-        </div>
         <!-- Grouped by subfolder -->
         {#each Object.entries(groupedModels).sort(([a], [b]) => a === '' ? -1 : b === '' ? 1 : a.localeCompare(b)) as [subfolder, models] (subfolder)}
           {#if subfolder !== ''}
@@ -679,18 +713,13 @@
           </button>
           <button
             class="px-4 py-2 text-sm rounded-md bg-green-600 hover:bg-green-500 text-white transition-colors"
-            onclick={() => showUpload = true}
+            onclick={() => onNavigate?.('add')}
           >
-            Upload a Model
-          </button>
-          <button
-            class="px-4 py-2 text-sm rounded-md bg-blue-600 hover:bg-blue-500 text-white transition-colors"
-            onclick={() => onNavigate?.('download')}
-          >
-            Download from Web
+            Add Model
           </button>
         </div>
       </div>
+    {/if}
     {/if}
   </div>
 </div>
@@ -704,15 +733,8 @@
     onClose={() => selectedModel = null}
     onUpdated={handleModelUpdated}
     onDelete={handleDelete}
-  />
-{/if}
-
-<!-- Upload dialog -->
-{#if showUpload}
-  <UploadDialog
-    {categories}
-    onUploaded={handleUploaded}
-    onClose={() => showUpload = false}
+    onSelectModel={(id) => { const m = modelList.find(x => x.id === id); if (m) selectedModel = m; }}
+    onNavigateHost={(hostId) => { selectedModel = null; onNavigate('hosts'); window.dispatchEvent(new CustomEvent('gaitor:select-host', { detail: hostId })); }}
   />
 {/if}
 
@@ -720,7 +742,7 @@
 {#if deleteTarget}
   <ConfirmDialog
     title="Delete Model from Library"
-    message="This will permanently delete '{deleteTarget.name}' and its file from the library. This action cannot be undone."
+    message="This will permanently delete '{deleteTarget.name}' from the library and remove it from all synced hosts. This action cannot be undone."
     warningText="Type 'delete' to confirm:"
     confirmValue="delete"
     confirmLabel="Delete Forever"
@@ -733,7 +755,7 @@
 {#if showBulkDelete}
   <ConfirmDialog
     title="Bulk Delete from Library"
-    message="This will permanently delete {selectedIds.size} model(s) and their files from the library. This action cannot be undone."
+    message="This will permanently delete {selectedIds.size} model(s) from the library and remove them from all synced hosts. This action cannot be undone."
     warningText="Type 'delete' to confirm:"
     confirmValue="delete"
     confirmLabel="Delete All"

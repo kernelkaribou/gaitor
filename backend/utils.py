@@ -66,11 +66,11 @@ def validate_model_id(model_id: str) -> str:
     return model_id
 
 
-def validate_dest_id(dest_id: str) -> str:
-    """Validate destination ID - alphanumeric, dashes, underscores only."""
-    if not re.match(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]*$", dest_id):
-        raise ValueError(f"Invalid destination ID: {dest_id}")
-    return dest_id
+def validate_host_id(host_id: str) -> str:
+    """Validate host ID - alphanumeric, dashes, underscores only."""
+    if not re.match(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]*$", host_id):
+        raise ValueError(f"Invalid host ID: {host_id}")
+    return host_id
 
 
 def sanitize_filename(name: str, extension: str = "") -> str:

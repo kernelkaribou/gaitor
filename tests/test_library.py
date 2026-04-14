@@ -184,8 +184,6 @@ class TestLibraryService:
         assert model.name == "Test Model"
         assert model.category == "checkpoints"
         assert model.size == 1000
-        assert len(model.history) == 1
-        assert model.history[0].action == "added"
 
     def test_update_model_metadata(self):
         initialize_library()
@@ -196,7 +194,6 @@ class TestLibraryService:
         updated = update_model_metadata(model.id, {"name": "Renamed", "description": "Updated desc"})
         assert updated.name == "Renamed"
         assert updated.description == "Updated desc"
-        assert any(h.action == "metadata_updated" for h in updated.history)
 
     def test_rename_model(self):
         initialize_library()
@@ -208,7 +205,6 @@ class TestLibraryService:
 
         assert renamed.name == "New Name"
         assert "New_Name" in renamed.filename
-        assert any(h.action == "renamed" for h in renamed.history)
         # Old file should be gone, new file should exist
         assert not filepath.exists()
         new_path = config.LIBRARY_PATH / renamed.relative_path

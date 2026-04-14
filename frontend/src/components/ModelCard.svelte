@@ -1,7 +1,8 @@
 <script>
   import { api } from '../lib/api.js';
+  import defaultThumb from '../assets/default-thumb.webp';
 
-  let { model, formatSize, onSelect, isDuplicate } = $props();
+  let { model, formatSize, onSelect, isDuplicate, hostMode } = $props();
 
   const ext = $derived(model.filename?.split('.').pop()?.toLowerCase() || '');
   const extBadge = $derived(ext.toUpperCase());
@@ -18,7 +19,7 @@
 </script>
 
 <button
-  class="bg-gray-800 rounded-lg border border-gray-700 hover:border-green-600/50 transition-colors cursor-pointer text-left w-full overflow-hidden"
+  class="{hostMode ? '' : 'bg-gray-800 rounded-lg border border-gray-700 hover:border-green-600/50'} transition-colors cursor-pointer text-left w-full overflow-hidden"
   onclick={onSelect}
 >
   {#if thumbUrl}
@@ -27,20 +28,30 @@
     </div>
   {:else}
     <div class="w-full h-40 bg-gray-900/50 flex items-center justify-center">
-      <span class="text-4xl text-gray-700">{'\uD83E\uDDE0'}</span>
+      <img src={defaultThumb} alt={model.name} class="max-w-full max-h-40 object-contain" />
     </div>
   {/if}
   <div class="p-4">
     <div class="flex items-start justify-between mb-2">
       <h3 class="font-medium text-gray-100 truncate text-sm">{model.name}</h3>
-      <span class="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-300 shrink-0 ml-2">
+    </div>
+    <div class="flex items-center gap-2 mb-2 flex-wrap">
+      <span class="text-xs font-medium px-2.5 py-1 rounded bg-green-900/40 text-green-400 border border-green-700/40">
         {model.category}
       </span>
+      {#if model.base_model}
+        <span class="text-xs font-medium px-2 py-0.5 rounded bg-purple-900/40 text-purple-400 border border-purple-700/40">
+          {model.base_model}
+        </span>
+      {/if}
     </div>
     <p class="text-xs text-gray-500 truncate mb-3">{model.filename}</p>
     <div class="flex items-center justify-between text-xs text-gray-500">
       <span>{formatSize(model.size)}</span>
       <div class="flex items-center gap-2">
+        {#if model.group_id}
+          <span class="text-blue-400" title="Grouped with other models">&#x26D3;</span>
+        {/if}
         {#if isDuplicate}
           <span class="text-yellow-500" title="Duplicate hash detected">DUP</span>
         {/if}

@@ -31,9 +31,9 @@ def test_models_list(client):
     assert response.status_code == 200
 
 
-def test_destinations_list(client):
-    """Destinations list endpoint works."""
-    response = client.get("/api/destinations/")
+def test_hosts_list(client):
+    """Hosts list endpoint works."""
+    response = client.get("/api/hosts/")
     assert response.status_code == 200
 
 

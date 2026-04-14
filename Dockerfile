@@ -22,7 +22,7 @@ COPY VERSION ./VERSION
 COPY backend/ ./backend/
 COPY --from=frontend-build /build/dist ./frontend/dist/
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN chmod +x /entrypoint.sh && mkdir -p /library /hosts
 
 LABEL org.opencontainers.image.title="gAItor" \
       org.opencontainers.image.description="AI model library manager and sync tool" \
@@ -36,7 +36,7 @@ ENV LOG_LEVEL=INFO
 ENV PUID=1000
 ENV PGID=1000
 
-EXPOSE ${PORT}
+EXPOSE 8487
 
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=30s \
   CMD curl -f http://localhost:${PORT}/health || exit 1

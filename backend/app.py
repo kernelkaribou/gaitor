@@ -17,7 +17,7 @@ import os
 from pathlib import Path
 
 from . import config
-from .routers import settings, library, models, destinations, retrieve
+from .routers import settings, library, models, hosts, retrieve
 from .services.tasks import task_manager
 
 
@@ -65,9 +65,9 @@ uvicorn_access_logger.addFilter(AccessLogFilter())
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
-    # Ensure library and dest paths exist (they should be volume mounts)
+    # Ensure library and hosts paths exist (they should be volume mounts)
     config.LIBRARY_PATH.mkdir(parents=True, exist_ok=True)
-    config.DESTINATIONS_ROOT.mkdir(parents=True, exist_ok=True)
+    config.HOSTS_ROOT.mkdir(parents=True, exist_ok=True)
 
     # Auto-initialize library if not yet initialized
     from .services.metadata import is_library_initialized, initialize_library, ensure_metadata_dir
@@ -78,7 +78,7 @@ async def lifespan(app: FastAPI):
 
     logger.info(f"gAItor v{app.version} starting")
     logger.info(f"Library path: {config.LIBRARY_PATH}")
-    logger.info(f"Destinations root: {config.DESTINATIONS_ROOT}")
+    logger.info(f"Hosts root: {config.HOSTS_ROOT}")
     logger.info(f"Log level: {config.LOG_LEVEL}")
 
     yield
@@ -126,7 +126,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.include_router(settings.router, prefix="/api/settings", tags=["settings"])
 app.include_router(library.router, prefix="/api/library", tags=["library"])
 app.include_router(models.router, prefix="/api/models", tags=["models"])
-app.include_router(destinations.router, prefix="/api/destinations", tags=["destinations"])
+app.include_router(hosts.router, prefix="/api/hosts", tags=["hosts"])
 app.include_router(retrieve.router, prefix="/api/retrieve", tags=["retrieve"])
 
 
@@ -148,8 +148,8 @@ async def websocket_tasks(websocket: WebSocket):
             await websocket.send_text(json.dumps({"type": "update", **msg}))
     except WebSocketDisconnect:
         pass
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"WebSocket error: {e}")
     finally:
         task_manager.unsubscribe(queue)
 

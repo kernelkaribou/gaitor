@@ -1,13 +1,15 @@
 """
 Library management API endpoints.
 """
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-from typing import Optional
-from pathlib import Path
 import asyncio
 import logging
 import os
+import re
+from pathlib import Path
+from typing import Optional
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 from ..services.library import get_library_status, scan_for_untracked
 from ..services.metadata import (
@@ -120,7 +122,6 @@ async def rename_category_endpoint(category_id: str, req: CategoryRenameRequest)
     """Rename a category (renames folder and updates all model metadata)."""
     if category_id in DEFAULT_CATEGORY_IDS:
         raise HTTPException(status_code=403, detail="Default categories cannot be renamed")
-    import re
     if not re.match(r'^[a-zA-Z0-9_-]+$', req.new_id):
         raise HTTPException(status_code=400, detail="Category ID must be alphanumeric with dashes/underscores only")
     try:
@@ -144,14 +145,11 @@ async def delete_category_endpoint(category_id: str):
     return {"categories": [c.model_dump() for c in categories]}
 
 
-class SubfolderRequest(BaseModel):
-    name: str
 
 
 @router.get("/categories/{category_id}/subfolders")
 async def list_subfolders(category_id: str):
     """List all subfolders (recursively) within a category."""
-    import re
     if not re.match(r'^[a-zA-Z0-9_-]+$', category_id):
         raise HTTPException(status_code=400, detail="Invalid category ID")
     cat_dir = safe_resolve(config.LIBRARY_PATH, category_id)
@@ -166,21 +164,3 @@ async def list_subfolders(category_id: str):
             subfolders.append(rel)
     return {"subfolders": sorted(subfolders)}
 
-
-@router.post("/categories/{category_id}/subfolders")
-async def create_subfolder(category_id: str, req: SubfolderRequest):
-    """Create a subfolder within a category."""
-    import re
-    if not re.match(r'^[a-zA-Z0-9_-]+$', category_id):
-        raise HTTPException(status_code=400, detail="Invalid category ID")
-    folder_name = req.name.strip()
-    if not folder_name or not re.match(r'^[a-zA-Z0-9_\- ]+$', folder_name):
-        raise HTTPException(status_code=400, detail="Subfolder name must be alphanumeric (dashes, underscores, spaces allowed)")
-    cat_dir = safe_resolve(config.LIBRARY_PATH, category_id)
-    if not cat_dir.is_dir():
-        raise HTTPException(status_code=404, detail="Category directory not found")
-    sub_dir = safe_resolve(cat_dir, folder_name)
-    if sub_dir.exists():
-        raise HTTPException(status_code=409, detail="Subfolder already exists")
-    sub_dir.mkdir(parents=True)
-    return {"message": f"Subfolder '{folder_name}' created", "path": f"{category_id}/{folder_name}"}

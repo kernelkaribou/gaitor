@@ -4,7 +4,7 @@
   let { title, message, warningText, confirmValue, confirmLabel = 'Confirm', danger = false, onConfirm, onCancel } = $props();
 
   function handleKeydown(e) {
-    if (e.key === 'Escape') onCancel();
+    if (e.key === 'Escape' && !confirming) onCancel();
   }
   onMount(() => document.addEventListener('keydown', handleKeydown));
   onDestroy(() => document.removeEventListener('keydown', handleKeydown));
@@ -29,7 +29,7 @@
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-<div class="fixed inset-0 bg-black/60 z-50" onclick={onCancel}></div>
+<div class="fixed inset-0 bg-black/60 z-50" onclick={() => !confirming && onCancel()}></div>
 
 <!-- Dialog -->
 <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -53,7 +53,7 @@
       {/if}
 
       <div class="flex gap-2 justify-end">
-        <button class="px-4 py-2 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={onCancel}>Cancel</button>
+        <button class="px-4 py-2 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200 disabled:opacity-50" onclick={onCancel} disabled={confirming}>Cancel</button>
         <button
           class="px-4 py-2 text-sm rounded {danger ? 'bg-red-600 hover:bg-red-500' : 'bg-green-600 hover:bg-green-500'} text-white disabled:opacity-50 disabled:cursor-not-allowed"
           onclick={handleConfirm}

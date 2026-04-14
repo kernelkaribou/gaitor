@@ -1,14 +1,18 @@
 """
 Model CRUD API endpoints.
 """
+import asyncio
+import re
+import shutil
+import logging
+import uuid
+from io import BytesIO
+from pathlib import Path
+from typing import Optional
+
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from typing import Optional
-from pathlib import Path
-from io import BytesIO
-import logging
-
 from PIL import Image
 
 Image.MAX_IMAGE_PIXELS = 25_000_000  # ~5000x5000, prevent decompression bombs
@@ -21,6 +25,7 @@ from ..services.library import (
     rename_model,
     delete_library_model,
     compute_hash,
+    cleanup_empty_parents,
 )
 from ..services.metadata import (
     load_all_models,
@@ -32,9 +37,8 @@ from ..services.metadata import (
     save_model,
     rebuild_index,
 )
-from ..schemas.model import ModelHistoryEntry
-from ..utils import validate_model_id, safe_resolve
-from datetime import datetime
+from ..services.sync import get_model_host_status
+from ..utils import validate_model_id, safe_resolve, to_iso, get_now
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -51,6 +55,10 @@ class CatalogRequest(BaseModel):
 
 class BulkCatalogRequest(BaseModel):
     models: list[CatalogRequest]
+
+    def model_post_init(self, __context):
+        if len(self.models) > 100:
+            raise ValueError("Maximum 100 models per bulk request")
 
 
 class UpdateModelRequest(BaseModel):
@@ -128,10 +136,125 @@ async def model_stats():
 @router.get("/{model_id}")
 async def get_model(model_id: str):
     """Get a single model's full metadata."""
+    try:
+        model_id = validate_model_id(model_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid model ID format")
     model = load_model(model_id)
     if not model:
         raise HTTPException(status_code=404, detail="Model not found")
     return model.model_dump()
+
+
+@router.get("/{model_id}/hosts")
+async def get_model_hosts(model_id: str):
+    """Get sync status of a model across all hosts."""
+    try:
+        model_id = validate_model_id(model_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid model ID format")
+    status = await asyncio.to_thread(get_model_host_status, model_id)
+    return {"hosts": status}
+
+
+@router.get("/{model_id}/group")
+async def get_model_group(model_id: str):
+    """Get all models in the same group as this model."""
+    try:
+        model_id = validate_model_id(model_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid model ID format")
+    model = load_model(model_id)
+    if not model:
+        raise HTTPException(status_code=404, detail="Model not found")
+    if not model.group_id:
+        return {"group_id": None, "members": []}
+
+    index = load_index()
+    members = [
+        {"id": m["id"], "name": m.get("name", ""), "filename": m.get("filename", ""), "category": m.get("category", ""), "size": m.get("size", 0), "thumbnail": m.get("thumbnail")}
+        for m in index if m.get("group_id") == model.group_id and m["id"] != model_id
+    ]
+    return {"group_id": model.group_id, "members": members}
+
+
+class GroupRequest(BaseModel):
+    model_ids: list[str]
+
+
+@router.put("/{model_id}/group")
+async def set_model_group(model_id: str, req: GroupRequest):
+    """Group this model with other models. Creates a new group or merges into an existing one."""
+    try:
+        model_id = validate_model_id(model_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid model ID format")
+    model = load_model(model_id)
+    if not model:
+        raise HTTPException(status_code=404, detail="Model not found")
+
+    all_ids = list(set([model_id] + req.model_ids))
+    if len(all_ids) < 2:
+        raise HTTPException(status_code=400, detail="Need at least two models to form a group")
+
+    # Find existing group_id from any of the models, or create new
+    group_id = model.group_id
+    if not group_id:
+        for mid in req.model_ids:
+            other = load_model(mid)
+            if other and other.group_id:
+                group_id = other.group_id
+                break
+    if not group_id:
+        group_id = str(uuid.uuid4())
+
+    now = to_iso(get_now())
+    for mid in all_ids:
+        try:
+            mid = validate_model_id(mid)
+        except ValueError:
+            continue
+        m = load_model(mid)
+        if not m:
+            continue
+        if m.group_id != group_id:
+            m.group_id = group_id
+            m.updated_at = now
+            save_model(m)
+
+    rebuild_index()
+    return {"group_id": group_id, "model_ids": all_ids}
+
+
+@router.delete("/{model_id}/group")
+async def remove_from_group(model_id: str):
+    """Remove this model from its group. If only one member remains, dissolve the group."""
+    try:
+        model_id = validate_model_id(model_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid model ID format")
+    model = load_model(model_id)
+    if not model:
+        raise HTTPException(status_code=404, detail="Model not found")
+    if not model.group_id:
+        return {"removed": True}
+
+    old_group_id = model.group_id
+    now = to_iso(get_now())
+
+    model.group_id = None
+    model.updated_at = now
+    save_model(model)
+
+    # Check remaining members — dissolve if only one left
+    remaining = [m for m in load_all_models() if m.group_id == old_group_id]
+    if len(remaining) == 1:
+        remaining[0].group_id = None
+        remaining[0].updated_at = now
+        save_model(remaining[0])
+
+    rebuild_index()
+    return {"removed": True}
 
 
 @router.post("/catalog")
@@ -184,6 +307,9 @@ async def upload_model_endpoint(
     category: str = Form("other"),
     description: str = Form(""),
     tags: str = Form(""),
+    subfolder: str = Form(""),
+    base_model: str = Form(""),
+    custom_filename: str = Form(""),
     background_tasks: BackgroundTasks = None,
 ):
     """Upload a model file to the library."""
@@ -191,12 +317,14 @@ async def upload_model_endpoint(
 
     try:
         model = upload_model(
-            filename=file.filename,
+            filename=custom_filename.strip() if custom_filename.strip() else file.filename,
             category=category,
             name=name,
             data_stream=file.file,
             description=description,
             tags=tag_list,
+            subfolder=subfolder.strip() if subfolder.strip() else None,
+            base_model=base_model.strip() if base_model.strip() else None,
         )
         if background_tasks:
             background_tasks.add_task(compute_hash, model.id)
@@ -279,11 +407,14 @@ async def bulk_delete_models(req: BulkDeleteRequest):
 @router.put("/{model_id}")
 async def update_model_endpoint(model_id: str, req: UpdateModelRequest):
     """Update a model's metadata."""
+    try:
+        model_id = validate_model_id(model_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid model ID format")
     updates = {k: v for k, v in req.model_dump().items() if v is not None}
     if not updates:
         raise HTTPException(status_code=400, detail="No updates provided")
     if "subfolder" in updates:
-        import re
         sub = updates["subfolder"].strip()
         if sub and not re.match(r'^[a-zA-Z0-9_\-/ ]+$', sub):
             raise HTTPException(status_code=400, detail="Invalid subfolder name")
@@ -297,6 +428,10 @@ async def update_model_endpoint(model_id: str, req: UpdateModelRequest):
 @router.post("/{model_id}/rename")
 async def rename_model_endpoint(model_id: str, req: RenameRequest):
     """Rename a model (metadata and optionally the physical file)."""
+    try:
+        model_id = validate_model_id(model_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid model ID format")
     try:
         model = rename_model(model_id, req.new_name, req.rename_file)
         return model.model_dump()
@@ -313,11 +448,14 @@ class MoveRequest(BaseModel):
 @router.post("/{model_id}/move")
 async def move_model_endpoint(model_id: str, req: MoveRequest):
     """Move a model to a subfolder within its category."""
+    try:
+        model_id = validate_model_id(model_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid model ID format")
     model = load_model(model_id)
     if not model:
         raise HTTPException(status_code=404, detail="Model not found")
 
-    import re
     subfolder = req.subfolder.strip()
     if subfolder and not re.match(r'^[a-zA-Z0-9_\-/ ]+$', subfolder):
         raise HTTPException(status_code=400, detail="Invalid subfolder name")
@@ -338,19 +476,11 @@ async def move_model_endpoint(model_id: str, req: MoveRequest):
         raise HTTPException(status_code=409, detail="A file with that name already exists in the target folder")
 
     if old_path != new_path:
-        import shutil
         shutil.move(str(old_path), str(new_path))
         model.relative_path = str(new_path.relative_to(config.LIBRARY_PATH))
-        model.updated_at = datetime.now().isoformat()
-        model.history.append(ModelHistoryEntry(
-            action="moved",
-            timestamp=model.updated_at,
-            details={"from": str(old_path.relative_to(config.LIBRARY_PATH)), "to": model.relative_path}
-        ))
+        model.updated_at = to_iso(get_now())
         save_model(model)
         rebuild_index()
-        # Clean up empty parent directories from old location
-        from ..services.library import cleanup_empty_parents
         cleanup_empty_parents(old_path, config.LIBRARY_PATH)
 
     return model.model_dump()
@@ -359,6 +489,10 @@ async def move_model_endpoint(model_id: str, req: MoveRequest):
 @router.delete("/{model_id}")
 async def delete_model_endpoint(model_id: str, req: DeleteConfirmation):
     """Delete a model from the library. Requires typing 'delete' to confirm."""
+    try:
+        model_id = validate_model_id(model_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid model ID format")
     model = load_model(model_id)
     if not model:
         raise HTTPException(status_code=404, detail="Model not found")
@@ -376,7 +510,10 @@ async def delete_model_endpoint(model_id: str, req: DeleteConfirmation):
 @router.post("/{model_id}/hash")
 async def compute_hash_endpoint(model_id: str):
     """Compute or recompute SHA-256 hash for a model."""
-    import asyncio
+    try:
+        model_id = validate_model_id(model_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid model ID format")
     model = load_model(model_id)
     if not model:
         raise HTTPException(status_code=404, detail="Model not found")
@@ -390,7 +527,10 @@ async def compute_hash_endpoint(model_id: str):
 @router.get("/{model_id}/download")
 async def download_model(model_id: str):
     """Download a model file to the user's browser."""
-    from ..utils import safe_resolve
+    try:
+        model_id = validate_model_id(model_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid model ID format")
 
     model = load_model(model_id)
     if not model:
@@ -418,7 +558,10 @@ MAX_THUMBNAIL_SIZE = 5 * 1024 * 1024  # 5MB
 @router.post("/{model_id}/thumbnail")
 async def upload_thumbnail(model_id: str, file: UploadFile = File(...)):
     """Upload a thumbnail image for a model. Auto-converts to max 400x400 webp."""
-    model_id = validate_model_id(model_id)
+    try:
+        model_id = validate_model_id(model_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid model ID format")
     model = load_model(model_id)
     if not model:
         raise HTTPException(status_code=404, detail="Model not found")
@@ -460,7 +603,10 @@ async def upload_thumbnail(model_id: str, file: UploadFile = File(...)):
 @router.delete("/{model_id}/thumbnail")
 async def delete_thumbnail(model_id: str):
     """Remove a model's thumbnail."""
-    model_id = validate_model_id(model_id)
+    try:
+        model_id = validate_model_id(model_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid model ID format")
     model = load_model(model_id)
     if not model:
         raise HTTPException(status_code=404, detail="Model not found")
@@ -475,7 +621,10 @@ async def delete_thumbnail(model_id: str):
 @router.get("/{model_id}/thumbnail")
 async def get_thumbnail(model_id: str):
     """Serve a model's thumbnail image."""
-    model_id = validate_model_id(model_id)
+    try:
+        model_id = validate_model_id(model_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid model ID format")
     model = load_model(model_id)
     if not model or not model.thumbnail:
         raise HTTPException(status_code=404, detail="No thumbnail found")
