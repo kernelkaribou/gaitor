@@ -442,13 +442,6 @@
           >☰</button>
         </div>
         <button
-          class="px-3 py-1.5 text-sm rounded-md bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors"
-          onclick={handleScan}
-          disabled={scanning}
-        >
-          {scanning ? 'Scanning...' : 'Scan'}
-        </button>
-        <button
           class="px-3 py-1.5 text-sm rounded-md transition-colors {selectMode ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-200'}"
           onclick={() => selectMode ? exitSelectMode() : (selectMode = true)}
         >
@@ -459,6 +452,13 @@
           onclick={() => onNavigate?.('add')}
         >
           Add Model
+        </button>
+        <button
+          class="px-3 py-1.5 text-sm rounded-md bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors"
+          onclick={handleScan}
+          disabled={scanning}
+        >
+          {scanning ? 'Scanning...' : 'Scan'}
         </button>
       </div>
     </div>
