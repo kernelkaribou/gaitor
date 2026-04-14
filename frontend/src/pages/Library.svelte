@@ -36,6 +36,14 @@
   // Subfolder management
   let collapsedGroups = $state({});
 
+  // Sorting
+  let sortBy = $state('date');
+
+  // Reset to default sort if category sort is selected but a category filter is active
+  $effect(() => {
+    if (activeCategory && sortBy === 'category') sortBy = 'date';
+  });
+
   // Bulk selection
   let selectMode = $state(false);
   let selectedIds = $state(new Set());
@@ -251,8 +259,19 @@
           (m.tags || []).some((t) => t.toLowerCase().includes(q))
       );
     }
-    // Sort by most recently updated first
-    return [...result].sort((a, b) => (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || ''));
+    return [...result].sort((a, b) => {
+      switch (sortBy) {
+        case 'name':
+          return (a.name || '').localeCompare(b.name || '');
+        case 'size':
+          return (b.size || 0) - (a.size || 0);
+        case 'category':
+          return (a.category || '').localeCompare(b.category || '') || (a.name || '').localeCompare(b.name || '');
+        case 'date':
+        default:
+          return (b.created_at || '').localeCompare(a.created_at || '');
+      }
+    });
   });
 
   // Group models by subfolder when viewing a specific category
@@ -441,6 +460,18 @@
             aria-label="List view"
           >☰</button>
         </div>
+        <!-- Sort -->
+        <select
+          bind:value={sortBy}
+          class="bg-gray-800 border border-gray-600 rounded-md px-2 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-green-500"
+        >
+          <option value="date">Date Added</option>
+          <option value="name">Name</option>
+          <option value="size">Size</option>
+          {#if !activeCategory}
+            <option value="category">Category</option>
+          {/if}
+        </select>
         <button
           class="px-3 py-1.5 text-sm rounded-md transition-colors {selectMode ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-200'}"
           onclick={() => selectMode ? exitSelectMode() : (selectMode = true)}
