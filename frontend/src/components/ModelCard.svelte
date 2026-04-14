@@ -27,7 +27,7 @@
     </div>
   {:else}
     <div class="w-full h-40 bg-gray-900/50 flex items-center justify-center">
-      <img src="/default-thumb.webp" alt="Model" class="w-16 h-16 opacity-40" />
+      <img src="/default-thumb.webp" alt="Model" class="max-w-full max-h-40 object-contain" />
     </div>
   {/if}
   <div class="p-4">
