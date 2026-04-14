@@ -10,10 +10,10 @@ Think of it as a smart FTP specifically designed for AI models - browse, sync, r
 
 ## Features
 
-- **Library Management** - Centralized model library with metadata, categories (ComfyUI-style), search, and tagging
+- **Library Management** - Centralized model library with metadata, common categories, search, and tagging
 - **Host Sync** - Copy models to inferencing machines with real-time progress tracking
-- **External Retrieval** - Download models from Hugging Face and CivitAI directly into your library
-- **Rename Tracking** - Rename models in the library; hosts detect renames and can apply them
+- **External Retrieval** - Download models from Hugging Face, CivitAI and external locations directly into your library
+- **Model Organization** - Rename models in the library, add descriptions and thumbnails, organize in folders and create groups of partner models
 - **Web Upload & Scan** - Upload models through the browser or scan for files added directly to storage
 - **File Integrity** - SHA-256 hashing for verifying large model file transfers
 - **Docker Native** - Single container, volume mounts for library and hosts, PUID/PGID support for NAS
@@ -35,8 +35,8 @@ services:
     ports:
       - "8487:8487"
     volumes:
-      - /path/to/nas/models:/library
-      - /path/to/local/models:/hosts/local-gpu
+      - /path/to/library/models:/library
+      - /path/to/host/models:/hosts/local-gpu
       # Add more hosts as volume mounts under /hosts/:
       # - /mnt/laptop/models:/hosts/laptop
       # - /mnt/server2/models:/hosts/server2
@@ -56,7 +56,7 @@ To add a host, mount the remote machine's model directory (via NFS, SMB, or loca
 
 ```yaml
 volumes:
-  - /path/to/nas/models:/library                  # Source of truth
+  - /path/to/library/models:/library                  # Source of truth
   - /mnt/gpu-pc/models:/hosts/gpu-pc              # Host 1
   - /mnt/laptop/ai-models:/hosts/laptop           # Host 2
   - /mnt/render-node/models:/hosts/render-node    # Host 3

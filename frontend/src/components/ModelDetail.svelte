@@ -3,7 +3,7 @@
   import { isSafeUrl, formatHostName } from '../lib/utils.js';
   import { onMount, onDestroy } from 'svelte';
 
-  let { model, categories, formatSize, onClose, onUpdated, onDelete, onSelectModel, hostContext, onNavigateHost } = $props();
+  let { model, categories, formatSize, onClose, onUpdated, onDelete, onSelectModel, hostContext, onNavigateHost, onViewInLibrary } = $props();
 
   function handleKeydown(e) {
     if (e.key === 'Escape') onClose();
@@ -448,10 +448,6 @@
       <!-- View mode -->
       <div class="space-y-4">
         <div>
-          <span class="text-xs text-gray-500 uppercase tracking-wider">Name</span>
-          <p class="text-gray-100 mt-0.5">{model.name}</p>
-        </div>
-        <div>
           <span class="text-xs text-gray-500 uppercase tracking-wider">Filename</span>
           <p class="text-gray-300 text-sm mt-0.5 font-mono">{model.filename}</p>
         </div>
@@ -680,6 +676,12 @@
         <!-- Actions -->
         <div class="border-t border-gray-700 pt-4 flex flex-wrap gap-2">
           {#if hostContext}
+            {#if onViewInLibrary}
+              <button
+                class="px-3 py-1.5 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200"
+                onclick={() => onViewInLibrary(model.id)}
+              >View in Library</button>
+            {/if}
             <button
               class="px-3 py-1.5 text-sm rounded bg-red-900/50 hover:bg-red-800 text-red-300 ml-auto"
               onclick={() => hostContext.onRemove?.()}

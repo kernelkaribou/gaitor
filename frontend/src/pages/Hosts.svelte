@@ -610,6 +610,12 @@
     onUpdated={handleModelUpdated}
     onDelete={() => { selectedModel = null; selectedHostItem = null; if (selectedHost) selectHost(selectedHost); }}
     onSelectModel={(id) => { api.getModel(id).then(m => { selectedModel = m; selectedHostItem = syncStatus.find(s => s.model_id === id) || selectedHostItem; }).catch(() => { error = 'Could not load model details.'; }); }}
+    onViewInLibrary={(modelId) => {
+      selectedModel = null;
+      selectedHostItem = null;
+      onBack();
+      window.dispatchEvent(new CustomEvent('gaitor:select-library-model', { detail: modelId }));
+    }}
     hostContext={selectedHostItem ? {
       host_id: selectedHost.id,
       host_name: selectedHost.name,

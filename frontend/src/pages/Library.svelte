@@ -198,11 +198,22 @@
   function onTaskComplete() {
     loadData();
   }
+  function onSelectLibraryModel(e) {
+    const modelId = e.detail;
+    const m = modelList.find(x => x.id === modelId);
+    if (m) {
+      selectedModel = m;
+    } else {
+      api.getModel(modelId).then(model => { selectedModel = model; }).catch(() => {});
+    }
+  }
   onMount(() => {
     window.addEventListener('gaitor:task-complete', onTaskComplete);
+    window.addEventListener('gaitor:select-library-model', onSelectLibraryModel);
   });
   onDestroy(() => {
     window.removeEventListener('gaitor:task-complete', onTaskComplete);
+    window.removeEventListener('gaitor:select-library-model', onSelectLibraryModel);
   });
 
   async function handleScan() {
