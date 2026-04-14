@@ -15,9 +15,15 @@
   }
 
   let currentPage = $state(pageFromHash());
+  let hostsResetFn = $state(null);
 
   function navigate(page) {
     if (!validPages.includes(page)) page = 'library';
+    // If already on hosts and clicking hosts again, reset to list
+    if (page === 'hosts' && currentPage === 'hosts' && hostsResetFn) {
+      hostsResetFn();
+      return;
+    }
     currentPage = page;
     const target = '#' + page;
     if (location.hash !== target) {
@@ -43,7 +49,7 @@
   {#if currentPage === 'library'}
     <Library onNavigate={navigate} />
   {:else if currentPage === 'hosts'}
-    <Hosts onBack={() => navigate('library')} />
+    <Hosts onBack={() => navigate('library')} onResetRef={(fn) => hostsResetFn = fn} />
   {:else if currentPage === 'add'}
     <AddModel onBack={() => navigate('library')} />
   {:else if currentPage === 'settings'}

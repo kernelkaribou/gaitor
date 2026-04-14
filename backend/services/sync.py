@@ -70,13 +70,26 @@ def list_hosts() -> list[dict]:
                 disk_total = 0
                 disk_free = 0
 
+            # Quick sidecar count for model summary
+            model_count = 0
+            health = check_host_health(entry)
+            if health.get("readable"):
+                try:
+                    for root, dirs, files in os.walk(entry):
+                        for f in files:
+                            if f.endswith(SIDECAR_SUFFIX):
+                                model_count += 1
+                except OSError:
+                    pass
+
             hosts.append({
                 "id": entry.name,
                 "name": entry.name,
                 "path": str(entry),
                 "disk_total": disk_total,
                 "disk_free": disk_free,
-                "health": check_host_health(entry),
+                "health": health,
+                "model_count": model_count,
             })
 
     return hosts

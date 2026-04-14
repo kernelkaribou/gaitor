@@ -3,7 +3,7 @@
   import { isSafeUrl, formatHostName } from '../lib/utils.js';
   import { onMount, onDestroy } from 'svelte';
 
-  let { model, categories, formatSize, onClose, onUpdated, onDelete, onSelectModel, hostContext } = $props();
+  let { model, categories, formatSize, onClose, onUpdated, onDelete, onSelectModel, hostContext, onNavigateHost } = $props();
 
   function handleKeydown(e) {
     if (e.key === 'Escape') onClose();
@@ -563,12 +563,15 @@
               <div class="space-y-2">
                 {#each hostStatuses as hs (hs.host_id)}
                   <div class="flex items-center justify-between bg-gray-900 rounded px-3 py-2 border border-gray-700">
-                    <div class="min-w-0">
-                      <p class="text-sm text-gray-200 font-medium truncate">{formatHostName(hs.host_name)}</p>
+                    <button
+                      class="min-w-0 text-left hover:opacity-80 transition-opacity"
+                      onclick={() => { if (onNavigateHost) { onClose(); onNavigateHost(hs.host_id); } }}
+                    >
+                      <p class="text-sm text-gray-200 font-medium truncate {onNavigateHost ? 'hover:text-green-400' : ''}">{formatHostName(hs.host_name)}</p>
                       {#if hs.disk_free}
                         <p class="text-xs text-gray-600">{formatSize(hs.disk_free)} free</p>
                       {/if}
-                    </div>
+                    </button>
                     {#if hs.status === 'synced'}
                       <span class="text-xs px-2 py-0.5 rounded bg-green-900/30 text-green-400 border border-green-800">Synced</span>
                     {:else if hs.status === 'rename_pending'}

@@ -723,6 +723,7 @@
     onUpdated={handleModelUpdated}
     onDelete={handleDelete}
     onSelectModel={(id) => { const m = modelList.find(x => x.id === id); if (m) selectedModel = m; }}
+    onNavigateHost={(hostId) => { selectedModel = null; onNavigate('hosts'); window.dispatchEvent(new CustomEvent('gaitor:select-host', { detail: hostId })); }}
   />
 {/if}
 

@@ -6,7 +6,7 @@
   import ModelDetail from '../components/ModelDetail.svelte';
   import HostScanResults from '../components/HostScanResults.svelte';
 
-  let { onBack } = $props();
+  let { onBack, onResetRef } = $props();
 
   let hosts = $state([]);
   let selectedHost = $state(null);
@@ -35,6 +35,24 @@
     if (selectedHost) selectHost(selectedHost);
   }
 
+  function handleSelectHostEvent(e) {
+    const hostId = e.detail;
+    const host = hosts.find(h => h.id === hostId);
+    if (host) selectHost(host);
+  }
+
+  function resetToList() {
+    selectedHost = null;
+    selectedModel = null;
+    selectedHostItem = null;
+    scanResults = null;
+  }
+
+  // Expose reset function to parent via callback ref
+  $effect(() => {
+    if (onResetRef) onResetRef(resetToList);
+  });
+
   onMount(async () => {
     try {
       const [hostData, catsData] = await Promise.all([
@@ -43,15 +61,21 @@
       ]);
       hosts = hostData.hosts || [];
       categories = catsData.categories || [];
+      // Auto-select if only one host
+      if (hosts.length === 1 && hosts[0].health?.status !== 'offline' && hosts[0].health?.status !== 'error') {
+        selectHost(hosts[0]);
+      }
     } catch (err) {
       error = err.message;
     }
     loading = false;
     window.addEventListener('gaitor:task-complete', handleTaskComplete);
+    window.addEventListener('gaitor:select-host', handleSelectHostEvent);
   });
 
   onDestroy(() => {
     window.removeEventListener('gaitor:task-complete', handleTaskComplete);
+    window.removeEventListener('gaitor:select-host', handleSelectHostEvent);
   });
 
   async function selectHost(host) {
@@ -308,6 +332,11 @@
             {#if isOffline || isDegraded}
               <p class="text-xs text-yellow-500 mb-2">{host.health?.message}</p>
             {/if}
+            {#if host.model_count > 0}
+              <p class="text-xs text-gray-400 mb-2">{host.model_count} model{host.model_count !== 1 ? 's' : ''} synced</p>
+            {:else if !isOffline}
+              <p class="text-xs text-gray-600 mb-2">No models synced</p>
+            {/if}
             {#if host.disk_total}
               <div class="w-full bg-gray-700 rounded-full h-2 mb-1">
                 <div
@@ -353,22 +382,34 @@
           {/if}
         {/each}
 
-        <!-- Summary -->
+        <!-- Status -->
         <div class="mt-6 pt-4 border-t border-gray-700">
-          <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2 font-semibold">Summary</h3>
-          <div class="space-y-1 text-xs">
-            <p class="text-gray-300">{hostModels.length} model{hostModels.length !== 1 ? 's' : ''} on host</p>
+          <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2 font-semibold">Status</h3>
+          <p class="text-sm text-gray-300 mb-2">{hostModels.length} model{hostModels.length !== 1 ? 's' : ''}</p>
+          <div class="space-y-1.5 text-xs">
             {#if syncSummary.synced > 0}
-              <p class="text-green-400">{syncSummary.synced} synced</p>
+              <div class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-green-400 shrink-0"></span>
+                <span class="text-gray-300">{syncSummary.synced} synced</span>
+              </div>
             {/if}
             {#if syncSummary.outdated > 0}
-              <p class="text-yellow-400">{syncSummary.outdated} out of sync</p>
+              <div class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-yellow-400 shrink-0"></span>
+                <span class="text-gray-300">{syncSummary.outdated} out of sync</span>
+              </div>
             {/if}
             {#if syncSummary.rename_pending > 0}
-              <p class="text-blue-400">{syncSummary.rename_pending} rename pending</p>
+              <div class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-blue-400 shrink-0"></span>
+                <span class="text-gray-300">{syncSummary.rename_pending} rename pending</span>
+              </div>
             {/if}
             {#if syncSummary.orphaned > 0}
-              <p class="text-red-400">{syncSummary.orphaned} orphaned</p>
+              <div class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-red-400 shrink-0"></span>
+                <span class="text-gray-300">{syncSummary.orphaned} orphaned</span>
+              </div>
             {/if}
           </div>
         </div>
