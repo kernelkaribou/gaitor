@@ -101,6 +101,26 @@
     syncing = { ...syncing, [modelId]: false };
   }
 
+  async function restoreToLibrary(item) {
+    if (!item.host_relative_path) {
+      error = 'Cannot restore: file path unknown for this orphaned model.';
+      return;
+    }
+    syncing = { ...syncing, [item.model_id]: true };
+    error = null;
+    try {
+      await api.importFromHost(selectedHost.id, {
+        relative_path: item.host_relative_path,
+        name: item.model_name,
+        category: item.category || 'other',
+      });
+      await selectHost(selectedHost);
+    } catch (err) {
+      error = err.message;
+    }
+    syncing = { ...syncing, [item.model_id]: false };
+  }
+
   async function handleHostScan() {
     scanning = true;
     error = null;
@@ -472,7 +492,30 @@
                     >
                       {syncing[item.model_id] ? 'Syncing...' : 'Re-sync'}
                     </button>
-                  {:else if item.status === 'synced' || item.status === 'orphaned'}
+                  {:else if item.status === 'orphaned'}
+                    <span class="text-xs text-red-400 truncate mr-2">Not in library</span>
+                    <div class="flex gap-1">
+                      {#if confirmRemove === item.model_id}
+                        <button class="px-2 py-1 text-xs rounded bg-red-700 text-white" onclick={() => { confirmRemove = null; removeModel(item.model_id); }}>Confirm</button>
+                        <button class="px-2 py-1 text-xs rounded bg-gray-700 text-gray-300" onclick={() => confirmRemove = null}>Cancel</button>
+                      {:else}
+                        <button
+                          class="px-2 py-1 text-xs rounded bg-green-700 hover:bg-green-600 text-white disabled:opacity-50 shrink-0"
+                          onclick={() => restoreToLibrary(item)}
+                          disabled={syncing[item.model_id]}
+                        >
+                          {syncing[item.model_id] ? 'Restoring...' : 'Restore'}
+                        </button>
+                        <button
+                          class="px-2 py-1 text-xs rounded bg-gray-700 hover:bg-red-800 text-gray-400 hover:text-red-300 disabled:opacity-50 shrink-0"
+                          onclick={() => confirmRemove = item.model_id}
+                          disabled={syncing[item.model_id]}
+                        >
+                          Remove
+                        </button>
+                      {/if}
+                    </div>
+                  {:else if item.status === 'synced'}
                     <span class="text-xs text-gray-500">{item.synced_at ? new Date(item.synced_at).toLocaleDateString() : ''}</span>
                     {#if confirmRemove === item.model_id}
                       <div class="flex gap-1">

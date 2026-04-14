@@ -208,14 +208,23 @@ def get_sync_status(host_id: str) -> list[dict]:
     # Check for orphaned models on host (exist on host but not in library)
     for host_model in host_models:
         if host_model["library_model_id"] not in lib_by_id:
+            # Derive the model file's relative path from the sidecar path
+            sidecar_rel = host_model.get("sidecar_path", "")
+            current_fn = host_model.get("current_filename", "")
+            host_relative_path = ""
+            if sidecar_rel and current_fn:
+                sidecar_dir = str(Path(sidecar_rel).parent)
+                host_relative_path = f"{sidecar_dir}/{current_fn}" if sidecar_dir != "." else current_fn
+
             status_list.append({
                 "model_id": host_model["library_model_id"],
                 "model_name": host_model.get("library_name", "Unknown"),
-                "filename": host_model.get("current_filename", ""),
+                "filename": current_fn,
                 "category": "",
                 "size": host_model.get("file_size", 0),
                 "status": "orphaned",
                 "synced_at": host_model.get("synced_at"),
+                "host_relative_path": host_relative_path,
             })
 
     return status_list
