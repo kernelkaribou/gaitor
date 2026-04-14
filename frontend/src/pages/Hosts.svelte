@@ -23,6 +23,7 @@
   let scanKey = $state(0);
   let linking = $state({});
   let selectedModel = $state(null);
+  let selectedHostItem = $state(null);
 
   function usagePercent(total, free) {
     if (!total) return 0;
@@ -202,6 +203,7 @@
     try {
       const model = await api.getModel(item.model_id);
       selectedModel = model;
+      selectedHostItem = item;
     } catch {
       error = 'Could not load model details from the library.';
     }
@@ -559,9 +561,20 @@
     model={selectedModel}
     {categories}
     {formatSize}
-    onClose={() => selectedModel = null}
+    onClose={() => { selectedModel = null; selectedHostItem = null; }}
     onUpdated={handleModelUpdated}
-    onDelete={() => { selectedModel = null; if (selectedHost) selectHost(selectedHost); }}
-    onSelectModel={(id) => { api.getModel(id).then(m => selectedModel = m).catch(() => { error = 'Could not load model details.'; }); }}
+    onDelete={() => { selectedModel = null; selectedHostItem = null; if (selectedHost) selectHost(selectedHost); }}
+    onSelectModel={(id) => { api.getModel(id).then(m => { selectedModel = m; selectedHostItem = syncStatus.find(s => s.model_id === id) || selectedHostItem; }).catch(() => { error = 'Could not load model details.'; }); }}
+    hostContext={selectedHostItem ? {
+      host_id: selectedHost.id,
+      host_name: selectedHost.name,
+      status: selectedHostItem.status,
+      synced_at: selectedHostItem.synced_at,
+      onRemove: async () => {
+        await removeModel(selectedHostItem.model_id);
+        selectedModel = null;
+        selectedHostItem = null;
+      },
+    } : undefined}
   />
 {/if}

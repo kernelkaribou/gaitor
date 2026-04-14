@@ -3,7 +3,7 @@
   import { isSafeUrl, formatHostName } from '../lib/utils.js';
   import { onMount, onDestroy } from 'svelte';
 
-  let { model, categories, formatSize, onClose, onUpdated, onDelete, onSelectModel } = $props();
+  let { model, categories, formatSize, onClose, onUpdated, onDelete, onSelectModel, hostContext } = $props();
 
   function handleKeydown(e) {
     if (e.key === 'Escape') onClose();
@@ -26,7 +26,7 @@
     model.id;
     editing = false;
     error = null;
-    loadHostStatuses();
+    if (!hostContext) loadHostStatuses();
     loadGroup();
   });
 
@@ -337,15 +337,17 @@
           <div class="w-full flex items-center justify-center bg-gray-900 rounded-lg border border-gray-700" style="max-height: 400px;">
             <img src={thumbUrl} alt={model.name} class="max-w-full max-h-[400px] object-contain rounded-lg" />
           </div>
-          <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">
-            <label class="px-3 py-1.5 text-xs rounded bg-gray-700 hover:bg-gray-600 text-gray-200 cursor-pointer">
-              Change
-              <input type="file" accept="image/*" onchange={handleThumbnailUpload} class="hidden" />
-            </label>
-            <button class="px-3 py-1.5 text-xs rounded bg-red-900/50 hover:bg-red-800 text-red-300" onclick={handleThumbnailRemove}>Remove</button>
-          </div>
+          {#if !hostContext}
+            <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">
+              <label class="px-3 py-1.5 text-xs rounded bg-gray-700 hover:bg-gray-600 text-gray-200 cursor-pointer">
+                Change
+                <input type="file" accept="image/*" onchange={handleThumbnailUpload} class="hidden" />
+              </label>
+              <button class="px-3 py-1.5 text-xs rounded bg-red-900/50 hover:bg-red-800 text-red-300" onclick={handleThumbnailRemove}>Remove</button>
+            </div>
+          {/if}
         </div>
-      {:else}
+      {:else if !hostContext}
         <label class="block w-full h-24 border-2 border-dashed border-gray-600 rounded-lg flex items-center justify-center text-gray-500 text-sm hover:border-green-600/50 hover:text-gray-400 cursor-pointer transition-colors">
           {uploadingThumb ? 'Uploading...' : 'Click to add thumbnail'}
           <input type="file" accept="image/*" onchange={handleThumbnailUpload} class="hidden" disabled={uploadingThumb} />
@@ -353,7 +355,7 @@
       {/if}
     </div>
 
-    {#if editing}
+    {#if editing && !hostContext}
       <!-- Unified Edit Form -->
       <div class="space-y-4">
         <div>
@@ -483,7 +485,9 @@
           {:else}
             <p class="text-gray-500 text-sm mt-0.5">
               Not computed
-              <button class="ml-2 text-green-400 underline text-xs" onclick={handleHash}>Compute now</button>
+              {#if !hostContext}
+                <button class="ml-2 text-green-400 underline text-xs" onclick={handleHash}>Compute now</button>
+              {/if}
             </p>
           {/if}
         </div>
@@ -518,62 +522,88 @@
           <p class="text-gray-500 text-xs mt-0.5 font-mono">{model.relative_path}</p>
         </div>
 
-        <!-- Hosts -->
-        <div class="border-t border-gray-700 pt-4">
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-xs text-gray-500 uppercase tracking-wider">Hosts</span>
-            {#if !loadingHosts}
-              <button class="text-xs text-gray-600 hover:text-gray-400" onclick={loadHostStatuses}>Refresh</button>
-            {/if}
+        {#if hostContext}
+          <!-- Host context: show status on this host -->
+          <div class="border-t border-gray-700 pt-4">
+            <span class="text-xs text-gray-500 uppercase tracking-wider">Host Status</span>
+            <div class="flex items-center justify-between bg-gray-900 rounded px-3 py-2 border border-gray-700 mt-2">
+              <div class="min-w-0">
+                <p class="text-sm text-gray-200 font-medium truncate">{formatHostName(hostContext.host_name)}</p>
+                {#if hostContext.synced_at}
+                  <p class="text-xs text-gray-600">Synced {new Date(hostContext.synced_at).toLocaleDateString()}</p>
+                {/if}
+              </div>
+              <span class="text-xs px-2 py-0.5 rounded border {
+                hostContext.status === 'synced' ? 'bg-green-900/30 text-green-400 border-green-800' :
+                hostContext.status === 'outdated' ? 'bg-yellow-900/30 text-yellow-400 border-yellow-800' :
+                hostContext.status === 'rename_pending' ? 'bg-blue-900/30 text-blue-400 border-blue-800' :
+                'bg-gray-700 text-gray-400 border-gray-600'
+              }">
+                {hostContext.status === 'synced' ? 'Synced' :
+                 hostContext.status === 'outdated' ? 'Outdated' :
+                 hostContext.status === 'rename_pending' ? 'Rename pending' :
+                 hostContext.status}
+              </span>
+            </div>
           </div>
-          {#if loadingHosts}
-            <p class="text-xs text-gray-500">Loading...</p>
-          {:else if hostStatuses.length === 0}
-            <p class="text-xs text-gray-600 italic">No hosts configured</p>
-          {:else}
-            <div class="space-y-2">
-              {#each hostStatuses as hs (hs.host_id)}
-                <div class="flex items-center justify-between bg-gray-900 rounded px-3 py-2 border border-gray-700">
-                  <div class="min-w-0">
-                    <p class="text-sm text-gray-200 font-medium truncate">{formatHostName(hs.host_name)}</p>
-                    {#if hs.disk_free}
-                      <p class="text-xs text-gray-600">{formatSize(hs.disk_free)} free</p>
+        {:else}
+          <!-- Hosts -->
+          <div class="border-t border-gray-700 pt-4">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs text-gray-500 uppercase tracking-wider">Hosts</span>
+              {#if !loadingHosts}
+                <button class="text-xs text-gray-600 hover:text-gray-400" onclick={loadHostStatuses}>Refresh</button>
+              {/if}
+            </div>
+            {#if loadingHosts}
+              <p class="text-xs text-gray-500">Loading...</p>
+            {:else if hostStatuses.length === 0}
+              <p class="text-xs text-gray-600 italic">No hosts configured</p>
+            {:else}
+              <div class="space-y-2">
+                {#each hostStatuses as hs (hs.host_id)}
+                  <div class="flex items-center justify-between bg-gray-900 rounded px-3 py-2 border border-gray-700">
+                    <div class="min-w-0">
+                      <p class="text-sm text-gray-200 font-medium truncate">{formatHostName(hs.host_name)}</p>
+                      {#if hs.disk_free}
+                        <p class="text-xs text-gray-600">{formatSize(hs.disk_free)} free</p>
+                      {/if}
+                    </div>
+                    {#if hs.status === 'synced'}
+                      <span class="text-xs px-2 py-0.5 rounded bg-green-900/30 text-green-400 border border-green-800">Synced</span>
+                    {:else if hs.status === 'rename_pending'}
+                      <span class="text-xs px-2 py-0.5 rounded bg-blue-900/30 text-blue-400 border border-blue-800">Rename pending</span>
+                    {:else if hs.status === 'outdated'}
+                      <button
+                        class="text-xs px-2.5 py-1 rounded bg-yellow-700 hover:bg-yellow-600 text-white disabled:opacity-50"
+                        onclick={() => syncToHost(hs.host_id)}
+                        disabled={syncingTo[hs.host_id]}
+                      >
+                        {syncingTo[hs.host_id] ? 'Syncing...' : 'Update'}
+                      </button>
+                    {:else if hs.status === 'error'}
+                      <span class="text-xs text-red-500">Unavailable</span>
+                    {:else}
+                      <button
+                        class="text-xs px-2.5 py-1 rounded bg-green-700 hover:bg-green-600 text-white disabled:opacity-50"
+                        onclick={() => syncToHost(hs.host_id)}
+                        disabled={syncingTo[hs.host_id]}
+                      >
+                        {syncingTo[hs.host_id] ? 'Syncing...' : 'Sync'}
+                      </button>
                     {/if}
                   </div>
-                  {#if hs.status === 'synced'}
-                    <span class="text-xs px-2 py-0.5 rounded bg-green-900/30 text-green-400 border border-green-800">Synced</span>
-                  {:else if hs.status === 'rename_pending'}
-                    <span class="text-xs px-2 py-0.5 rounded bg-blue-900/30 text-blue-400 border border-blue-800">Rename pending</span>
-                  {:else if hs.status === 'outdated'}
-                    <button
-                      class="text-xs px-2.5 py-1 rounded bg-yellow-700 hover:bg-yellow-600 text-white disabled:opacity-50"
-                      onclick={() => syncToHost(hs.host_id)}
-                      disabled={syncingTo[hs.host_id]}
-                    >
-                      {syncingTo[hs.host_id] ? 'Syncing...' : 'Update'}
-                    </button>
-                  {:else if hs.status === 'error'}
-                    <span class="text-xs text-red-500">Unavailable</span>
-                  {:else}
-                    <button
-                      class="text-xs px-2.5 py-1 rounded bg-green-700 hover:bg-green-600 text-white disabled:opacity-50"
-                      onclick={() => syncToHost(hs.host_id)}
-                      disabled={syncingTo[hs.host_id]}
-                    >
-                      {syncingTo[hs.host_id] ? 'Syncing...' : 'Sync'}
-                    </button>
-                  {/if}
-                </div>
-              {/each}
-            </div>
-          {/if}
-        </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        {/if}
 
         <!-- Group -->
         <div class="border-t border-gray-700 pt-4">
           <div class="flex items-center justify-between mb-2">
             <span class="text-xs text-gray-500 uppercase tracking-wider">Group</span>
-            {#if !showGroupPicker}
+            {#if !hostContext && !showGroupPicker}
               <button class="text-xs text-gray-600 hover:text-gray-400" onclick={openGroupPicker}>
                 {groupMembers.length > 0 ? 'Add' : 'Create Group'}
               </button>
@@ -601,11 +631,11 @@
                 </button>
               {/each}
             </div>
-            {#if groupId}
+            {#if groupId && !hostContext}
               <button class="text-xs text-red-400 hover:text-red-300" onclick={removeFromGroup}>Leave group</button>
             {/if}
           {/if}
-          {#if showGroupPicker}
+          {#if showGroupPicker && !hostContext}
             <div class="mt-2 bg-gray-900 border border-gray-700 rounded-lg p-3">
               <input
                 type="text"
@@ -637,16 +667,23 @@
 
         <!-- Actions -->
         <div class="border-t border-gray-700 pt-4 flex flex-wrap gap-2">
-          <button class="px-3 py-1.5 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={startEditing}>Edit</button>
-          <a
-            href={api.getDownloadUrl(model.id)}
-            download
-            class="px-3 py-1.5 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200 inline-block"
-          >Download</a>
-          <button
-            class="px-3 py-1.5 text-sm rounded bg-red-900/50 hover:bg-red-800 text-red-300 ml-auto"
-            onclick={() => onDelete(model)}
-          >Delete</button>
+          {#if hostContext}
+            <button
+              class="px-3 py-1.5 text-sm rounded bg-red-900/50 hover:bg-red-800 text-red-300 ml-auto"
+              onclick={() => hostContext.onRemove?.()}
+            >Remove from Host</button>
+          {:else}
+            <button class="px-3 py-1.5 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={startEditing}>Edit</button>
+            <a
+              href={api.getDownloadUrl(model.id)}
+              download
+              class="px-3 py-1.5 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200 inline-block"
+            >Download</a>
+            <button
+              class="px-3 py-1.5 text-sm rounded bg-red-900/50 hover:bg-red-800 text-red-300 ml-auto"
+              onclick={() => onDelete(model)}
+            >Delete</button>
+          {/if}
         </div>
       </div>
     {/if}
