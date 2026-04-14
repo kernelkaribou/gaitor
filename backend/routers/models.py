@@ -37,6 +37,7 @@ from ..services.metadata import (
     rebuild_index,
 )
 from ..schemas.model import ModelHistoryEntry
+from ..services.sync import get_model_host_status
 from ..utils import validate_model_id, safe_resolve
 from datetime import datetime
 
@@ -140,6 +141,17 @@ async def get_model(model_id: str):
     if not model:
         raise HTTPException(status_code=404, detail="Model not found")
     return model.model_dump()
+
+
+@router.get("/{model_id}/hosts")
+async def get_model_hosts(model_id: str):
+    """Get sync status of a model across all hosts."""
+    try:
+        model_id = validate_model_id(model_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid model ID format")
+    status = await asyncio.to_thread(get_model_host_status, model_id)
+    return {"hosts": status}
 
 
 @router.post("/catalog")

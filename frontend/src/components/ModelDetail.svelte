@@ -8,8 +8,18 @@
   function handleKeydown(e) {
     if (e.key === 'Escape') onClose();
   }
-  onMount(() => document.addEventListener('keydown', handleKeydown));
-  onDestroy(() => document.removeEventListener('keydown', handleKeydown));
+  function handleTaskComplete() {
+    loadHostStatuses();
+  }
+  onMount(() => {
+    document.addEventListener('keydown', handleKeydown);
+    window.addEventListener('gaitor:task-complete', handleTaskComplete);
+    loadHostStatuses();
+  });
+  onDestroy(() => {
+    document.removeEventListener('keydown', handleKeydown);
+    window.removeEventListener('gaitor:task-complete', handleTaskComplete);
+  });
 
   let editing = $state(false);
   let saving = $state(false);
@@ -54,12 +64,21 @@
   let thumbUrl = $derived(model.thumbnail ? api.getThumbnailUrl(model.id) + '?t=' + Date.now() : null);
   let uploadingThumb = $state(false);
 
-  // Sync to host
-  let showSyncPicker = $state(false);
-  let hosts = $state([]);
+  // Host sync status
+  let hostStatuses = $state([]);
   let syncingTo = $state({});
   let loadingHosts = $state(false);
-  let confirmSyncHost = $state(null);
+
+  async function loadHostStatuses() {
+    loadingHosts = true;
+    try {
+      const data = await api.getModelHosts(model.id);
+      hostStatuses = data.hosts || [];
+    } catch (err) {
+      error = err.message;
+    }
+    loadingHosts = false;
+  }
 
   function getModelSubfolder() {
     const parts = model.relative_path.split('/');
@@ -194,25 +213,13 @@
     }
   }
 
-  async function openSyncPicker() {
-    showSyncPicker = true;
-    loadingHosts = true;
-    confirmSyncHost = null;
-    try {
-      const data = await api.listHosts();
-      hosts = data.hosts || [];
-    } catch (err) {
-      error = err.message;
-    }
-    loadingHosts = false;
-  }
-
   async function syncToHost(hostId) {
     syncingTo = { ...syncingTo, [hostId]: true };
-    confirmSyncHost = null;
     error = null;
     try {
       await api.syncModelToHost(hostId, model.id);
+      // Refresh host statuses after sync starts (will update when task completes)
+      await loadHostStatuses();
     } catch (err) {
       error = err.message;
     }
@@ -388,52 +395,6 @@
           <button class="px-4 py-2 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={() => editing = false}>Cancel</button>
         </div>
       </div>
-    {:else if showSyncPicker}
-      <!-- Sync to host picker -->
-      <div class="space-y-4">
-        <div class="flex items-center justify-between">
-          <h3 class="text-sm font-medium text-gray-300">Sync to Host</h3>
-          <button class="text-xs text-gray-500 hover:text-gray-300" onclick={() => showSyncPicker = false}>Back</button>
-        </div>
-        {#if loadingHosts}
-          <p class="text-sm text-gray-500">Loading hosts...</p>
-        {:else if hosts.length === 0}
-          <p class="text-sm text-gray-500">No hosts configured. Mount volumes under /hosts/ in Docker.</p>
-        {:else}
-          <div class="space-y-2">
-            {#each hosts as host}
-              <div class="flex items-center justify-between bg-gray-900 rounded-lg px-4 py-3 border border-gray-700">
-                <div>
-                  <p class="text-sm text-gray-200 font-medium">{host.name}</p>
-                  {#if host.disk_free}
-                    <p class="text-xs text-gray-500">{formatSize(host.disk_free)} free</p>
-                  {/if}
-                </div>
-                {#if confirmSyncHost === host.id}
-                  <div class="flex gap-1">
-                    <button
-                      class="px-2 py-1 text-xs rounded bg-green-700 hover:bg-green-600 text-white disabled:opacity-50"
-                      onclick={() => syncToHost(host.id)}
-                      disabled={syncingTo[host.id]}
-                    >
-                      {syncingTo[host.id] ? 'Syncing...' : 'Confirm'}
-                    </button>
-                    <button class="px-2 py-1 text-xs rounded bg-gray-700 text-gray-300" onclick={() => confirmSyncHost = null}>No</button>
-                  </div>
-                {:else}
-                  <button
-                    class="px-3 py-1.5 text-xs rounded bg-green-700 hover:bg-green-600 text-white disabled:opacity-50"
-                    onclick={() => confirmSyncHost = host.id}
-                    disabled={syncingTo[host.id]}
-                  >
-                    Sync
-                  </button>
-                {/if}
-              </div>
-            {/each}
-          </div>
-        {/if}
-      </div>
     {:else}
       <!-- View mode -->
       <div class="space-y-4">
@@ -534,10 +495,60 @@
           </div>
         {/if}
 
+        <!-- Hosts -->
+        <div class="border-t border-gray-700 pt-4">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs text-gray-500 uppercase tracking-wider">Hosts</span>
+            {#if !loadingHosts}
+              <button class="text-xs text-gray-600 hover:text-gray-400" onclick={loadHostStatuses}>Refresh</button>
+            {/if}
+          </div>
+          {#if loadingHosts}
+            <p class="text-xs text-gray-500">Loading...</p>
+          {:else if hostStatuses.length === 0}
+            <p class="text-xs text-gray-600 italic">No hosts configured</p>
+          {:else}
+            <div class="space-y-2">
+              {#each hostStatuses as hs (hs.host_id)}
+                <div class="flex items-center justify-between bg-gray-900 rounded px-3 py-2 border border-gray-700">
+                  <div class="min-w-0">
+                    <p class="text-sm text-gray-200 font-medium truncate">{hs.host_name}</p>
+                    {#if hs.disk_free}
+                      <p class="text-xs text-gray-600">{formatSize(hs.disk_free)} free</p>
+                    {/if}
+                  </div>
+                  {#if hs.status === 'synced'}
+                    <span class="text-xs px-2 py-0.5 rounded bg-green-900/30 text-green-400 border border-green-800">Synced</span>
+                  {:else if hs.status === 'rename_pending'}
+                    <span class="text-xs px-2 py-0.5 rounded bg-blue-900/30 text-blue-400 border border-blue-800">Rename pending</span>
+                  {:else if hs.status === 'outdated'}
+                    <button
+                      class="text-xs px-2.5 py-1 rounded bg-yellow-700 hover:bg-yellow-600 text-white disabled:opacity-50"
+                      onclick={() => syncToHost(hs.host_id)}
+                      disabled={syncingTo[hs.host_id]}
+                    >
+                      {syncingTo[hs.host_id] ? 'Syncing...' : 'Update'}
+                    </button>
+                  {:else if hs.status === 'error'}
+                    <span class="text-xs text-red-500">Unavailable</span>
+                  {:else}
+                    <button
+                      class="text-xs px-2.5 py-1 rounded bg-green-700 hover:bg-green-600 text-white disabled:opacity-50"
+                      onclick={() => syncToHost(hs.host_id)}
+                      disabled={syncingTo[hs.host_id]}
+                    >
+                      {syncingTo[hs.host_id] ? 'Syncing...' : 'Sync'}
+                    </button>
+                  {/if}
+                </div>
+              {/each}
+            </div>
+          {/if}
+        </div>
+
         <!-- Actions -->
         <div class="border-t border-gray-700 pt-4 flex flex-wrap gap-2">
           <button class="px-3 py-1.5 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={startEditing}>Edit</button>
-          <button class="px-3 py-1.5 text-sm rounded bg-green-700 hover:bg-green-600 text-white" onclick={openSyncPicker}>Sync to Host</button>
           <a
             href={api.getDownloadUrl(model.id)}
             download

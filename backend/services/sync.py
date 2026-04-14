@@ -15,6 +15,7 @@ from .. import config
 from ..utils import get_now, to_iso, safe_resolve, validate_host_id, sanitize_filename
 from ..schemas.model import ModelMetadata, ModelSource, SyncMetadata, ModelHistoryEntry
 from .metadata import load_model, save_model, rebuild_index, load_all_models, load_categories
+from .library import cleanup_empty_parents
 
 logger = logging.getLogger(__name__)
 
@@ -173,17 +174,19 @@ def get_sync_status(host_id: str) -> list[dict]:
     # Check library models against host
     for lib_model in library_models:
         host_model = host_by_lib_id.get(lib_model.id)
+        base_fields = {
+            "model_id": lib_model.id,
+            "model_name": lib_model.name,
+            "filename": lib_model.filename,
+            "category": lib_model.category,
+            "size": lib_model.size,
+            "thumbnail": lib_model.thumbnail,
+            "hash": lib_model.hash,
+            "base_model": lib_model.base_model,
+        }
         if not host_model:
-            status_list.append({
-                "model_id": lib_model.id,
-                "model_name": lib_model.name,
-                "filename": lib_model.filename,
-                "category": lib_model.category,
-                "size": lib_model.size,
-                "status": "not_synced",
-            })
+            status_list.append({**base_fields, "status": "not_synced"})
         else:
-            # Check if hashes match (outdated if different)
             lib_hash = lib_model.hash.get("sha256") if lib_model.hash else None
             host_hash_raw = host_model.get("hash") or ""
             host_hash = host_hash_raw.replace("sha256:", "")
@@ -196,11 +199,7 @@ def get_sync_status(host_id: str) -> list[dict]:
                 sync_status = "synced"
 
             status_list.append({
-                "model_id": lib_model.id,
-                "model_name": lib_model.name,
-                "filename": lib_model.filename,
-                "category": lib_model.category,
-                "size": lib_model.size,
+                **base_fields,
                 "status": sync_status,
                 "synced_at": host_model.get("synced_at"),
                 "host_filename": host_model.get("current_filename"),
@@ -220,6 +219,64 @@ def get_sync_status(host_id: str) -> list[dict]:
             })
 
     return status_list
+
+
+def get_model_host_status(model_id: str) -> list[dict]:
+    """Get sync status of a single model across all hosts."""
+    hosts = list_hosts()
+    model = load_model(model_id)
+    if not model:
+        return []
+
+    result = []
+    for host in hosts:
+        host_id = host["id"]
+        try:
+            host_models = get_host_models(host_id)
+        except (ValueError, OSError):
+            result.append({
+                "host_id": host_id,
+                "host_name": host["name"],
+                "status": "error",
+                "disk_free": host.get("disk_free", 0),
+            })
+            continue
+
+        host_model = None
+        for hm in host_models:
+            if hm.get("library_model_id") == model_id:
+                host_model = hm
+                break
+
+        if not host_model:
+            result.append({
+                "host_id": host_id,
+                "host_name": host["name"],
+                "status": "not_synced",
+                "disk_free": host.get("disk_free", 0),
+            })
+        else:
+            lib_hash = model.hash.get("sha256") if model.hash else None
+            host_hash_raw = host_model.get("hash") or ""
+            host_hash = host_hash_raw.replace("sha256:", "")
+
+            if model.filename != host_model.get("current_filename"):
+                status = "rename_pending"
+            elif lib_hash and host_hash and lib_hash != host_hash:
+                status = "outdated"
+            else:
+                status = "synced"
+
+            result.append({
+                "host_id": host_id,
+                "host_name": host["name"],
+                "status": status,
+                "synced_at": host_model.get("synced_at"),
+                "host_filename": host_model.get("current_filename"),
+                "disk_free": host.get("disk_free", 0),
+            })
+
+    return result
 
 
 def sync_model_to_host(
@@ -329,6 +386,8 @@ def remove_from_host(model_id: str, host_id: str) -> dict:
                         result["file_deleted"] = True
                     sidecar_path.unlink()
                     result["sidecar_deleted"] = True
+                    # Clean up empty subfolders (but not the host root or category root)
+                    cleanup_empty_parents(model_file, host_path)
                     logger.info(f"Removed {data.get('library_name', model_id)} from {host_id}")
                     return result
             except OSError:

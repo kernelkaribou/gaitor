@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { api } from '../lib/api.js';
   import { formatSize } from '../lib/utils.js';
   import ModelCard from '../components/ModelCard.svelte';
@@ -16,10 +16,7 @@
   let error = $state(null);
   let search = $state('');
   let activeCategory = $state(null);
-  let currentView = $state('grid');
   let confirmRemove = $state(null);
-  let selectedModels = $state(new Set());
-  let confirmBulkAction = $state(false);
   let scanning = $state(false);
   let scanResults = $state(null);
   let scanKey = $state(0);
@@ -28,6 +25,10 @@
   function usagePercent(total, free) {
     if (!total) return 0;
     return Math.round(((total - free) / total) * 100);
+  }
+
+  function handleTaskComplete() {
+    if (selectedHost) selectHost(selectedHost);
   }
 
   onMount(async () => {
@@ -42,6 +43,11 @@
       error = err.message;
     }
     loading = false;
+    window.addEventListener('gaitor:task-complete', handleTaskComplete);
+  });
+
+  onDestroy(() => {
+    window.removeEventListener('gaitor:task-complete', handleTaskComplete);
   });
 
   async function selectHost(host) {
@@ -91,62 +97,6 @@
       error = err.message;
     }
     syncing = { ...syncing, [modelId]: false };
-  }
-
-  async function bulkSync() {
-    const notSynced = syncStatus.filter(s => s.status === 'not_synced').map(s => s.model_id);
-    if (notSynced.length === 0) return;
-    for (const id of notSynced) {
-      await syncModel(id);
-    }
-  }
-
-  function toggleSelect(modelId) {
-    const next = new Set(selectedModels);
-    if (next.has(modelId)) next.delete(modelId);
-    else next.add(modelId);
-    selectedModels = next;
-  }
-
-  function toggleSelectAll() {
-    const visible = filteredItems.map(i => i.model_id);
-    if (visible.every(id => selectedModels.has(id))) {
-      selectedModels = new Set();
-    } else {
-      selectedModels = new Set(visible);
-    }
-  }
-
-  let selectionInfo = $derived.by(() => {
-    if (selectedModels.size === 0) return null;
-    const items = syncStatus.filter(s => selectedModels.has(s.model_id));
-    const hasUnsynced = items.some(s => s.status === 'not_synced' || s.status === 'outdated');
-    const allSynced = items.every(s => s.status === 'synced');
-    return { count: items.length, hasUnsynced, allSynced };
-  });
-
-  async function bulkSyncSelected() {
-    confirmBulkAction = false;
-    const ids = [...selectedModels].filter(id => {
-      const item = syncStatus.find(s => s.model_id === id);
-      return item && (item.status === 'not_synced' || item.status === 'outdated');
-    });
-    for (const id of ids) {
-      await syncModel(id);
-    }
-    selectedModels = new Set();
-  }
-
-  async function bulkRemoveSelected() {
-    confirmBulkAction = false;
-    const ids = [...selectedModels].filter(id => {
-      const item = syncStatus.find(s => s.model_id === id);
-      return item && (item.status === 'synced' || item.status === 'orphaned');
-    });
-    for (const id of ids) {
-      await removeModel(id);
-    }
-    selectedModels = new Set();
   }
 
   async function handleHostScan() {
@@ -237,8 +187,11 @@
     orphaned: 'Orphaned',
   };
 
+  // Only show models that are actually on the host (not "not_synced")
+  let hostModels = $derived(syncStatus.filter(s => s.status !== 'not_synced'));
+
   let filteredItems = $derived.by(() => {
-    let result = syncStatus;
+    let result = hostModels;
     if (activeCategory) {
       result = result.filter((s) => s.category === activeCategory);
     }
@@ -253,7 +206,7 @@
 
   let categoryCountMap = $derived.by(() => {
     const map = {};
-    for (const s of syncStatus) {
+    for (const s of hostModels) {
       if (s.category) {
         map[s.category] = (map[s.category] || 0) + 1;
       }
@@ -262,8 +215,8 @@
   });
 
   let syncSummary = $derived.by(() => {
-    const counts = { synced: 0, not_synced: 0, outdated: 0, rename_pending: 0, orphaned: 0 };
-    for (const s of syncStatus) {
+    const counts = { synced: 0, outdated: 0, rename_pending: 0, orphaned: 0 };
+    for (const s of hostModels) {
       if (counts[s.status] !== undefined) counts[s.status]++;
     }
     return counts;
@@ -363,9 +316,9 @@
         <div class="mt-6 pt-4 border-t border-gray-700">
           <h3 class="text-xs uppercase tracking-wider text-gray-500 mb-2 font-semibold">Summary</h3>
           <div class="space-y-1 text-xs">
-            <p class="text-gray-300">{syncStatus.length} total models</p>
+            <p class="text-gray-300">{hostModels.length} model{hostModels.length !== 1 ? 's' : ''} on host</p>
             {#if syncSummary.synced > 0}
-              <p class="text-green-400">{syncSummary.synced} synced to this host</p>
+              <p class="text-green-400">{syncSummary.synced} synced</p>
             {/if}
             {#if syncSummary.outdated > 0}
               <p class="text-yellow-400">{syncSummary.outdated} outdated</p>
@@ -401,7 +354,7 @@
           <div class="flex items-center gap-3">
             <h2 class="text-lg font-semibold text-gray-200">{selectedHost.name}</h2>
             <span class="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-400">
-              {syncStatus.length} models | {syncSummary.synced} synced
+              {hostModels.length} model{hostModels.length !== 1 ? 's' : ''} on host
             </span>
             <button
               class="px-3 py-1.5 text-sm rounded-md bg-yellow-600 hover:bg-yellow-500 text-white disabled:opacity-50"
@@ -426,60 +379,8 @@
                 >&#x2715;</button>
               {/if}
             </div>
-            <!-- View toggle -->
-            <div class="flex border border-gray-600 rounded-md overflow-hidden">
-              <button
-                class="px-2 py-1.5 text-sm transition-colors {currentView === 'grid' ? 'bg-gray-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}"
-                onclick={() => currentView = 'grid'}
-                title="Grid view"
-              >&#x25A6;</button>
-              <button
-                class="px-2 py-1.5 text-sm transition-colors {currentView === 'list' ? 'bg-gray-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}"
-                onclick={() => currentView = 'list'}
-                title="List view"
-              >&#x2630;</button>
-            </div>
-            <label class="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer select-none" title="Select all visible">
-              <input
-                type="checkbox"
-                checked={filteredItems.length > 0 && filteredItems.every(i => selectedModels.has(i.model_id))}
-                onchange={toggleSelectAll}
-                class="rounded"
-              />
-              All
-            </label>
           </div>
         </div>
-
-        <!-- Bulk action bar -->
-        {#if selectionInfo}
-          <div class="flex items-center gap-3 mb-4 bg-gray-800 border border-gray-600 rounded-lg px-4 py-2">
-            <span class="text-sm text-gray-300">{selectionInfo.count} selected</span>
-            {#if confirmBulkAction}
-              <span class="text-sm text-yellow-300">
-                {selectionInfo.hasUnsynced ? `Sync ${selectionInfo.count} models to host?` : `Remove ${selectionInfo.count} models from host?`}
-              </span>
-              <button
-                class="px-3 py-1 text-xs rounded {selectionInfo.hasUnsynced ? 'bg-green-600 hover:bg-green-500' : 'bg-red-700 hover:bg-red-600'} text-white"
-                onclick={() => selectionInfo.hasUnsynced ? bulkSyncSelected() : bulkRemoveSelected()}
-              >Yes</button>
-              <button class="px-3 py-1 text-xs rounded bg-gray-700 text-gray-300" onclick={() => confirmBulkAction = false}>No</button>
-            {:else}
-              {#if selectionInfo.hasUnsynced}
-                <button
-                  class="px-3 py-1 text-xs rounded bg-green-600 hover:bg-green-500 text-white"
-                  onclick={() => confirmBulkAction = true}
-                >Sync Selected</button>
-              {:else if selectionInfo.allSynced}
-                <button
-                  class="px-3 py-1 text-xs rounded bg-red-900/50 hover:bg-red-800 text-red-300"
-                  onclick={() => confirmBulkAction = true}
-                >Remove Selected</button>
-              {/if}
-            {/if}
-            <button class="ml-auto text-xs text-gray-500 hover:text-gray-300" onclick={() => { selectedModels = new Set(); confirmBulkAction = false; }}>Clear</button>
-          </div>
-        {/if}
 
         <!-- Host scan results -->
         {#if scanResults && scanResults.count > 0}
@@ -506,141 +407,80 @@
 
         {#if !(scanResults && scanResults.count > 0)}
         {#if loading}
-          <div class="text-center py-10 text-gray-500">Loading sync status...</div>
+          <div class="text-center py-10 text-gray-500">Loading...</div>
         {:else if filteredItems.length > 0}
-          {#if currentView === 'grid'}
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {#each filteredItems as item (item.model_id)}
-                <div class="bg-gray-800 rounded-lg border transition-colors overflow-hidden {selectedModels.has(item.model_id) ? 'border-green-500' : 'border-gray-700 hover:border-green-600/50'}">
-                  <div class="p-4">
-                    <div class="flex items-start justify-between mb-2">
-                      <label class="flex items-center gap-2 min-w-0">
-                        <input type="checkbox" checked={selectedModels.has(item.model_id)} onchange={() => toggleSelect(item.model_id)} class="rounded shrink-0" />
-                        <h3 class="font-medium text-gray-100 truncate text-sm">{item.model_name}</h3>
-                      </label>
-                      <span class="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-300 shrink-0 ml-2">
-                        {item.category || 'other'}
-                      </span>
-                    </div>
-                    <p class="text-xs text-gray-500 truncate mb-2">{item.filename}</p>
-                    <!-- Status badge -->
-                    <div class="flex items-center justify-between mb-3">
-                      <span class="text-xs px-2 py-0.5 rounded border {statusColors[item.status] || 'bg-gray-700 text-gray-400 border-gray-600'}">
-                        {statusLabels[item.status] || item.status}
-                      </span>
-                      <span class="text-xs text-gray-500">{formatSize(item.size)}</span>
-                    </div>
-                    {#if item.status === 'rename_pending' && item.host_filename}
-                      <p class="text-xs text-blue-400 mb-2 truncate">On host: {item.host_filename}</p>
-                    {/if}
-                    <!-- Actions -->
-                    <div class="flex gap-1">
-                      {#if item.status === 'not_synced' || item.status === 'outdated'}
-                        <button
-                          class="flex-1 px-2 py-1.5 text-xs rounded bg-green-700 hover:bg-green-600 text-white disabled:opacity-50"
-                          onclick={() => syncModel(item.model_id)}
-                          disabled={syncing[item.model_id]}
-                        >
-                          {syncing[item.model_id] ? 'Syncing...' : 'Sync'}
-                        </button>
-                      {:else if item.status === 'rename_pending'}
-                        <button
-                          class="flex-1 px-2 py-1.5 text-xs rounded bg-blue-700 hover:bg-blue-600 text-white disabled:opacity-50"
-                          onclick={() => applyRename(item.model_id)}
-                          disabled={syncing[item.model_id]}
-                        >
-                          Apply Rename
-                        </button>
-                      {/if}
-                      {#if item.status === 'synced' || item.status === 'orphaned'}
-                        {#if confirmRemove === item.model_id}
-                          <div class="flex gap-1 flex-1">
-                            <span class="text-xs text-red-400 self-center mr-1">Remove from host?</span>
-                            <button class="flex-1 px-2 py-1 text-xs rounded bg-red-700 text-white" onclick={() => { confirmRemove = null; removeModel(item.model_id); }}>Yes</button>
-                            <button class="flex-1 px-2 py-1 text-xs rounded bg-gray-700 text-gray-300" onclick={() => confirmRemove = null}>No</button>
-                          </div>
-                        {:else}
-                          <button
-                            class="flex-1 px-2 py-1.5 text-xs rounded bg-gray-700 hover:bg-red-800 text-gray-400 hover:text-red-300 disabled:opacity-50"
-                            onclick={() => confirmRemove = item.model_id}
-                            disabled={syncing[item.model_id]}
-                          >
-                            Remove
-                          </button>
-                        {/if}
-                      {/if}
-                    </div>
-                  </div>
-                </div>
-              {/each}
-            </div>
-          {:else}
-            <!-- List view -->
-            <div class="bg-gray-800 rounded-lg border border-gray-700 divide-y divide-gray-700">
-              {#each filteredItems as item (item.model_id)}
-                <div class="px-4 py-3 flex items-center gap-4 {selectedModels.has(item.model_id) ? 'bg-green-900/10' : ''}">
-                  <input type="checkbox" checked={selectedModels.has(item.model_id)} onchange={() => toggleSelect(item.model_id)} class="rounded shrink-0" />
-                  <div class="flex-1 min-w-0">
-                    <span class="text-gray-100 font-medium text-sm">{item.model_name}</span>
-                    <span class="text-gray-600 text-xs ml-2">{item.filename}</span>
-                    {#if item.status === 'rename_pending' && item.host_filename}
-                      <span class="text-blue-400 text-xs ml-2">(on host: {item.host_filename})</span>
-                    {/if}
-                  </div>
-                  {#if item.category}
-                    <span class="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-400 shrink-0">{item.category}</span>
-                  {/if}
-                  <span class="text-xs shrink-0 w-20 text-right text-gray-500">{formatSize(item.size)}</span>
-                  <span class="text-xs shrink-0 px-2 py-0.5 rounded border {statusColors[item.status] || 'bg-gray-700 text-gray-400 border-gray-600'}">
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {#each filteredItems as item (item.model_id)}
+              <div class="relative">
+                <ModelCard
+                  model={{
+                    id: item.model_id,
+                    name: item.model_name,
+                    filename: item.filename,
+                    category: item.category || 'other',
+                    size: item.size,
+                    thumbnail: item.thumbnail || null,
+                    hash: item.hash || null,
+                    base_model: item.base_model || null,
+                  }}
+                  {formatSize}
+                  onSelect={() => {}}
+                />
+                <!-- Status overlay -->
+                <div class="absolute top-2 right-2 flex items-center gap-1">
+                  <span class="text-xs px-2 py-0.5 rounded border backdrop-blur-sm {statusColors[item.status] || 'bg-gray-700 text-gray-400 border-gray-600'}">
                     {statusLabels[item.status] || item.status}
                   </span>
-                  <div class="flex gap-1 shrink-0">
-                    {#if item.status === 'not_synced' || item.status === 'outdated'}
-                      <button
-                        class="px-2 py-1 text-xs rounded bg-green-700 hover:bg-green-600 text-white disabled:opacity-50"
-                        onclick={() => syncModel(item.model_id)}
-                        disabled={syncing[item.model_id]}
-                      >
-                        {syncing[item.model_id] ? '...' : 'Sync'}
-                      </button>
-                    {:else if item.status === 'rename_pending'}
-                      <button
-                        class="px-2 py-1 text-xs rounded bg-blue-700 hover:bg-blue-600 text-white disabled:opacity-50"
-                        onclick={() => applyRename(item.model_id)}
-                        disabled={syncing[item.model_id]}
-                      >
-                        Apply Rename
-                      </button>
-                    {:else if item.status === 'synced' || item.status === 'orphaned'}
-                      {#if confirmRemove === item.model_id}
-                        <div class="flex gap-1 items-center">
-                          <span class="text-xs text-red-400 mr-1">Remove from host?</span>
-                          <button class="px-2 py-1 text-xs rounded bg-red-700 text-white" onclick={() => { confirmRemove = null; removeModel(item.model_id); }}>Yes</button>
-                          <button class="px-2 py-1 text-xs rounded bg-gray-700 text-gray-300" onclick={() => confirmRemove = null}>No</button>
-                        </div>
-                      {:else}
-                        <button
-                          class="px-2 py-1 text-xs rounded bg-gray-700 hover:bg-red-800 text-gray-400 hover:text-red-300 disabled:opacity-50"
-                          onclick={() => confirmRemove = item.model_id}
-                          disabled={syncing[item.model_id]}
-                        >
-                          Remove
-                        </button>
-                      {/if}
-                    {/if}
-                  </div>
                 </div>
-              {/each}
-            </div>
-          {/if}
+                <!-- Action bar -->
+                <div class="absolute bottom-0 left-0 right-0 bg-gray-900/90 backdrop-blur-sm px-3 py-2 flex items-center justify-between rounded-b-lg">
+                  {#if item.status === 'rename_pending'}
+                    <span class="text-xs text-blue-400 truncate mr-2">Host: {item.host_filename}</span>
+                    <button
+                      class="px-2 py-1 text-xs rounded bg-blue-700 hover:bg-blue-600 text-white disabled:opacity-50 shrink-0"
+                      onclick={() => applyRename(item.model_id)}
+                      disabled={syncing[item.model_id]}
+                    >
+                      Apply Rename
+                    </button>
+                  {:else if item.status === 'outdated'}
+                    <span class="text-xs text-yellow-500">Hash mismatch</span>
+                    <button
+                      class="px-2 py-1 text-xs rounded bg-yellow-700 hover:bg-yellow-600 text-white disabled:opacity-50 shrink-0"
+                      onclick={() => syncModel(item.model_id)}
+                      disabled={syncing[item.model_id]}
+                    >
+                      {syncing[item.model_id] ? 'Syncing...' : 'Re-sync'}
+                    </button>
+                  {:else if item.status === 'synced' || item.status === 'orphaned'}
+                    <span class="text-xs text-gray-500">{item.synced_at ? new Date(item.synced_at).toLocaleDateString() : ''}</span>
+                    {#if confirmRemove === item.model_id}
+                      <div class="flex gap-1">
+                        <button class="px-2 py-1 text-xs rounded bg-red-700 text-white" onclick={() => { confirmRemove = null; removeModel(item.model_id); }}>Remove</button>
+                        <button class="px-2 py-1 text-xs rounded bg-gray-700 text-gray-300" onclick={() => confirmRemove = null}>Cancel</button>
+                      </div>
+                    {:else}
+                      <button
+                        class="px-2 py-1 text-xs rounded bg-gray-700 hover:bg-red-800 text-gray-400 hover:text-red-300 disabled:opacity-50 shrink-0"
+                        onclick={() => confirmRemove = item.model_id}
+                        disabled={syncing[item.model_id]}
+                      >
+                        Remove
+                      </button>
+                    {/if}
+                  {/if}
+                </div>
+              </div>
+            {/each}
+          </div>
         {:else}
           <div class="text-center py-20">
-            <h3 class="text-xl font-medium text-gray-300 mb-2">No models found</h3>
+            <h3 class="text-xl font-medium text-gray-300 mb-2">No models on this host</h3>
             <p class="text-gray-500 max-w-md mx-auto">
               {#if search || activeCategory}
-                No models match your current filters. Try clearing the search or selecting a different category.
+                No models match your current filters.
               {:else}
-                No models in the library. Add models to the library first, then sync them here.
+                Sync models from the Library to add them to this host. Open a model in the Library and use the Hosts section to sync.
               {/if}
             </p>
           </div>

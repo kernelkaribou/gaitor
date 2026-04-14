@@ -75,6 +75,8 @@ export const api = {
     request('/models/bulk/delete', { method: 'POST', body: JSON.stringify({ model_ids: modelIds, confirm_text: confirmText }) }),
   getDownloadUrl: (id) => `${BASE_URL}/models/${encodeURIComponent(id)}/download`,
   getThumbnailUrl: (id) => `${BASE_URL}/models/${encodeURIComponent(id)}/thumbnail`,
+  getModelHosts: (id) =>
+    request(`/models/${encodeURIComponent(id)}/hosts`),
 
   async uploadThumbnail(modelId, file) {
     const formData = new FormData();

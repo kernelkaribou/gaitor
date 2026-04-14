@@ -9,7 +9,7 @@
   <!-- Header -->
   <header class="bg-gray-800 border-b border-gray-700 px-6 py-3 flex items-center justify-between">
     <div class="flex items-center gap-3">
-      <img src={logoUrl} alt="gAItor logo" class="h-8 w-8 rounded-full" />
+      <img src={logoUrl} alt="gAItor logo" class="h-10 w-10 rounded-full" />
       <h1 class="text-xl font-bold text-green-400">gAItor</h1>
     </div>
     <nav class="flex items-center gap-4">

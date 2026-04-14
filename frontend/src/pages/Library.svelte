@@ -239,7 +239,8 @@
           (m.tags || []).some((t) => t.toLowerCase().includes(q))
       );
     }
-    return result;
+    // Sort by most recently updated first
+    return [...result].sort((a, b) => (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || ''));
   });
 
   // Group models by subfolder when viewing a specific category

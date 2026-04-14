@@ -10,6 +10,7 @@ from ..services.sync import (
     list_hosts,
     get_host_models,
     get_sync_status,
+    get_model_host_status,
     sync_model_to_host,
     remove_from_host,
     apply_rename_on_host,
