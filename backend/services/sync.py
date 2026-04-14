@@ -174,6 +174,21 @@ def get_host_models(host_id: str) -> list[dict]:
     return models
 
 
+def _host_relative_path(host_model: dict) -> str:
+    """Get the host-side relative path for a synced model.
+    Prefers the explicit library_relative_path from the sidecar (the path at sync time),
+    falls back to deriving from sidecar filesystem location for older sidecars."""
+    synced_path = host_model.get("library_relative_path")
+    if synced_path:
+        return synced_path
+    sidecar_rel = host_model.get("sidecar_path", "")
+    current_fn = host_model.get("current_filename", "")
+    if sidecar_rel and current_fn:
+        sidecar_dir = str(Path(sidecar_rel).parent)
+        return f"{sidecar_dir}/{current_fn}" if sidecar_dir != "." else current_fn
+    return ""
+
+
 def get_sync_status(host_id: str) -> list[dict]:
     """Compare library models with what's on a host to determine sync status."""
     host_models = get_host_models(host_id)
@@ -204,14 +219,8 @@ def get_sync_status(host_id: str) -> list[dict]:
             host_hash_raw = host_model.get("hash") or ""
             host_hash = host_hash_raw.replace("sha256:", "")
 
-            # Derive host-side relative path from sidecar location
-            sidecar_rel = host_model.get("sidecar_path", "")
+            host_rel = _host_relative_path(host_model)
             current_fn = host_model.get("current_filename", "")
-            if sidecar_rel and current_fn:
-                sidecar_dir = str(Path(sidecar_rel).parent)
-                host_rel = f"{sidecar_dir}/{current_fn}" if sidecar_dir != "." else current_fn
-            else:
-                host_rel = ""
 
             if lib_model.filename != current_fn:
                 sync_status = "rename_pending"
@@ -233,13 +242,8 @@ def get_sync_status(host_id: str) -> list[dict]:
     # Check for orphaned models on host (exist on host but not in library)
     for host_model in host_models:
         if host_model["library_model_id"] not in lib_by_id:
-            # Derive the model file's relative path from the sidecar path
-            sidecar_rel = host_model.get("sidecar_path", "")
             current_fn = host_model.get("current_filename", "")
-            host_relative_path = ""
-            if sidecar_rel and current_fn:
-                sidecar_dir = str(Path(sidecar_rel).parent)
-                host_relative_path = f"{sidecar_dir}/{current_fn}" if sidecar_dir != "." else current_fn
+            host_relative_path = _host_relative_path(host_model)
 
             status_list.append({
                 "model_id": host_model["library_model_id"],
@@ -294,13 +298,8 @@ def get_model_host_status(model_id: str) -> list[dict]:
             host_hash_raw = host_model.get("hash") or ""
             host_hash = host_hash_raw.replace("sha256:", "")
 
-            sidecar_rel = host_model.get("sidecar_path", "")
+            host_rel = _host_relative_path(host_model)
             current_fn = host_model.get("current_filename", "")
-            if sidecar_rel and current_fn:
-                sidecar_dir = str(Path(sidecar_rel).parent)
-                host_rel = f"{sidecar_dir}/{current_fn}" if sidecar_dir != "." else current_fn
-            else:
-                host_rel = ""
 
             if model.filename != current_fn:
                 status = "rename_pending"
@@ -402,6 +401,7 @@ def sync_model_to_host(
     sidecar = SyncMetadata(
         library_model_id=model.id,
         library_name=model.name,
+        library_relative_path=model.relative_path,
         current_filename=model.filename,
         synced_at=now,
         hash=f"sha256:{model.hash['sha256']}" if model.hash and model.hash.get("sha256") else None,
@@ -502,6 +502,7 @@ def apply_rename_on_host(model_id: str, host_id: str) -> dict:
                 # Update sidecar
                 data["current_filename"] = new_filename
                 data["library_name"] = model.name
+                data["library_relative_path"] = model.relative_path
 
                 # Write updated sidecar with new name
                 sidecar_path.unlink()
@@ -683,6 +684,7 @@ def link_host_model(host_id: str, relative_path: str, library_model_id: str) -> 
     sidecar = SyncMetadata(
         library_model_id=model.id,
         library_name=model.name,
+        library_relative_path=model.relative_path,
         current_filename=host_file.name,
         synced_at=now,
         hash=f"sha256:{host_hash}",
@@ -777,6 +779,7 @@ def import_from_host(
     sidecar = SyncMetadata(
         library_model_id=model.id,
         library_name=model.name,
+        library_relative_path=model.relative_path,
         current_filename=src_file.name,
         synced_at=now,
     )
