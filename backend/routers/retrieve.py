@@ -33,6 +33,7 @@ class DownloadRequest(BaseModel):
     model_type: Optional[str] = None
     subfolder: Optional[str] = None
     base_model: Optional[str] = None
+    page_url: Optional[str] = None
 
 
 @router.get("/providers")
@@ -101,6 +102,7 @@ async def download_model_endpoint(req: DownloadRequest):
                 thumbnail_url=req.thumbnail_url,
                 subfolder=req.subfolder,
                 base_model=req.base_model,
+                page_url=req.page_url,
             )
             task_manager.complete_task(
                 task_id,

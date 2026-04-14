@@ -149,6 +149,7 @@ async def download_model(
     thumbnail_url: Optional[str] = None,
     subfolder: Optional[str] = None,
     base_model: Optional[str] = None,
+    page_url: Optional[str] = None,
 ) -> ModelMetadata:
     """Download a model file from an external URL into the library.
 
@@ -225,6 +226,9 @@ async def download_model(
 
     relative_path = str(dest_path.relative_to(config.LIBRARY_PATH))
 
+    # Use page_url (human-readable) for source, fall back to download url
+    source_url = page_url or url
+
     model = ModelMetadata(
         id=model_id,
         name=name or filename.rsplit(".", 1)[0],
@@ -237,7 +241,7 @@ async def download_model(
         base_model=base_model or None,
         thumbnail=thumb_rel,
         source=ModelSource(
-            url=url,
+            url=source_url,
             provider=provider or detect_provider(url) or "url",
             downloaded_at=now,
         ),
@@ -245,7 +249,7 @@ async def download_model(
             ModelHistoryEntry(
                 action="retrieved",
                 timestamp=now,
-                details={"source": url, "provider": provider or "url"},
+                details={"source": source_url, "provider": provider or "url"},
             )
         ],
         created_at=now,

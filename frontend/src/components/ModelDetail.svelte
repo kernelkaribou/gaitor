@@ -225,13 +225,27 @@
     }
   }
 
+  function sourceDomain(urlStr) {
+    try {
+      const h = new URL(urlStr).hostname.replace(/^www\./, '');
+      const parts = h.split('.');
+      if (parts.length > 1) {
+        const name = parts[parts.length - 2];
+        return name.charAt(0).toUpperCase() + name.slice(1);
+      }
+      return h;
+    } catch {
+      return urlStr;
+    }
+  }
+
   function formatHistoryEntry(entry) {
     const d = entry.details || {};
     switch (entry.action) {
       case 'added':
         if (d.method === 'upload') return 'Uploaded to library';
         if (d.method === 'catalog') return 'Cataloged from scan';
-        if (d.method === 'download') return `Downloaded from ${d.source || 'external source'}`;
+        if (d.method === 'download') return `Downloaded from ${d.source ? sourceDomain(d.source) : 'external source'}`;
         return 'Added to library';
       case 'renamed': {
         const parts = [];
@@ -448,12 +462,8 @@
           <span class="text-xs text-gray-500 uppercase tracking-wider">Source</span>
           {#if model.source?.url}
             <p class="text-sm mt-0.5">
-              {#if model.source.provider && model.source.provider !== 'manual'}
-                <span class="text-gray-400">{model.source.provider}</span>
-                <span class="text-gray-600 mx-1">-</span>
-              {/if}
               {#if isSafeUrl(model.source.url)}
-                <a href={model.source.url} target="_blank" rel="noopener noreferrer" class="text-green-400 hover:text-green-300 underline break-all">{model.source.url}</a>
+                <a href={model.source.url} target="_blank" rel="noopener noreferrer" class="text-green-400 hover:text-green-300 underline">{sourceDomain(model.source.url)}</a>
               {:else}
                 <span class="text-gray-300 break-all">{model.source.url}</span>
               {/if}

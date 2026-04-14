@@ -117,6 +117,7 @@
         thumbnail_url: retrieveThumbnailUrl || undefined,
         subfolder: retrieveSubfolder || undefined,
         base_model: retrieveBaseModel || undefined,
+        page_url: url || undefined,
       };
       await api.startDownload(params);
       addToast({ type: 'info', title: 'Download started', message: `${retrieveName || selectedFile.filename}` });
