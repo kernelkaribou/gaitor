@@ -417,7 +417,9 @@ def rename_model(model_id: str, new_name: str, rename_file: bool = True) -> Mode
 
 
 def delete_library_model(model_id: str, delete_file: bool = True) -> dict:
-    """Delete a model from the library. Returns details of what was deleted."""
+    """Delete a model from the library and cascade-remove from all hosts."""
+    from .sync import list_hosts, get_host_models, remove_from_host
+
     model = load_model(model_id)
     if not model:
         raise ValueError(f"Model not found: {model_id}")
@@ -428,7 +430,21 @@ def delete_library_model(model_id: str, delete_file: bool = True) -> dict:
         "filename": model.filename,
         "file_deleted": False,
         "metadata_deleted": False,
+        "hosts_cleaned": [],
+        "hosts_failed": [],
     }
+
+    # Cascade-remove from all hosts first
+    for host in list_hosts():
+        host_id = host["id"]
+        try:
+            host_models = get_host_models(host_id)
+            if any(hm.get("library_model_id") == model_id for hm in host_models):
+                remove_from_host(model_id, host_id)
+                result["hosts_cleaned"].append(host_id)
+        except Exception as e:
+            logger.warning(f"Failed to remove {model.name} from host {host_id}: {e}")
+            result["hosts_failed"].append(host_id)
 
     if delete_file:
         filepath = safe_resolve(config.LIBRARY_PATH, model.relative_path)

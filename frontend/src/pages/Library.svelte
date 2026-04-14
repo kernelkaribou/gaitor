@@ -730,7 +730,7 @@
 {#if deleteTarget}
   <ConfirmDialog
     title="Delete Model from Library"
-    message="This will permanently delete '{deleteTarget.name}' and its file from the library. This action cannot be undone."
+    message="This will permanently delete '{deleteTarget.name}' from the library and remove it from all synced hosts. This action cannot be undone."
     warningText="Type 'delete' to confirm:"
     confirmValue="delete"
     confirmLabel="Delete Forever"
@@ -743,7 +743,7 @@
 {#if showBulkDelete}
   <ConfirmDialog
     title="Bulk Delete from Library"
-    message="This will permanently delete {selectedIds.size} model(s) and their files from the library. This action cannot be undone."
+    message="This will permanently delete {selectedIds.size} model(s) from the library and remove them from all synced hosts. This action cannot be undone."
     warningText="Type 'delete' to confirm:"
     confirmValue="delete"
     confirmLabel="Delete All"
