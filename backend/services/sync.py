@@ -227,6 +227,7 @@ def get_sync_status(host_id: str) -> list[dict]:
                 "status": sync_status,
                 "synced_at": host_model.get("synced_at"),
                 "host_filename": current_fn,
+                "host_relative_path": host_rel,
             })
 
     # Check for orphaned models on host (exist on host but not in library)

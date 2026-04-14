@@ -449,8 +449,14 @@
       <div class="space-y-4">
         <div>
           <span class="text-xs text-gray-500 uppercase tracking-wider">Filename</span>
-          <p class="text-gray-300 text-sm mt-0.5 font-mono">{model.filename}</p>
+          <p class="text-gray-300 text-sm mt-0.5 font-mono">{hostContext?.host_filename || model.filename}</p>
         </div>
+        {#if hostContext?.host_relative_path}
+          <div>
+            <span class="text-xs text-gray-500 uppercase tracking-wider">Host Path</span>
+            <p class="text-gray-300 text-sm mt-0.5 font-mono">{hostContext.host_relative_path}</p>
+          </div>
+        {/if}
         <div class="flex gap-6">
           <div>
             <span class="text-xs text-gray-500 uppercase tracking-wider">Category</span>

@@ -621,6 +621,8 @@
       host_name: selectedHost.name,
       status: selectedHostItem.status,
       synced_at: selectedHostItem.synced_at,
+      host_filename: selectedHostItem.host_filename,
+      host_relative_path: selectedHostItem.host_relative_path,
       onRemove: async () => {
         await removeModel(selectedHostItem.model_id);
         selectedModel = null;
