@@ -563,29 +563,22 @@
                 {#each hostStatuses as hs (hs.host_id)}
                   <div class="flex items-center gap-2">
                     <button
-                      class="flex-1 flex items-center justify-between bg-gray-900 rounded px-3 py-2 border border-gray-700 {onNavigateHost ? 'hover:border-gray-500 hover:bg-gray-800/80 cursor-pointer' : ''} transition-colors"
+                      class="flex-1 flex items-center bg-gray-900 rounded px-3 py-2 border border-gray-700 {onNavigateHost ? 'hover:border-gray-500 hover:bg-gray-800/80 cursor-pointer' : ''} transition-colors"
                       onclick={() => { if (onNavigateHost) { onClose(); onNavigateHost(hs.host_id); } }}
                       disabled={!onNavigateHost}
                     >
                       <div class="min-w-0 text-left">
-                        <p class="text-sm text-gray-200 font-medium truncate {onNavigateHost ? 'group-hover:text-green-400' : ''}">{formatHostName(hs.host_name)}</p>
+                        <p class="text-sm text-gray-200 font-medium truncate">{formatHostName(hs.host_name)}</p>
                         {#if hs.disk_free}
                           <p class="text-xs text-gray-600">{formatSize(hs.disk_free)} free</p>
                         {/if}
                       </div>
-                      {#if hs.status === 'synced'}
-                        <span class="text-xs px-2 py-0.5 rounded bg-green-900/30 text-green-400 border border-green-800">Synced</span>
-                      {:else if hs.status === 'rename_pending'}
-                        <span class="text-xs px-2 py-0.5 rounded bg-blue-900/30 text-blue-400 border border-blue-800">Rename pending</span>
-                      {:else if hs.status === 'outdated'}
-                        <span class="text-xs px-2 py-0.5 rounded bg-yellow-900/30 text-yellow-400 border border-yellow-800">Out of sync</span>
-                      {:else if hs.status === 'error'}
-                        <span class="text-xs text-red-500">Unavailable</span>
-                      {:else}
-                        <span class="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-400 border border-gray-600">Not synced</span>
-                      {/if}
                     </button>
-                    {#if hs.status === 'outdated'}
+                    {#if hs.status === 'synced'}
+                      <span class="text-xs px-2.5 py-1 rounded bg-green-900/30 text-green-400 border border-green-800 shrink-0">Synced</span>
+                    {:else if hs.status === 'rename_pending'}
+                      <span class="text-xs px-2.5 py-1 rounded bg-blue-900/30 text-blue-400 border border-blue-800 shrink-0">Rename pending</span>
+                    {:else if hs.status === 'outdated'}
                       <button
                         class="text-xs px-2.5 py-1 rounded bg-yellow-700 hover:bg-yellow-600 text-white disabled:opacity-50 shrink-0"
                         onclick={() => syncToHost(hs.host_id)}
@@ -593,7 +586,9 @@
                       >
                         {syncingTo[hs.host_id] ? 'Syncing...' : 'Re-sync'}
                       </button>
-                    {:else if hs.status !== 'synced' && hs.status !== 'rename_pending' && hs.status !== 'error'}
+                    {:else if hs.status === 'error'}
+                      <span class="text-xs px-2.5 py-1 rounded text-red-500 shrink-0">Unavailable</span>
+                    {:else}
                       <button
                         class="text-xs px-2.5 py-1 rounded bg-green-700 hover:bg-green-600 text-white disabled:opacity-50 shrink-0"
                         onclick={() => syncToHost(hs.host_id)}
@@ -681,7 +676,7 @@
             <button
               class="px-3 py-1.5 text-sm rounded bg-red-900/50 hover:bg-red-800 text-red-300 ml-auto"
               onclick={() => hostContext.onRemove?.()}
-            >Remove from Host</button>
+            >Remove</button>
           {:else}
             <button class="px-3 py-1.5 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200" onclick={startEditing}>Edit</button>
             <a
