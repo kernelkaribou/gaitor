@@ -306,7 +306,8 @@ def sync_model_to_host(
     host_id: str,
     progress_callback: Optional[Callable] = None,
 ) -> dict:
-    """Copy a model from the library to a host with sidecar metadata."""
+    """Copy a model from the library to a host with sidecar metadata.
+    Cleans up any existing copy at a different path first to mirror the library structure."""
     validate_host_id(host_id)
     model = load_model(model_id)
     if not model:
@@ -327,6 +328,30 @@ def sync_model_to_host(
     host_model_dir.mkdir(parents=True, exist_ok=True)
 
     dest_file = host_model_dir / model.filename
+
+    # Clean up any previous copy at a different location before syncing
+    for root, dirs, files in os.walk(host_path):
+        for fname in files:
+            if not fname.endswith(SIDECAR_SUFFIX):
+                continue
+            sc_path = Path(root) / fname
+            sc_data = _load_sidecar(sc_path)
+            if sc_data is None or sc_data.get("library_model_id") != model_id:
+                continue
+            old_filename = sc_data.get("current_filename", "")
+            old_model_file = (Path(root) / old_filename).resolve()
+            if not old_model_file.is_relative_to(host_path.resolve()):
+                continue
+            # Skip if already at the target location
+            if old_model_file == dest_file.resolve():
+                continue
+            if old_model_file.exists():
+                old_model_file.unlink()
+                logger.info(f"Cleaned up old copy at {old_model_file.relative_to(host_path)}")
+            sc_path.unlink()
+            cleanup_empty_parents(old_model_file, host_path)
+            break
+
     total_size = src_path.stat().st_size
     copied_size = 0
 
