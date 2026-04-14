@@ -320,8 +320,13 @@
   <div class="p-6">
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
-      <h2 class="text-lg font-semibold text-gray-100">Model Details</h2>
-      <button class="text-gray-400 hover:text-gray-200 text-xl" onclick={onClose}>{'\u2715'}</button>
+      <div class="min-w-0 mr-4">
+        <h2 class="text-lg font-semibold text-gray-100 truncate">{model.name}</h2>
+        {#if hostContext}
+          <p class="text-xs text-gray-500 mt-0.5">on {formatHostName(hostContext.host_name)}</p>
+        {/if}
+      </div>
+      <button class="text-gray-400 hover:text-gray-200 text-xl shrink-0" onclick={onClose}>{'\u2715'}</button>
     </div>
 
     {#if error}
@@ -523,16 +528,18 @@
         </div>
 
         {#if hostContext}
-          <!-- Host context: show sync status only (host name is already known from the page) -->
+          <!-- Host context: sync status with badge outside the box -->
           <div class="border-t border-gray-700 pt-4">
             <span class="text-xs text-gray-500 uppercase tracking-wider">Sync Status</span>
-            <div class="flex items-center justify-between bg-gray-900 rounded px-3 py-2 border border-gray-700 mt-2">
-              {#if hostContext.synced_at}
-                <p class="text-xs text-gray-500">Synced {new Date(hostContext.synced_at).toLocaleDateString()}</p>
-              {:else}
-                <p class="text-xs text-gray-500">No sync date</p>
-              {/if}
-              <span class="text-xs px-2 py-0.5 rounded border {
+            <div class="flex items-center gap-2 mt-2">
+              <div class="flex-1 bg-gray-900 rounded px-3 py-2 border border-gray-700">
+                {#if hostContext.synced_at}
+                  <p class="text-xs text-gray-500">Synced {new Date(hostContext.synced_at).toLocaleDateString()}</p>
+                {:else}
+                  <p class="text-xs text-gray-500">Not yet synced</p>
+                {/if}
+              </div>
+              <span class="text-xs px-2.5 py-1 rounded border shrink-0 {
                 hostContext.status === 'synced' ? 'bg-green-900/30 text-green-400 border-green-800' :
                 hostContext.status === 'outdated' ? 'bg-yellow-900/30 text-yellow-400 border-yellow-800' :
                 hostContext.status === 'rename_pending' ? 'bg-blue-900/30 text-blue-400 border-blue-800' :
