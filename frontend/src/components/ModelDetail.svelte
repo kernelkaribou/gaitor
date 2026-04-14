@@ -58,7 +58,6 @@
   // Path autocomplete
   let knownSubfolders = $state([]);
   let showPathSuggestions = $state(false);
-  let pathInputFocused = $state(false);
 
   let filteredSuggestions = $derived(
     editSubfolder.trim()
@@ -385,8 +384,8 @@
           <label class="block text-sm text-gray-400 mb-1">Path</label>
           <input
             bind:value={editSubfolder}
-            onfocus={() => { pathInputFocused = true; showPathSuggestions = true; }}
-            onblur={() => setTimeout(() => { pathInputFocused = false; showPathSuggestions = false; }, 200)}
+            onfocus={() => { showPathSuggestions = true; }}
+            onblur={() => setTimeout(() => { showPathSuggestions = false; }, 200)}
             class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 font-mono focus:outline-none focus:border-green-500"
             placeholder="Leave empty for category root"
           />

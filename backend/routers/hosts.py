@@ -20,9 +20,18 @@ from ..services.sync import (
 )
 from ..services.metadata import load_model
 from ..services.tasks import task_manager
+from ..utils import validate_host_id as _validate_host_id
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _check_host_id(host_id: str) -> str:
+    """Validate host_id at router level, raise 400 on invalid."""
+    try:
+        return _validate_host_id(host_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid host ID")
 
 
 class SyncRequest(BaseModel):
@@ -72,6 +81,7 @@ async def list_hosts_endpoint():
 @router.get("/{host_id}/models")
 async def host_models(host_id: str):
     """List synced models on a host."""
+    host_id = _check_host_id(host_id)
     try:
         models = await asyncio.to_thread(get_host_models, host_id)
         return {"models": models, "count": len(models)}
@@ -82,6 +92,7 @@ async def host_models(host_id: str):
 @router.get("/{host_id}/status")
 async def host_sync_status(host_id: str):
     """Get sync status comparing library with a host."""
+    host_id = _check_host_id(host_id)
     try:
         status = await asyncio.to_thread(get_sync_status, host_id)
         return {"status": status, "count": len(status)}
@@ -92,6 +103,7 @@ async def host_sync_status(host_id: str):
 @router.post("/{host_id}/sync")
 async def sync_model(host_id: str, req: SyncRequest):
     """Sync a single model to a host with progress tracking."""
+    host_id = _check_host_id(host_id)
     model = load_model(req.model_id)
     if not model:
         raise HTTPException(status_code=404, detail="Model not found")
@@ -119,6 +131,7 @@ async def sync_model(host_id: str, req: SyncRequest):
 @router.post("/{host_id}/sync/bulk")
 async def bulk_sync(host_id: str, req: BulkSyncRequest):
     """Sync multiple models to a host with progress tracking."""
+    host_id = _check_host_id(host_id)
     task_id = task_manager.create_task("sync", f"Bulk sync {len(req.model_ids)} models to {host_id}")
 
     async def _do_bulk_sync():
@@ -149,6 +162,7 @@ async def bulk_sync(host_id: str, req: BulkSyncRequest):
 @router.post("/{host_id}/remove")
 async def remove_model(host_id: str, req: RemoveRequest):
     """Remove a synced model from a host."""
+    host_id = _check_host_id(host_id)
     try:
         result = await asyncio.to_thread(remove_from_host, req.model_id, host_id)
         return result
@@ -159,6 +173,7 @@ async def remove_model(host_id: str, req: RemoveRequest):
 @router.post("/{host_id}/apply-rename")
 async def apply_rename(host_id: str, req: SyncRequest):
     """Apply a pending library rename on a host."""
+    host_id = _check_host_id(host_id)
     try:
         result = await asyncio.to_thread(apply_rename_on_host, req.model_id, host_id)
         return result
@@ -169,6 +184,7 @@ async def apply_rename(host_id: str, req: SyncRequest):
 @router.post("/{host_id}/scan")
 async def scan_host_endpoint(host_id: str):
     """Scan a host for unmanaged model files and match against library."""
+    host_id = _check_host_id(host_id)
     try:
         result = await asyncio.to_thread(scan_host, host_id)
         return result
@@ -179,6 +195,7 @@ async def scan_host_endpoint(host_id: str):
 @router.post("/{host_id}/link")
 async def link_model_endpoint(host_id: str, req: LinkRequest):
     """Link an existing host file to a library model (hash verified)."""
+    host_id = _check_host_id(host_id)
     try:
         result = await asyncio.to_thread(
             link_host_model, host_id, req.relative_path, req.library_model_id
@@ -195,6 +212,7 @@ async def link_model_endpoint(host_id: str, req: LinkRequest):
 @router.post("/{host_id}/link/bulk")
 async def bulk_link_endpoint(host_id: str, req: BulkLinkRequest):
     """Link multiple existing host files to library models."""
+    host_id = _check_host_id(host_id)
     task_id = task_manager.create_task("link", f"Linking {len(req.links)} models on {host_id}")
 
     async def _do_bulk_link():
@@ -221,6 +239,7 @@ async def bulk_link_endpoint(host_id: str, req: BulkLinkRequest):
 @router.post("/{host_id}/import")
 async def import_model_endpoint(host_id: str, req: ImportRequest):
     """Import a model from a host into the library (reverse sync)."""
+    host_id = _check_host_id(host_id)
     task_id = task_manager.create_task("import", f"Importing {req.name} from {host_id}")
 
     async def _do_import():

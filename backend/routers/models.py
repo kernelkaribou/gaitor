@@ -38,8 +38,7 @@ from ..services.metadata import (
     rebuild_index,
 )
 from ..services.sync import get_model_host_status
-from ..utils import validate_model_id, safe_resolve
-from datetime import datetime
+from ..utils import validate_model_id, safe_resolve, to_iso, get_now
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -56,6 +55,10 @@ class CatalogRequest(BaseModel):
 
 class BulkCatalogRequest(BaseModel):
     models: list[CatalogRequest]
+
+    def model_post_init(self, __context):
+        if len(self.models) > 100:
+            raise ValueError("Maximum 100 models per bulk request")
 
 
 class UpdateModelRequest(BaseModel):
@@ -205,7 +208,7 @@ async def set_model_group(model_id: str, req: GroupRequest):
     if not group_id:
         group_id = str(uuid.uuid4())
 
-    now = datetime.now().isoformat()
+    now = to_iso(get_now())
     for mid in all_ids:
         try:
             mid = validate_model_id(mid)
@@ -237,7 +240,7 @@ async def remove_from_group(model_id: str):
         return {"removed": True}
 
     old_group_id = model.group_id
-    now = datetime.now().isoformat()
+    now = to_iso(get_now())
 
     model.group_id = None
     model.updated_at = now
@@ -475,7 +478,7 @@ async def move_model_endpoint(model_id: str, req: MoveRequest):
     if old_path != new_path:
         shutil.move(str(old_path), str(new_path))
         model.relative_path = str(new_path.relative_to(config.LIBRARY_PATH))
-        model.updated_at = datetime.now().isoformat()
+        model.updated_at = to_iso(get_now())
         save_model(model)
         rebuild_index()
         cleanup_empty_parents(old_path, config.LIBRARY_PATH)

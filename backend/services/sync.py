@@ -309,18 +309,24 @@ def sync_model_to_host(
     copied_size = 0
 
     # Copy with progress
-    with open(src_path, "rb") as src, open(str(dest_file) + ".syncing", "wb") as dst:
-        while True:
-            chunk = src.read(config.COPY_BUFFER_SIZE)
-            if not chunk:
-                break
-            dst.write(chunk)
-            copied_size += len(chunk)
-            if progress_callback:
-                progress_callback(copied_size, total_size)
+    temp_path = str(dest_file) + ".syncing"
+    try:
+        with open(src_path, "rb") as src, open(temp_path, "wb") as dst:
+            while True:
+                chunk = src.read(config.COPY_BUFFER_SIZE)
+                if not chunk:
+                    break
+                dst.write(chunk)
+                copied_size += len(chunk)
+                if progress_callback:
+                    progress_callback(copied_size, total_size)
+    except Exception:
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
+        raise
 
     # Atomic rename
-    os.replace(str(dest_file) + ".syncing", str(dest_file))
+    os.replace(temp_path, str(dest_file))
 
     # Write sidecar metadata
     now = to_iso(get_now())
@@ -651,7 +657,7 @@ def import_from_host(
     filename = sanitize_filename(src_file.stem, src_file.suffix)
 
     # Build library destination path
-    dest_dir = config.LIBRARY_PATH / category
+    dest_dir = safe_resolve(config.LIBRARY_PATH, category)
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest_file = dest_dir / filename
 
@@ -661,17 +667,23 @@ def import_from_host(
     # Copy with progress tracking
     total_size = src_file.stat().st_size
     copied_size = 0
-    with open(src_file, "rb") as src, open(str(dest_file) + ".importing", "wb") as dst:
-        while True:
-            chunk = src.read(config.COPY_BUFFER_SIZE)
-            if not chunk:
-                break
-            dst.write(chunk)
-            copied_size += len(chunk)
-            if progress_callback:
-                progress_callback(copied_size, total_size)
+    temp_path = str(dest_file) + ".importing"
+    try:
+        with open(src_file, "rb") as src, open(temp_path, "wb") as dst:
+            while True:
+                chunk = src.read(config.COPY_BUFFER_SIZE)
+                if not chunk:
+                    break
+                dst.write(chunk)
+                copied_size += len(chunk)
+                if progress_callback:
+                    progress_callback(copied_size, total_size)
+    except Exception:
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
+        raise
 
-    os.replace(str(dest_file) + ".importing", str(dest_file))
+    os.replace(temp_path, str(dest_file))
 
     # Create library metadata
     now = to_iso(get_now())

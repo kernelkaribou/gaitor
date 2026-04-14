@@ -12,8 +12,14 @@ fi
 
 # Create app user if it doesn't exist
 if ! id -u appuser > /dev/null 2>&1; then
-    groupadd -g "$PGID" appgroup
-    useradd -u "$PUID" -g "$PGID" -d /app -s /bin/bash appuser
+    # Use existing group if GID is taken, otherwise create one
+    if getent group "$PGID" > /dev/null 2>&1; then
+        EXISTING_GROUP=$(getent group "$PGID" | cut -d: -f1)
+        useradd -u "$PUID" -g "$EXISTING_GROUP" -d /app -s /bin/bash appuser
+    else
+        groupadd -g "$PGID" appgroup
+        useradd -u "$PUID" -g "$PGID" -d /app -s /bin/bash appuser
+    fi
 fi
 
 # Update existing user's UID/GID if they differ
@@ -25,12 +31,10 @@ if [ "$CURRENT_UID" != "$PUID" ] || [ "$CURRENT_GID" != "$PGID" ]; then
     usermod -u "$PUID" -g "$PGID" appuser 2>/dev/null || true
 fi
 
-# Set ownership of app and data dirs (ignore errors for read-only mounts)
-for dir in /app /library /hosts; do
-    if [ "$(stat -c %u "$dir" 2>/dev/null)" != "$PUID" ]; then
-        chown -R "$PUID:$PGID" "$dir" 2>/dev/null || true
-    fi
-done
+# Set ownership of app directory (recursive) and mount points (non-recursive)
+chown -R "$PUID:$PGID" /app 2>/dev/null || true
+chown "$PUID:$PGID" /library 2>/dev/null || true
+chown "$PUID:$PGID" /hosts 2>/dev/null || true
 
 # Switch to app user and execute the command
 exec gosu appuser "$@"

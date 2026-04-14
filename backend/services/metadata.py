@@ -133,7 +133,14 @@ def update_category(category_id: str, updates: dict) -> list[CategoryDefinition]
 
 
 def delete_category(category_id: str) -> list[CategoryDefinition]:
-    """Delete a category."""
+    """Delete a category. Blocks deletion if models still use it."""
+    from .library import load_all_models
+    models_in_cat = [m for m in load_all_models() if m.category == category_id]
+    if models_in_cat:
+        raise ValueError(
+            f"Cannot delete category '{category_id}': {len(models_in_cat)} model(s) still assigned to it. "
+            "Move or delete them first."
+        )
     cats = load_categories()
     cats = [c for c in cats if c.id != category_id]
     save_categories(cats)
