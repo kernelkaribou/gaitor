@@ -8,6 +8,15 @@ AI local model asset manager and sync tool. A self-hosted, Docker-based web UI f
 
 Think of it as a smart FTP specifically designed for AI models - browse, sync, retrieve from Hugging Face / CivitAI and other URL's, and deploy models across your local AI infrastructure.
 
+<p align="center">
+  <img src="docs/screenshot_1.png" alt="Library view" width="49%" />
+  <img src="docs/screenshot_3.png" alt="Model detail and sync" width="49%" />
+</p>
+<p align="center">
+  <img src="docs/screenshot_2.png" alt="Scan and catalog" width="49%" />
+  <img src="docs/screenshot_4.png" alt="Settings" width="49%" />
+</p>
+
 ## Features
 
 - **Library Management** - Centralized model library with metadata, common categories, search, and tagging
