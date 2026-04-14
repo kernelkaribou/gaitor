@@ -19,10 +19,10 @@
   let retrieveName = $state('');
   let retrieveCategory = $state('checkpoints');
   let retrieveDescription = $state('');
-  let searchQuery = $state('');
-  let searchProvider = $state('huggingface');
-  let searchResults = $state([]);
-  let searching = $state(false);
+  let retrieveFilename = $state('');
+  let retrieveSubfolder = $state('');
+  let retrieveBaseModel = $state('');
+  let retrieveThumbnailUrl = $state('');
 
   const civitaiTypeMap = {
     'Checkpoint': 'checkpoints',
@@ -43,6 +43,9 @@
   let uploadCategory = $state('other');
   let uploadDescription = $state('');
   let uploadTags = $state('');
+  let uploadFilename = $state('');
+  let uploadSubfolder = $state('');
+  let uploadBaseModel = $state('');
   let uploading = $state(false);
   let uploadProgress = $state(0);
   let uploadProgressBytes = $state({ loaded: 0, total: 0 });
@@ -69,6 +72,10 @@
     resolved = null;
     selectedFile = null;
     retrieveDescription = '';
+    retrieveFilename = '';
+    retrieveSubfolder = '';
+    retrieveBaseModel = '';
+    retrieveThumbnailUrl = '';
     try {
       resolved = await api.resolveUrl(url);
       if (resolved.description) {
@@ -83,12 +90,15 @@
     resolving = false;
   }
 
-  function selectFile(file, previewUrl = null) {
+  function selectFile(file, previewUrl = null, baseModel = null) {
     selectedFile = { ...file, previewUrl };
     retrieveName = file.filename.replace(/\.[^.]+$/, '').replace(/[_-]/g, ' ');
+    retrieveFilename = file.filename;
     if (resolved?.model_info?.name) {
       retrieveName = resolved.model_info.name;
     }
+    retrieveThumbnailUrl = previewUrl || resolved?.preview_url || '';
+    retrieveBaseModel = baseModel || '';
   }
 
   async function startDownload() {
@@ -97,12 +107,14 @@
     try {
       const params = {
         url: selectedFile.download_url,
-        filename: selectedFile.filename,
+        filename: retrieveFilename || selectedFile.filename,
         category: retrieveCategory,
         name: retrieveName || undefined,
         description: retrieveDescription || undefined,
         provider: resolved?.provider || 'url',
-        thumbnail_url: selectedFile.previewUrl || resolved?.preview_url || undefined,
+        thumbnail_url: retrieveThumbnailUrl || undefined,
+        subfolder: retrieveSubfolder || undefined,
+        base_model: retrieveBaseModel || undefined,
       };
       await api.startDownload(params);
       addToast({ type: 'info', title: 'Download started', message: `${retrieveName || selectedFile.filename}` });
@@ -111,34 +123,13 @@
       url = '';
       retrieveName = '';
       retrieveDescription = '';
+      retrieveFilename = '';
+      retrieveSubfolder = '';
+      retrieveBaseModel = '';
+      retrieveThumbnailUrl = '';
     } catch (err) {
       retrieveError = err.message;
     }
-  }
-
-  async function searchModels() {
-    if (!searchQuery.trim()) return;
-    searching = true;
-    retrieveError = null;
-    searchResults = [];
-    try {
-      const data = await api.searchModels(searchQuery, searchProvider);
-      searchResults = data.results || [];
-    } catch (err) {
-      retrieveError = err.message;
-    }
-    searching = false;
-  }
-
-  function selectSearchResult(result) {
-    if (searchProvider === 'huggingface') {
-      url = `https://huggingface.co/${result.repo_id}`;
-    } else if (searchProvider === 'civitai') {
-      url = `https://civitai.com/models/${result.id}`;
-    }
-    searchResults = [];
-    searchQuery = '';
-    resolveUrl();
   }
 
   function clearUrl() {
@@ -148,11 +139,10 @@
     retrieveError = null;
     retrieveDescription = '';
     retrieveName = '';
-  }
-
-  function clearSearch() {
-    searchQuery = '';
-    searchResults = [];
+    retrieveFilename = '';
+    retrieveSubfolder = '';
+    retrieveBaseModel = '';
+    retrieveThumbnailUrl = '';
   }
 
   // --- Upload functions ---
@@ -160,6 +150,7 @@
     const selected = event.target.files[0];
     if (selected) {
       uploadFile = selected;
+      uploadFilename = selected.name;
       if (!uploadName) {
         uploadName = selected.name.replace(/\.[^.]+$/, '').replace(/[_-]/g, ' ');
       }
@@ -182,13 +173,19 @@
     uploadProgress = 0;
     uploadError = null;
     try {
-      await api.uploadModel(uploadFile, uploadName, uploadCategory, uploadDescription, uploadTags, handleUploadProgress);
+      await api.uploadModel(
+        uploadFile, uploadName, uploadCategory, uploadDescription, uploadTags,
+        handleUploadProgress, uploadSubfolder, uploadBaseModel, uploadFilename
+      );
       addToast({ type: 'success', title: 'Upload complete', message: `${uploadName} added to library` });
       uploadFile = null;
       uploadName = '';
       uploadCategory = 'other';
       uploadDescription = '';
       uploadTags = '';
+      uploadFilename = '';
+      uploadSubfolder = '';
+      uploadBaseModel = '';
       uploadProgress = 0;
     } catch (err) {
       uploadError = err.message;
@@ -269,156 +266,109 @@
       </button>
     </div>
 
-    <!-- Search -->
-    <div class="mb-6">
-      <div class="flex gap-2">
-        <select
-          bind:value={searchProvider}
-          class="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-300"
-        >
-          <option value="huggingface">Hugging Face</option>
-          <option value="civitai">CivitAI</option>
-        </select>
-        <div class="flex-1 relative">
-          <input
-            type="text"
-            bind:value={searchQuery}
-            placeholder="Search models..."
-            class="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:border-green-600 pr-8"
-            onkeydown={(e) => e.key === 'Enter' && searchModels()}
-          />
-          {#if searchQuery}
-            <button
-              class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 text-sm"
-              onclick={clearSearch}
-            >&#x2715;</button>
-          {/if}
-        </div>
-        <button
-          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg disabled:opacity-50"
-          onclick={searchModels}
-          disabled={searching || !searchQuery.trim()}
-        >
-          {searching ? '...' : 'Search'}
-        </button>
-      </div>
-      {#if searchResults.length > 0}
-        <div class="mt-2 bg-gray-800 border border-gray-700 rounded-lg divide-y divide-gray-700 max-h-64 overflow-y-auto">
-          {#each searchResults as result}
-            <button
-              class="w-full px-4 py-2 text-left hover:bg-gray-700 transition-colors"
-              onclick={() => selectSearchResult(result)}
-            >
-              <span class="text-gray-100 text-sm font-medium">{result.name || result.repo_id}</span>
-              {#if result.type}
-                <span class="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-400 ml-2">{result.type}</span>
-              {/if}
-              {#if result.author || result.creator}
-                <span class="text-gray-500 text-xs ml-2">by {result.author || result.creator}</span>
-              {/if}
-              {#if result.downloads}
-                <span class="text-gray-600 text-xs ml-2">{result.downloads.toLocaleString()} downloads</span>
-              {/if}
-            </button>
-          {/each}
-        </div>
-      {/if}
-    </div>
-
     <!-- Resolved content -->
     {#if resolved}
       <div class="bg-gray-800 border border-gray-700 rounded-lg p-5 mb-6">
-        <div class="flex items-center gap-2 mb-3">
-          <span class="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-300">{resolved.provider || 'url'}</span>
-          {#if resolved.repo_id}
-            <span class="text-gray-400 text-sm font-mono">{resolved.repo_id}</span>
+        <div class="flex items-start gap-4">
+          {#if resolved.preview_url}
+            <img src={resolved.preview_url} alt="Preview" class="w-48 h-48 object-cover rounded-lg border border-gray-700 shrink-0" />
           {/if}
-          {#if resolved.model_info?.name}
-            <span class="text-gray-200 font-medium">{resolved.model_info.name}</span>
-          {/if}
-          {#if resolved.model_type}
-            <span class="text-xs px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-400">{resolved.model_type}</span>
-          {/if}
-        </div>
-
-        {#if resolved.repo_info?.description}
-          <p class="text-xs text-gray-500 mb-3 line-clamp-2">{resolved.repo_info.description}</p>
-        {/if}
-
-        {#if resolved.preview_url}
-          <div class="mb-3">
-            <img src={resolved.preview_url} alt="Preview" class="w-32 h-32 object-cover rounded-lg border border-gray-700" />
-          </div>
-        {/if}
-
-        <!-- HuggingFace files -->
-        {#if resolved.provider === 'huggingface' && resolved.files}
-          <p class="text-gray-500 text-xs mb-2">{resolved.files.length} model file(s) found:</p>
-          <div class="space-y-1">
-            {#each resolved.files as file}
-              <button
-                class="w-full flex items-center justify-between px-3 py-2 rounded text-sm transition-colors
-                  {selectedFile?.filename === file.filename ? 'bg-green-900/30 border border-green-700' : 'bg-gray-900 hover:bg-gray-700'}"
-                onclick={() => selectFile(file)}
-              >
-                <span class="text-gray-200 font-mono text-xs">{file.filename}</span>
-                <span class="text-gray-500 text-xs">{formatSize(file.size)}</span>
-              </button>
-            {/each}
-          </div>
-        {/if}
-
-        <!-- CivitAI versions -->
-        {#if resolved.provider === 'civitai' && resolved.model_info?.versions}
-          {#each resolved.model_info.versions as version}
-            <div class="mb-3">
-              <p class="text-gray-400 text-sm font-medium mb-1">{version.name} ({version.base_model})</p>
-              {#each version.files as file}
-                {@const previewUrl = version.images?.[0] || resolved.preview_url || null}
-                <button
-                  class="w-full flex items-center justify-between px-3 py-2 rounded text-sm transition-colors
-                    {selectedFile?.download_url === file.download_url ? 'bg-green-900/30 border border-green-700' : 'bg-gray-900 hover:bg-gray-700'}"
-                  onclick={() => selectFile({ filename: file.name, download_url: file.download_url, size: file.size }, previewUrl)}
-                >
-                  <span class="text-gray-200 font-mono text-xs">{file.name}</span>
-                  <span class="text-gray-500 text-xs">{formatSize(file.size)}</span>
-                </button>
-              {/each}
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-300">{resolved.provider || 'url'}</span>
+              {#if resolved.repo_id}
+                <span class="text-gray-400 text-sm font-mono">{resolved.repo_id}</span>
+              {/if}
+              {#if resolved.model_info?.name}
+                <span class="text-gray-200 font-medium">{resolved.model_info.name}</span>
+              {/if}
+              {#if resolved.model_type}
+                <span class="text-xs px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-400">{resolved.model_type}</span>
+              {/if}
             </div>
-          {/each}
-        {/if}
 
-        <!-- Generic URL files -->
-        {#if resolved.provider === 'url' && resolved.files}
-          <p class="text-gray-500 text-xs mb-2">Direct download:</p>
-          <div class="space-y-1">
-            {#each resolved.files as file}
-              <button
-                class="w-full flex items-center justify-between px-3 py-2 rounded text-sm transition-colors
-                  {selectedFile?.filename === file.filename ? 'bg-green-900/30 border border-green-700' : 'bg-gray-900 hover:bg-gray-700'}"
-                onclick={() => selectFile(file)}
-              >
-                <span class="text-gray-200 font-mono text-xs">{file.filename}</span>
-                {#if file.size}
-                  <span class="text-gray-500 text-xs">{formatSize(file.size)}</span>
-                {/if}
-              </button>
-            {/each}
+            {#if resolved.repo_info?.description}
+              <p class="text-xs text-gray-500 mb-3 line-clamp-3">{resolved.repo_info.description}</p>
+            {/if}
+
+            <!-- HuggingFace files -->
+            {#if resolved.provider === 'huggingface' && resolved.files}
+              <p class="text-gray-500 text-xs mb-2">{resolved.files.length} model file(s) found:</p>
+              <div class="space-y-1 max-h-48 overflow-y-auto">
+                {#each resolved.files as file}
+                  <button
+                    class="w-full flex items-center justify-between px-3 py-2 rounded text-sm transition-colors
+                      {selectedFile?.filename === file.filename ? 'bg-green-900/30 border border-green-700' : 'bg-gray-900 hover:bg-gray-700'}"
+                    onclick={() => selectFile(file)}
+                  >
+                    <span class="text-gray-200 font-mono text-xs">{file.filename}</span>
+                    <span class="text-gray-500 text-xs">{formatSize(file.size)}</span>
+                  </button>
+                {/each}
+              </div>
+            {/if}
+
+            <!-- CivitAI versions -->
+            {#if resolved.provider === 'civitai' && resolved.model_info?.versions}
+              {#each resolved.model_info.versions as version}
+                <div class="mb-3">
+                  <p class="text-gray-400 text-sm font-medium mb-1">{version.name} ({version.base_model})</p>
+                  {#each version.files as file}
+                    {@const previewUrl = version.images?.[0] || resolved.preview_url || null}
+                    <button
+                      class="w-full flex items-center justify-between px-3 py-2 rounded text-sm transition-colors
+                        {selectedFile?.download_url === file.download_url ? 'bg-green-900/30 border border-green-700' : 'bg-gray-900 hover:bg-gray-700'}"
+                      onclick={() => selectFile({ filename: file.name, download_url: file.download_url, size: file.size }, previewUrl, version.base_model)}
+                    >
+                      <span class="text-gray-200 font-mono text-xs">{file.name}</span>
+                      <span class="text-gray-500 text-xs">{formatSize(file.size)}</span>
+                    </button>
+                  {/each}
+                </div>
+              {/each}
+            {/if}
+
+            <!-- Generic URL files -->
+            {#if resolved.provider === 'url' && resolved.files}
+              <p class="text-gray-500 text-xs mb-2">Direct download:</p>
+              <div class="space-y-1">
+                {#each resolved.files as file}
+                  <button
+                    class="w-full flex items-center justify-between px-3 py-2 rounded text-sm transition-colors
+                      {selectedFile?.filename === file.filename ? 'bg-green-900/30 border border-green-700' : 'bg-gray-900 hover:bg-gray-700'}"
+                    onclick={() => selectFile(file)}
+                  >
+                    <span class="text-gray-200 font-mono text-xs">{file.filename}</span>
+                    {#if file.size}
+                      <span class="text-gray-500 text-xs">{formatSize(file.size)}</span>
+                    {/if}
+                  </button>
+                {/each}
+              </div>
+            {/if}
           </div>
-        {/if}
+        </div>
       </div>
     {/if}
 
     <!-- Download form -->
     {#if selectedFile}
       <div class="bg-gray-800 border border-gray-700 rounded-lg p-5">
-        <h3 class="text-gray-200 font-medium mb-3">Download: {selectedFile.filename}</h3>
+        <h3 class="text-gray-200 font-medium mb-4">Configure Download</h3>
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <label class="block text-xs text-gray-400 mb-1">Name</label>
+            <label class="block text-xs text-gray-400 mb-1">Model Name</label>
             <input
               type="text"
               bind:value={retrieveName}
+              class="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded text-gray-100 text-sm focus:outline-none focus:border-green-600"
+            />
+          </div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">Filename</label>
+            <input
+              type="text"
+              bind:value={retrieveFilename}
               class="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded text-gray-100 text-sm focus:outline-none focus:border-green-600"
             />
           </div>
@@ -433,7 +383,25 @@
               {/each}
             </select>
           </div>
-          <div class="col-span-2">
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">Subfolder (optional)</label>
+            <input
+              type="text"
+              bind:value={retrieveSubfolder}
+              placeholder="e.g. sdxl"
+              class="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded text-gray-100 text-sm focus:outline-none focus:border-green-600"
+            />
+          </div>
+          <div>
+            <label class="block text-xs text-gray-400 mb-1">Base Model (optional)</label>
+            <input
+              type="text"
+              bind:value={retrieveBaseModel}
+              placeholder="e.g. SDXL 1.0, SD 1.5, Flux.1"
+              class="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded text-gray-100 text-sm focus:outline-none focus:border-green-600"
+            />
+          </div>
+          <div>
             <label class="block text-xs text-gray-400 mb-1">Description (optional)</label>
             <input
               type="text"
@@ -441,13 +409,27 @@
               class="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded text-gray-100 text-sm focus:outline-none focus:border-green-600"
             />
           </div>
+          <div class="col-span-2">
+            <label class="block text-xs text-gray-400 mb-1">Thumbnail</label>
+            {#if retrieveThumbnailUrl}
+              <div class="flex items-center gap-3">
+                <img src={retrieveThumbnailUrl} alt="Thumbnail" class="w-16 h-16 object-cover rounded border border-gray-700" />
+                <div class="flex-1 min-w-0">
+                  <p class="text-xs text-gray-500 truncate">{retrieveThumbnailUrl}</p>
+                </div>
+                <button
+                  class="text-xs text-red-400 hover:text-red-300 shrink-0"
+                  onclick={() => retrieveThumbnailUrl = ''}
+                >Remove</button>
+              </div>
+            {:else}
+              <p class="text-xs text-gray-600">No thumbnail</p>
+            {/if}
+          </div>
         </div>
         <div class="mt-4 flex items-center justify-between">
           <span class="text-xs text-gray-500">
             Size: {formatSize(selectedFile.size)}
-            {#if selectedFile.previewUrl || resolved?.preview_url}
-              - Preview image will be saved as thumbnail
-            {/if}
           </span>
           <button
             class="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg"
@@ -459,11 +441,10 @@
       </div>
     {/if}
 
-    {#if !resolved && !selectedFile && searchResults.length === 0}
+    {#if !resolved && !selectedFile}
       <div class="text-center py-12">
         <p class="text-gray-500 max-w-md mx-auto">
           Paste any model URL above - HuggingFace, CivitAI, Ollama, or any direct download link.
-          Use search to browse HuggingFace and CivitAI catalogs.
           Models will be downloaded directly into your library.
         </p>
       </div>
@@ -494,27 +475,67 @@
           {/if}
         </div>
 
-        <!-- Name -->
-        <div>
-          <label class="block text-sm text-gray-400 mb-1">Model Name</label>
-          <input
-            bind:value={uploadName}
-            class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500"
-            placeholder="My Model"
-          />
+        <!-- Name + Filename -->
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Model Name</label>
+            <input
+              bind:value={uploadName}
+              class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500"
+              placeholder="My Model"
+            />
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Filename</label>
+            <input
+              bind:value={uploadFilename}
+              class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500"
+              placeholder="model.safetensors"
+            />
+          </div>
         </div>
 
-        <!-- Category -->
-        <div>
-          <label class="block text-sm text-gray-400 mb-1">Category</label>
-          <select
-            bind:value={uploadCategory}
-            class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500"
-          >
-            {#each categories as cat}
-              <option value={cat.id}>{cat.label}</option>
-            {/each}
-          </select>
+        <!-- Category + Subfolder -->
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Category</label>
+            <select
+              bind:value={uploadCategory}
+              class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500"
+            >
+              {#each categories as cat}
+                <option value={cat.id}>{cat.label}</option>
+              {/each}
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Subfolder (optional)</label>
+            <input
+              bind:value={uploadSubfolder}
+              class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500"
+              placeholder="e.g. sdxl"
+            />
+          </div>
+        </div>
+
+        <!-- Base Model + Tags -->
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Base Model (optional)</label>
+            <input
+              bind:value={uploadBaseModel}
+              class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500"
+              placeholder="e.g. SDXL 1.0, SD 1.5, Flux.1"
+            />
+          </div>
+          <div>
+            <label class="block text-sm text-gray-400 mb-1">Tags (comma-separated, optional)</label>
+            <input
+              bind:value={uploadTags}
+              class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500"
+              placeholder="sdxl, base, 1024px"
+            />
+          </div>
         </div>
 
         <!-- Description -->
@@ -525,16 +546,6 @@
             rows="2"
             class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500 resize-none"
           ></textarea>
-        </div>
-
-        <!-- Tags -->
-        <div>
-          <label class="block text-sm text-gray-400 mb-1">Tags (comma-separated, optional)</label>
-          <input
-            bind:value={uploadTags}
-            class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-green-500"
-            placeholder="sdxl, base, 1024px"
-          />
         </div>
 
         <!-- Progress bar -->

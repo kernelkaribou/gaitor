@@ -31,18 +31,8 @@ class DownloadRequest(BaseModel):
     provider: Optional[str] = None
     thumbnail_url: Optional[str] = None
     model_type: Optional[str] = None
-
-
-class SearchRequest(BaseModel):
-    query: str
-    provider: str = "huggingface"
-    limit: int = 20
-
-    def model_post_init(self, __context):
-        if self.limit < 1:
-            self.limit = 1
-        elif self.limit > 100:
-            self.limit = 100
+    subfolder: Optional[str] = None
+    base_model: Optional[str] = None
 
 
 @router.get("/providers")
@@ -109,6 +99,8 @@ async def download_model_endpoint(req: DownloadRequest):
                 provider=provider,
                 progress_callback=progress_cb,
                 thumbnail_url=req.thumbnail_url,
+                subfolder=req.subfolder,
+                base_model=req.base_model,
             )
             task_manager.complete_task(
                 task_id,
@@ -133,24 +125,6 @@ async def download_model_endpoint(req: DownloadRequest):
     atask = asyncio.create_task(_do_download())
     task_manager.set_asyncio_task(task_id, atask)
     return {"task_id": task_id, "status": "started"}
-
-
-@router.post("/search")
-async def search_models(req: SearchRequest):
-    """Search for models on a provider."""
-    try:
-        if req.provider == "huggingface":
-            results = await huggingface.search_models(req.query, limit=req.limit)
-        elif req.provider == "civitai":
-            results = await civitai.search_models(req.query, limit=req.limit)
-        else:
-            raise HTTPException(status_code=400, detail=f"Unknown provider: {req.provider}")
-        return {"results": results, "provider": req.provider, "count": len(results)}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Search failed: {e}")
-        raise HTTPException(status_code=502, detail="Search failed")
 
 
 @router.get("/hf/{repo_id:path}/files")

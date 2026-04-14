@@ -145,6 +145,8 @@ async def download_model(
     provider: Optional[str] = None,
     progress_callback: Optional[Callable] = None,
     thumbnail_url: Optional[str] = None,
+    subfolder: Optional[str] = None,
+    base_model: Optional[str] = None,
 ) -> ModelMetadata:
     """Download a model file from an external URL into the library.
 
@@ -157,7 +159,8 @@ async def download_model(
 
     # Sanitize filename and validate path stays within library
     safe_name = sanitize_filename(Path(filename).stem, Path(filename).suffix)
-    category_dir = safe_resolve(config.LIBRARY_PATH, category)
+    sub_path = f"{category}/{subfolder}" if subfolder else category
+    category_dir = safe_resolve(config.LIBRARY_PATH, sub_path)
     category_dir.mkdir(parents=True, exist_ok=True)
     dest_path = category_dir / safe_name
 
@@ -219,15 +222,18 @@ async def download_model(
         except Exception as e:
             logger.warning(f"Failed to download thumbnail: {e}")
 
+    relative_path = str(dest_path.relative_to(config.LIBRARY_PATH))
+
     model = ModelMetadata(
         id=model_id,
         name=name or filename.rsplit(".", 1)[0],
         filename=safe_name,
         category=category,
-        relative_path=f"{category}/{safe_name}",
+        relative_path=relative_path,
         size=actual_size,
         description=description or "",
         tags=tags or [],
+        base_model=base_model or None,
         thumbnail=thumb_rel,
         source=ModelSource(
             url=url,

@@ -184,6 +184,9 @@ async def upload_model_endpoint(
     category: str = Form("other"),
     description: str = Form(""),
     tags: str = Form(""),
+    subfolder: str = Form(""),
+    base_model: str = Form(""),
+    custom_filename: str = Form(""),
     background_tasks: BackgroundTasks = None,
 ):
     """Upload a model file to the library."""
@@ -191,12 +194,14 @@ async def upload_model_endpoint(
 
     try:
         model = upload_model(
-            filename=file.filename,
+            filename=custom_filename.strip() if custom_filename.strip() else file.filename,
             category=category,
             name=name,
             data_stream=file.file,
             description=description,
             tags=tag_list,
+            subfolder=subfolder.strip() if subfolder.strip() else None,
+            base_model=base_model.strip() if base_model.strip() else None,
         )
         if background_tasks:
             background_tasks.add_task(compute_hash, model.id)

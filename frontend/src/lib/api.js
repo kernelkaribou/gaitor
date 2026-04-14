@@ -92,7 +92,7 @@ export const api = {
 
   deleteThumbnail: (id) => request(`/models/${encodeURIComponent(id)}/thumbnail`, { method: 'DELETE' }),
 
-  async uploadModel(file, name, category, description = '', tags = '', onProgress = null) {
+  async uploadModel(file, name, category, description = '', tags = '', onProgress = null, subfolder = '', baseModel = '', customFilename = '') {
     return new Promise((resolve, reject) => {
       const formData = new FormData();
       formData.append('file', file);
@@ -100,6 +100,9 @@ export const api = {
       formData.append('category', category);
       formData.append('description', description);
       formData.append('tags', tags);
+      formData.append('subfolder', subfolder);
+      formData.append('base_model', baseModel);
+      formData.append('custom_filename', customFilename);
 
       const xhr = new XMLHttpRequest();
       xhr.open('POST', `${BASE_URL}/models/upload`);
@@ -161,8 +164,6 @@ export const api = {
     request('/retrieve/resolve', { method: 'POST', body: JSON.stringify({ url }) }),
   startDownload: (params) =>
     request('/retrieve/download', { method: 'POST', body: JSON.stringify(params) }),
-  searchModels: (query, provider = 'huggingface', limit = 20) =>
-    request('/retrieve/search', { method: 'POST', body: JSON.stringify({ query, provider, limit }) }),
   listHfFiles: (repoId) => request(`/retrieve/hf/${encodeURIComponent(repoId)}/files`),
   getCivitaiModel: (modelId) => request(`/retrieve/civitai/${encodeURIComponent(modelId)}`),
 

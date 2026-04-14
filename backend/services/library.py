@@ -210,6 +210,8 @@ def upload_model(
     data_stream,
     description: str = "",
     tags: Optional[list[str]] = None,
+    subfolder: Optional[str] = None,
+    base_model: Optional[str] = None,
 ) -> ModelMetadata:
     """Handle an uploaded model file - stream to disk, catalog it."""
     ensure_metadata_dir()
@@ -217,8 +219,9 @@ def upload_model(
     # Sanitize filename to prevent path traversal
     safe_name = sanitize_filename(Path(filename).stem, Path(filename).suffix)
 
-    # Validate category and host stay within library
-    dest_dir = safe_resolve(config.LIBRARY_PATH, category)
+    # Validate category and subfolder stay within library
+    sub_path = f"{category}/{subfolder}" if subfolder else category
+    dest_dir = safe_resolve(config.LIBRARY_PATH, sub_path)
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest_path = dest_dir / safe_name
 
@@ -265,6 +268,7 @@ def upload_model(
         source=ModelSource(provider="upload"),
         description=description,
         tags=tags or [],
+        base_model=base_model or None,
         history=[
             ModelHistoryEntry(
                 action="added",
