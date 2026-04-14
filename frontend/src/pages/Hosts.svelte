@@ -28,6 +28,7 @@
   }
 
   function handleTaskComplete() {
+    syncing = {};
     if (selectedHost) selectHost(selectedHost);
   }
 
@@ -70,11 +71,10 @@
     error = null;
     try {
       await api.syncModelToHost(selectedHost.id, modelId);
-      await selectHost(selectedHost);
     } catch (err) {
       error = err.message;
+      syncing = { ...syncing, [modelId]: false };
     }
-    syncing = { ...syncing, [modelId]: false };
   }
 
   async function removeModel(modelId) {

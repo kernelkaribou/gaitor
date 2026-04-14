@@ -9,6 +9,7 @@
     if (e.key === 'Escape') onClose();
   }
   function handleTaskComplete() {
+    syncingTo = {};
     loadHostStatuses();
   }
   onMount(() => {
@@ -218,12 +219,10 @@
     error = null;
     try {
       await api.syncModelToHost(hostId, model.id);
-      // Refresh host statuses after sync starts (will update when task completes)
-      await loadHostStatuses();
     } catch (err) {
       error = err.message;
+      syncingTo = { ...syncingTo, [hostId]: false };
     }
-    syncingTo = { ...syncingTo, [hostId]: false };
   }
 
   function formatHistoryEntry(entry) {
