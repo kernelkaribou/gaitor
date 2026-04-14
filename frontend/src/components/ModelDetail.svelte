@@ -523,16 +523,15 @@
         </div>
 
         {#if hostContext}
-          <!-- Host context: show status on this host -->
+          <!-- Host context: show sync status only (host name is already known from the page) -->
           <div class="border-t border-gray-700 pt-4">
-            <span class="text-xs text-gray-500 uppercase tracking-wider">Host Status</span>
+            <span class="text-xs text-gray-500 uppercase tracking-wider">Sync Status</span>
             <div class="flex items-center justify-between bg-gray-900 rounded px-3 py-2 border border-gray-700 mt-2">
-              <div class="min-w-0">
-                <p class="text-sm text-gray-200 font-medium truncate">{formatHostName(hostContext.host_name)}</p>
-                {#if hostContext.synced_at}
-                  <p class="text-xs text-gray-600">Synced {new Date(hostContext.synced_at).toLocaleDateString()}</p>
-                {/if}
-              </div>
+              {#if hostContext.synced_at}
+                <p class="text-xs text-gray-500">Synced {new Date(hostContext.synced_at).toLocaleDateString()}</p>
+              {:else}
+                <p class="text-xs text-gray-500">No sync date</p>
+              {/if}
               <span class="text-xs px-2 py-0.5 rounded border {
                 hostContext.status === 'synced' ? 'bg-green-900/30 text-green-400 border-green-800' :
                 hostContext.status === 'outdated' ? 'bg-yellow-900/30 text-yellow-400 border-yellow-800' :
@@ -562,33 +561,41 @@
             {:else}
               <div class="space-y-2">
                 {#each hostStatuses as hs (hs.host_id)}
-                  <div class="flex items-center justify-between bg-gray-900 rounded px-3 py-2 border border-gray-700">
+                  <div class="flex items-center gap-2">
                     <button
-                      class="min-w-0 text-left hover:opacity-80 transition-opacity"
+                      class="flex-1 flex items-center justify-between bg-gray-900 rounded px-3 py-2 border border-gray-700 {onNavigateHost ? 'hover:border-gray-500 hover:bg-gray-800/80 cursor-pointer' : ''} transition-colors"
                       onclick={() => { if (onNavigateHost) { onClose(); onNavigateHost(hs.host_id); } }}
+                      disabled={!onNavigateHost}
                     >
-                      <p class="text-sm text-gray-200 font-medium truncate {onNavigateHost ? 'hover:text-green-400' : ''}">{formatHostName(hs.host_name)}</p>
-                      {#if hs.disk_free}
-                        <p class="text-xs text-gray-600">{formatSize(hs.disk_free)} free</p>
+                      <div class="min-w-0 text-left">
+                        <p class="text-sm text-gray-200 font-medium truncate {onNavigateHost ? 'group-hover:text-green-400' : ''}">{formatHostName(hs.host_name)}</p>
+                        {#if hs.disk_free}
+                          <p class="text-xs text-gray-600">{formatSize(hs.disk_free)} free</p>
+                        {/if}
+                      </div>
+                      {#if hs.status === 'synced'}
+                        <span class="text-xs px-2 py-0.5 rounded bg-green-900/30 text-green-400 border border-green-800">Synced</span>
+                      {:else if hs.status === 'rename_pending'}
+                        <span class="text-xs px-2 py-0.5 rounded bg-blue-900/30 text-blue-400 border border-blue-800">Rename pending</span>
+                      {:else if hs.status === 'outdated'}
+                        <span class="text-xs px-2 py-0.5 rounded bg-yellow-900/30 text-yellow-400 border border-yellow-800">Out of sync</span>
+                      {:else if hs.status === 'error'}
+                        <span class="text-xs text-red-500">Unavailable</span>
+                      {:else}
+                        <span class="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-400 border border-gray-600">Not synced</span>
                       {/if}
                     </button>
-                    {#if hs.status === 'synced'}
-                      <span class="text-xs px-2 py-0.5 rounded bg-green-900/30 text-green-400 border border-green-800">Synced</span>
-                    {:else if hs.status === 'rename_pending'}
-                      <span class="text-xs px-2 py-0.5 rounded bg-blue-900/30 text-blue-400 border border-blue-800">Rename pending</span>
-                    {:else if hs.status === 'outdated'}
+                    {#if hs.status === 'outdated'}
                       <button
-                        class="text-xs px-2.5 py-1 rounded bg-yellow-700 hover:bg-yellow-600 text-white disabled:opacity-50"
+                        class="text-xs px-2.5 py-1 rounded bg-yellow-700 hover:bg-yellow-600 text-white disabled:opacity-50 shrink-0"
                         onclick={() => syncToHost(hs.host_id)}
                         disabled={syncingTo[hs.host_id]}
                       >
                         {syncingTo[hs.host_id] ? 'Syncing...' : 'Re-sync'}
                       </button>
-                    {:else if hs.status === 'error'}
-                      <span class="text-xs text-red-500">Unavailable</span>
-                    {:else}
+                    {:else if hs.status !== 'synced' && hs.status !== 'rename_pending' && hs.status !== 'error'}
                       <button
-                        class="text-xs px-2.5 py-1 rounded bg-green-700 hover:bg-green-600 text-white disabled:opacity-50"
+                        class="text-xs px-2.5 py-1 rounded bg-green-700 hover:bg-green-600 text-white disabled:opacity-50 shrink-0"
                         onclick={() => syncToHost(hs.host_id)}
                         disabled={syncingTo[hs.host_id]}
                       >

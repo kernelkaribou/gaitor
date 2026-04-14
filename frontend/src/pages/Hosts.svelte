@@ -41,11 +41,15 @@
     if (host) selectHost(host);
   }
 
-  function resetToList() {
+  function resetToList(reselect = false) {
     selectedHost = null;
     selectedModel = null;
     selectedHostItem = null;
     scanResults = null;
+    // Re-apply auto-select for single host when triggered from navbar
+    if (reselect && hosts.length === 1 && hosts[0].health?.status !== 'offline' && hosts[0].health?.status !== 'error') {
+      selectHost(hosts[0]);
+    }
   }
 
   // Expose reset function to parent via callback ref

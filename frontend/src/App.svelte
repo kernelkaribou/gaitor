@@ -19,9 +19,9 @@
 
   function navigate(page) {
     if (!validPages.includes(page)) page = 'library';
-    // If already on hosts and clicking hosts again, reset to list
+    // If already on hosts and clicking hosts again, reset view
     if (page === 'hosts' && currentPage === 'hosts' && hostsResetFn) {
-      hostsResetFn();
+      hostsResetFn(true);
       return;
     }
     currentPage = page;
