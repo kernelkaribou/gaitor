@@ -15,12 +15,19 @@
   onMount(() => {
     document.addEventListener('keydown', handleKeydown);
     window.addEventListener('gaitor:task-complete', handleTaskComplete);
-    loadHostStatuses();
-    loadGroup();
   });
   onDestroy(() => {
     document.removeEventListener('keydown', handleKeydown);
     window.removeEventListener('gaitor:task-complete', handleTaskComplete);
+  });
+
+  // Reload data whenever model changes (e.g. clicking a group member)
+  $effect(() => {
+    model.id;
+    editing = false;
+    error = null;
+    loadHostStatuses();
+    loadGroup();
   });
 
   let editing = $state(false);
