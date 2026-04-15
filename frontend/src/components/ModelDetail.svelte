@@ -459,6 +459,37 @@
             <span class="text-xs text-gray-500 uppercase tracking-wider">Host Path</span>
             <p class="text-gray-300 text-sm mt-0.5 font-mono">{hostContext.host_relative_path}</p>
           </div>
+          {#if hostContext.status === 'rename_pending'}
+            <div class="bg-blue-900/20 border border-blue-800/50 rounded px-3 py-2">
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-blue-400">Library renamed to:</span>
+                <span class="text-xs text-blue-300 font-mono">{model.filename}</span>
+              </div>
+              {#if confirmApplyRename}
+                <div class="flex items-center gap-2 mt-2">
+                  <span class="text-xs text-blue-400">Rename host file to match?</span>
+                  <button
+                    class="px-2.5 py-1 text-xs rounded bg-blue-700 hover:bg-blue-600 text-white disabled:opacity-50"
+                    onclick={async () => {
+                      applyingRename = true;
+                      try {
+                        await hostContext.onApplyRename();
+                        confirmApplyRename = false;
+                      } catch (e) { error = e.message; }
+                      applyingRename = false;
+                    }}
+                    disabled={applyingRename}
+                  >{applyingRename ? 'Applying...' : 'Confirm'}</button>
+                  <button class="text-xs text-gray-500 hover:text-gray-300" onclick={() => confirmApplyRename = false}>Cancel</button>
+                </div>
+              {:else}
+                <button
+                  class="px-2.5 py-1 text-xs rounded bg-blue-700 hover:bg-blue-600 text-white mt-2"
+                  onclick={() => confirmApplyRename = true}
+                >Apply Rename</button>
+              {/if}
+            </div>
+          {/if}
         {/if}
         <div class="flex gap-6">
           <div>
@@ -527,10 +558,12 @@
             <p class="text-gray-600 text-sm mt-0.5 italic">No tags</p>
           {/if}
         </div>
-        <div>
-          <span class="text-xs text-gray-500 uppercase tracking-wider">Path</span>
-          <p class="text-gray-500 text-xs mt-0.5 font-mono">{model.relative_path}</p>
-        </div>
+        {#if !hostContext}
+          <div>
+            <span class="text-xs text-gray-500 uppercase tracking-wider">Path</span>
+            <p class="text-gray-500 text-xs mt-0.5 font-mono">{model.relative_path}</p>
+          </div>
+        {/if}
 
         {#if hostContext}
           <!-- Host context: sync status with badge outside the box -->
@@ -556,34 +589,7 @@
                  hostContext.status}
               </span>
             </div>
-            {#if hostContext.status === 'rename_pending'}
-              <div class="mt-2">
-                {#if confirmApplyRename}
-                  <div class="flex items-center gap-2">
-                    <span class="text-xs text-blue-400">Rename host file to match library?</span>
-                    <button
-                      class="px-2.5 py-1 text-xs rounded bg-blue-700 hover:bg-blue-600 text-white disabled:opacity-50"
-                      onclick={async () => {
-                        applyingRename = true;
-                        try {
-                          await hostContext.onApplyRename();
-                          confirmApplyRename = false;
-                        } catch (e) { error = e.message; }
-                        applyingRename = false;
-                      }}
-                      disabled={applyingRename}
-                    >{applyingRename ? 'Applying...' : 'Confirm'}</button>
-                    <button class="text-xs text-gray-500 hover:text-gray-300" onclick={() => confirmApplyRename = false}>Cancel</button>
-                  </div>
-                {:else}
-                  <button
-                    class="px-2.5 py-1 text-xs rounded bg-blue-700 hover:bg-blue-600 text-white"
-                    onclick={() => confirmApplyRename = true}
-                  >Apply Rename</button>
-                  <span class="text-xs text-gray-500 ml-2">Host: {hostContext.host_filename}</span>
-                {/if}
-              </div>
-            {:else if hostContext.status === 'outdated'}
+            {#if hostContext.status === 'outdated'}
               <div class="mt-2">
                 <button
                   class="px-2.5 py-1 text-xs rounded bg-yellow-700 hover:bg-yellow-600 text-white disabled:opacity-50"
