@@ -3,7 +3,7 @@ Host management API endpoints.
 """
 import asyncio
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import logging
 
 from ..services.sync import (
@@ -17,6 +17,10 @@ from ..services.sync import (
     scan_host,
     link_host_model,
     import_from_host,
+    add_ignore_pattern,
+    get_ignore_patterns,
+    remove_ignore_pattern,
+    delete_unmanaged_file,
 )
 from ..services.metadata import load_model
 from ..services.tasks import task_manager
@@ -69,6 +73,14 @@ class BulkLinkRequest(BaseModel):
     def model_post_init(self, __context):
         if len(self.links) > 100:
             raise ValueError("Bulk link limited to 100 models at a time")
+
+
+class IgnoreRequest(BaseModel):
+    pattern: str = Field(max_length=500)
+
+
+class DeleteFileRequest(BaseModel):
+    relative_path: str
 
 
 @router.get("/")
@@ -261,3 +273,53 @@ async def import_model_endpoint(host_id: str, req: ImportRequest):
     atask = asyncio.create_task(_do_import())
     task_manager.set_asyncio_task(task_id, atask)
     return {"task_id": task_id, "message": f"Importing {req.name} from {host_id}"}
+
+
+@router.post("/{host_id}/ignore")
+async def ignore_pattern_endpoint(host_id: str, req: IgnoreRequest):
+    """Add a pattern to the host's .gaitor-ignore file."""
+    host_id = _check_host_id(host_id)
+    try:
+        result = await asyncio.to_thread(add_ignore_pattern, host_id, req.pattern)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to write ignore file: {e}")
+
+
+@router.get("/{host_id}/ignore")
+async def list_ignore_patterns_endpoint(host_id: str):
+    """List all ignore patterns for a host."""
+    host_id = _check_host_id(host_id)
+    try:
+        patterns = await asyncio.to_thread(get_ignore_patterns, host_id)
+        return {"patterns": patterns}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/{host_id}/ignore")
+async def remove_ignore_pattern_endpoint(host_id: str, req: IgnoreRequest):
+    """Remove a pattern from the host's .gaitor-ignore file."""
+    host_id = _check_host_id(host_id)
+    try:
+        result = await asyncio.to_thread(remove_ignore_pattern, host_id, req.pattern)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update ignore file: {e}")
+
+
+@router.post("/{host_id}/delete-file")
+async def delete_file_endpoint(host_id: str, req: DeleteFileRequest):
+    """Delete an unmanaged file from a host."""
+    host_id = _check_host_id(host_id)
+    try:
+        result = await asyncio.to_thread(delete_unmanaged_file, host_id, req.relative_path)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete file: {e}")

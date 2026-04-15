@@ -24,6 +24,8 @@
   let linking = $state({});
   let selectedModel = $state(null);
   let selectedHostItem = $state(null);
+  let showIgnoreList = $state(false);
+  let ignorePatterns = $state([]);
 
   function usagePercent(total, free) {
     if (!total) return 0;
@@ -46,6 +48,8 @@
     selectedModel = null;
     selectedHostItem = null;
     scanResults = null;
+    showIgnoreList = false;
+    ignorePatterns = [];
     // Re-apply auto-select for single host when triggered from navbar
     if (reselect && hosts.length === 1 && hosts[0].health?.status !== 'offline' && hosts[0].health?.status !== 'error') {
       selectHost(hosts[0]);
@@ -87,6 +91,7 @@
     loading = true;
     search = '';
     activeCategory = null;
+    showIgnoreList = false;
     try {
       const data = await api.getHostSyncStatus(host.id);
       syncStatus = data.status || [];
@@ -95,6 +100,8 @@
       syncStatus = [];
     }
     loading = false;
+    // Load ignore count in background
+    api.getIgnorePatterns(host.id).then(r => { ignorePatterns = r.patterns || []; }).catch(() => {});
   }
 
   async function syncModel(modelId) {
@@ -168,20 +175,19 @@
     error = null;
     try {
       await api.linkHostModel(selectedHost.id, relativePath, libraryModelId);
-      // Re-scan to refresh results
-      const result = await api.scanHost(selectedHost.id);
-      scanResults = result;
-      scanKey += 1;
+      linking = { ...linking, [relativePath]: false };
+      return true;
     } catch (err) {
       error = err.message;
+      linking = { ...linking, [relativePath]: false };
+      return false;
     }
-    linking = { ...linking, [relativePath]: false };
   }
 
   async function bulkLinkMatched() {
-    if (!scanResults) return;
+    if (!scanResults) return 0;
     const matched = scanResults.unmanaged.filter(u => u.match && u.match.confidence === 'high');
-    if (matched.length === 0) return;
+    if (matched.length === 0) return 0;
     error = null;
     linking = { ...linking, _bulk: true };
     try {
@@ -190,13 +196,13 @@
         library_model_id: u.match.library_model_id,
       }));
       await api.bulkLinkHostModels(selectedHost.id, links);
-      const result = await api.scanHost(selectedHost.id);
-      scanResults = result;
-      scanKey += 1;
+      linking = { ...linking, _bulk: false };
+      return matched.length;
     } catch (err) {
       error = err.message;
+      linking = { ...linking, _bulk: false };
+      return 0;
     }
-    linking = { ...linking, _bulk: false };
   }
 
   async function importModel(item, importName, importCategory) {
@@ -208,19 +214,40 @@
         name: importName,
         category: importCategory,
       });
-      const result = await api.scanHost(selectedHost.id);
-      scanResults = result;
-      scanKey += 1;
+      linking = { ...linking, [item.relative_path]: false };
+      return true;
     } catch (err) {
       error = err.message;
+      linking = { ...linking, [item.relative_path]: false };
+      return false;
     }
-    linking = { ...linking, [item.relative_path]: false };
   }
 
   function dismissScan() {
     scanResults = null;
-    // Refresh sync status since linking/importing may have changed it
     if (selectedHost) selectHost(selectedHost);
+  }
+
+  async function ignoreFile(item) {
+    error = null;
+    try {
+      await api.addIgnorePattern(selectedHost.id, item.relative_path);
+      return true;
+    } catch (err) {
+      error = err.message;
+      return false;
+    }
+  }
+
+  async function deleteUnmanagedFile(item) {
+    error = null;
+    try {
+      await api.deleteUnmanagedFile(selectedHost.id, item.relative_path);
+      return true;
+    } catch (err) {
+      error = err.message;
+      return false;
+    }
   }
 
   async function openModelDetail(item) {
@@ -234,6 +261,35 @@
       selectedHostItem = item;
     } catch {
       error = 'Could not load model details from the library.';
+    }
+  }
+
+  async function loadIgnorePatterns() {
+    if (!selectedHost) return;
+    try {
+      const result = await api.getIgnorePatterns(selectedHost.id);
+      ignorePatterns = result.patterns || [];
+    } catch (err) {
+      error = err.message;
+    }
+  }
+
+  async function toggleIgnoreList() {
+    if (showIgnoreList) {
+      showIgnoreList = false;
+      if (selectedHost) selectHost(selectedHost);
+    } else {
+      showIgnoreList = true;
+      await loadIgnorePatterns();
+    }
+  }
+
+  async function removeIgnorePattern(pattern) {
+    try {
+      await api.removeIgnorePattern(selectedHost.id, pattern);
+      ignorePatterns = ignorePatterns.filter(p => p !== pattern);
+    } catch (err) {
+      error = err.message;
     }
   }
 
@@ -415,6 +471,15 @@
                 <span class="text-gray-300">{syncSummary.orphaned} orphaned</span>
               </div>
             {/if}
+            {#if ignorePatterns.length > 0}
+              <button
+                class="flex items-center gap-2 w-full text-left group"
+                onclick={toggleIgnoreList}
+              >
+                <span class="w-2 h-2 rounded-full bg-gray-500 shrink-0"></span>
+                <span class="text-gray-400 group-hover:text-gray-200 underline decoration-gray-600 group-hover:decoration-gray-400 transition-colors">{ignorePatterns.length} ignored</span>
+              </button>
+            {/if}
           </div>
         </div>
 
@@ -468,6 +533,37 @@
           </div>
         </div>
 
+        <!-- Ignore list (replaces main content when open) -->
+        {#if showIgnoreList}
+          <div class="bg-gray-800 border border-gray-700 rounded-lg mb-4">
+            <div class="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
+              <span class="text-sm font-medium text-gray-200">{ignorePatterns.length} ignored pattern{ignorePatterns.length !== 1 ? 's' : ''}</span>
+              <button class="text-gray-400 hover:text-gray-200 text-sm" onclick={() => toggleIgnoreList()}>&#x2715;</button>
+            </div>
+            {#if ignorePatterns.length === 0}
+              <div class="px-4 py-3 text-sm text-gray-500">No ignored patterns configured for this host.</div>
+            {:else}
+              <div class="divide-y divide-gray-700 max-h-[60vh] overflow-y-auto">
+                {#each ignorePatterns as pattern}
+                  <div class="px-4 py-2.5 flex items-center gap-3">
+                    <div class="flex-1 min-w-0">
+                      <p class="text-sm text-gray-300 truncate">
+                        {pattern.replace(/.*\//, '').replace(/\.[^.]+$/, '').replace(/[_-]/g, ' ')}
+                      </p>
+                      <p class="text-xs text-gray-500 font-mono truncate">{pattern}</p>
+                    </div>
+                    <button
+                      class="px-3 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 text-gray-400 hover:text-gray-200 shrink-0"
+                      onclick={() => removeIgnorePattern(pattern)}
+                      title="Unignore — file will appear in future scans"
+                    >Unignore</button>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        {:else}
+
         <!-- Host scan results -->
         {#if scanResults && scanResults.count > 0}
           {#key scanKey}
@@ -478,6 +574,8 @@
               onLink={linkModel}
               onBulkLink={bulkLinkMatched}
               onImport={importModel}
+              onIgnore={ignoreFile}
+              onDelete={deleteUnmanagedFile}
               onDismiss={dismissScan}
             />
           {/key}
@@ -596,6 +694,7 @@
           </div>
         {/if}
         {/if}
+        {/if}
       </div>
     </div>
   {/if}
@@ -625,6 +724,16 @@
       host_relative_path: selectedHostItem.host_relative_path,
       onRemove: async () => {
         await removeModel(selectedHostItem.model_id);
+        selectedModel = null;
+        selectedHostItem = null;
+      },
+      onApplyRename: async () => {
+        await applyRename(selectedHostItem.model_id);
+        selectedModel = null;
+        selectedHostItem = null;
+      },
+      onResync: async () => {
+        await syncModel(selectedHostItem.model_id);
         selectedModel = null;
         selectedHostItem = null;
       },

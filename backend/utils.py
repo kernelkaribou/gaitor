@@ -78,9 +78,13 @@ def sanitize_filename(name: str, extension: str = "") -> str:
 
     Strips dangerous characters, replaces spaces with underscores,
     and ensures the result is non-empty.
+    Allowed: alphanumeric, space, hyphen, underscore, dot, parentheses, plus.
     """
-    safe = "".join(c for c in name if c.isalnum() or c in " -_").strip()
+    safe = "".join(c for c in name if c.isalnum() or c in " -_.()+" ).strip()
     safe = re.sub(r"\s+", "_", safe)  # spaces → underscores
+    safe = safe.lstrip(".")  # no hidden files
+    while ".." in safe:
+        safe = safe.replace("..", ".")  # collapse consecutive dots
     if not safe:
         raise ValueError("Name produces an empty filename after sanitization")
     return f"{safe}{extension}" if extension else safe
