@@ -16,13 +16,47 @@
   let matchedCount = $derived(items.filter(i => i.match).length);
   let highConfidenceCount = $derived(items.filter(i => i.match?.confidence === 'high').length);
   let unmatchedCount = $derived(items.filter(i => !i.match).length);
+  let totalCount = $derived(items.length);
+
+  function removeItem(item) {
+    items = items.filter(i => i.relative_path !== item.relative_path);
+  }
+
+  async function handleLink(relativePath, libraryModelId) {
+    const ok = await onLink(relativePath, libraryModelId);
+    if (ok) {
+      items = items.filter(i => i.relative_path !== relativePath);
+    }
+  }
+
+  async function handleBulkLink() {
+    const linked = await onBulkLink();
+    if (linked > 0) {
+      items = items.filter(i => !(i.match && i.match.confidence === 'high'));
+    }
+  }
+
+  async function handleImport(item, name, category) {
+    const ok = await onImport(item, name, category);
+    if (ok) removeItem(item);
+  }
+
+  async function handleIgnore(item) {
+    const ok = await onIgnore(item);
+    if (ok) removeItem(item);
+  }
+
+  async function handleDelete(item) {
+    const ok = await onDelete(item);
+    if (ok) removeItem(item);
+  }
 </script>
 
 <div class="bg-gray-800 border border-yellow-700/50 rounded-lg">
   <div class="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
     <div class="flex items-center gap-3">
       <span class="text-sm font-medium text-gray-200">
-        {results.count} unmanaged model{results.count !== 1 ? 's' : ''} found
+        {totalCount} unmanaged model{totalCount !== 1 ? 's' : ''}{totalCount < results.count ? ` (${results.count - totalCount} resolved)` : ''}
       </span>
       {#if results.already_managed > 0}
         <span class="text-xs text-gray-500">{results.already_managed} already managed</span>
@@ -32,7 +66,7 @@
       {#if highConfidenceCount > 0}
         <button
           class="px-3 py-1 text-sm rounded bg-green-600 hover:bg-green-500 text-white disabled:opacity-50"
-          onclick={onBulkLink}
+          onclick={handleBulkLink}
           disabled={linking._bulk}
         >
           {linking._bulk ? 'Linking...' : `Link All Matched (${highConfidenceCount})`}
@@ -74,7 +108,7 @@
               </div>
               <button
                 class="px-3 py-1 text-xs rounded bg-green-600 hover:bg-green-500 text-white disabled:opacity-50"
-                onclick={() => onLink(item.relative_path, item.match.library_model_id)}
+                onclick={() => handleLink(item.relative_path, item.match.library_model_id)}
                 disabled={linking[item.relative_path]}
                 title="Hash will be verified during linking"
               >
@@ -101,7 +135,7 @@
                   </select>
                   <button
                     class="px-3 py-1 text-xs rounded bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50"
-                    onclick={() => onImport(item, item.importName, item.importCategory)}
+                    onclick={() => handleImport(item, item.importName, item.importCategory)}
                     disabled={linking[item.relative_path] || !item.importName.trim()}
                   >
                     {linking[item.relative_path] ? 'Importing...' : 'Import'}
@@ -115,7 +149,7 @@
                 <span class="text-xs text-red-400">Delete this file?</span>
                 <button
                   class="px-3 py-1 text-xs rounded bg-red-700 hover:bg-red-600 text-white"
-                  onclick={() => { onDelete(item); }}
+                  onclick={() => { handleDelete(item); }}
                 >Confirm</button>
                 <button
                   class="text-xs text-gray-500 hover:text-gray-300"
@@ -128,7 +162,7 @@
                 >Import</button>
                 <button
                   class="px-3 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 text-gray-400"
-                  onclick={() => onIgnore(item)}
+                  onclick={() => handleIgnore(item)}
                   title="Add to .gaitor-ignore — hidden from future scans"
                 >Ignore</button>
                 <button

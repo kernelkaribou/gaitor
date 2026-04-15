@@ -168,20 +168,19 @@
     error = null;
     try {
       await api.linkHostModel(selectedHost.id, relativePath, libraryModelId);
-      // Re-scan to refresh results
-      const result = await api.scanHost(selectedHost.id);
-      scanResults = result;
-      scanKey += 1;
+      linking = { ...linking, [relativePath]: false };
+      return true;
     } catch (err) {
       error = err.message;
+      linking = { ...linking, [relativePath]: false };
+      return false;
     }
-    linking = { ...linking, [relativePath]: false };
   }
 
   async function bulkLinkMatched() {
-    if (!scanResults) return;
+    if (!scanResults) return 0;
     const matched = scanResults.unmanaged.filter(u => u.match && u.match.confidence === 'high');
-    if (matched.length === 0) return;
+    if (matched.length === 0) return 0;
     error = null;
     linking = { ...linking, _bulk: true };
     try {
@@ -190,13 +189,13 @@
         library_model_id: u.match.library_model_id,
       }));
       await api.bulkLinkHostModels(selectedHost.id, links);
-      const result = await api.scanHost(selectedHost.id);
-      scanResults = result;
-      scanKey += 1;
+      linking = { ...linking, _bulk: false };
+      return matched.length;
     } catch (err) {
       error = err.message;
+      linking = { ...linking, _bulk: false };
+      return 0;
     }
-    linking = { ...linking, _bulk: false };
   }
 
   async function importModel(item, importName, importCategory) {
@@ -208,13 +207,13 @@
         name: importName,
         category: importCategory,
       });
-      const result = await api.scanHost(selectedHost.id);
-      scanResults = result;
-      scanKey += 1;
+      linking = { ...linking, [item.relative_path]: false };
+      return true;
     } catch (err) {
       error = err.message;
+      linking = { ...linking, [item.relative_path]: false };
+      return false;
     }
-    linking = { ...linking, [item.relative_path]: false };
   }
 
   function dismissScan() {
@@ -226,11 +225,10 @@
     error = null;
     try {
       await api.addIgnorePattern(selectedHost.id, item.relative_path);
-      const result = await api.scanHost(selectedHost.id);
-      scanResults = result;
-      scanKey += 1;
+      return true;
     } catch (err) {
       error = err.message;
+      return false;
     }
   }
 
@@ -238,11 +236,10 @@
     error = null;
     try {
       await api.deleteUnmanagedFile(selectedHost.id, item.relative_path);
-      const result = await api.scanHost(selectedHost.id);
-      scanResults = result;
-      scanKey += 1;
+      return true;
     } catch (err) {
       error = err.message;
+      return false;
     }
   }
 
