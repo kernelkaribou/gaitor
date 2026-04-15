@@ -1,6 +1,7 @@
 """
 Sync service - file copy operations between library and hosts with progress tracking.
 """
+import fnmatch
 import hashlib
 import json
 import logging
@@ -513,12 +514,90 @@ def apply_rename_on_host(model_id: str, host_id: str) -> dict:
     raise ValueError(f"Model {model_id} not found on host {host_id}")
 
 
+IGNORE_FILENAME = ".gaitor-ignore"
+
+
+def _load_ignore_patterns(host_path: Path) -> list[str]:
+    """Load ignore patterns from .gaitor-ignore file in host root."""
+    ignore_file = host_path / IGNORE_FILENAME
+    if not ignore_file.exists():
+        return []
+    patterns = []
+    try:
+        with open(ignore_file) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    patterns.append(line)
+    except OSError as e:
+        logger.warning(f"Failed to read {ignore_file}: {e}")
+    return patterns
+
+
+def _is_ignored(rel_path: str, patterns: list[str]) -> bool:
+    """Check if a relative path matches any ignore pattern."""
+    for pattern in patterns:
+        if fnmatch.fnmatch(rel_path, pattern) or fnmatch.fnmatch(Path(rel_path).name, pattern):
+            return True
+    return False
+
+
+def add_ignore_pattern(host_id: str, pattern: str) -> dict:
+    """Append a pattern to the host's .gaitor-ignore file."""
+    validate_host_id(host_id)
+    host_path = safe_resolve(config.HOSTS_ROOT, host_id)
+    if not host_path.exists():
+        raise ValueError(f"Host not found: {host_id}")
+
+    pattern = pattern.strip()
+    if not pattern:
+        raise ValueError("Pattern cannot be empty")
+
+    ignore_file = host_path / IGNORE_FILENAME
+    existing = _load_ignore_patterns(host_path)
+    if pattern in existing:
+        return {"pattern": pattern, "added": False, "reason": "already exists"}
+
+    with open(ignore_file, "a") as f:
+        if ignore_file.exists() and ignore_file.stat().st_size > 0:
+            f.write("\n")
+        f.write(pattern + "\n")
+
+    logger.info(f"Added ignore pattern '{pattern}' for host {host_id}")
+    return {"pattern": pattern, "added": True}
+
+
+def delete_unmanaged_file(host_id: str, relative_path: str) -> dict:
+    """Delete an unmanaged file from a host. Only allows deleting non-sidecar-managed files."""
+    validate_host_id(host_id)
+    host_path = safe_resolve(config.HOSTS_ROOT, host_id)
+    if not host_path.exists():
+        raise ValueError(f"Host not found: {host_id}")
+
+    target = safe_resolve(host_path, relative_path)
+    if not target.exists():
+        raise ValueError(f"File not found: {relative_path}")
+
+    # Check this file is not managed by a sidecar
+    sidecar_candidate = target.parent / f".{target.name}{SIDECAR_SUFFIX}"
+    if sidecar_candidate.exists():
+        raise ValueError("Cannot delete a sidecar-managed file. Use Remove instead.")
+
+    target.unlink()
+    cleanup_empty_parents(target, host_path)
+
+    logger.info(f"Deleted unmanaged file {relative_path} from {host_id}")
+    return {"host_id": host_id, "deleted": relative_path}
+
+
 def scan_host(host_id: str) -> dict:
     """Scan a host for model files that are not managed by gAItor sidecars."""
     validate_host_id(host_id)
     host_path = safe_resolve(config.HOSTS_ROOT, host_id)
     if not host_path.exists():
         raise ValueError(f"Host not found: {host_id}")
+
+    ignore_patterns = _load_ignore_patterns(host_path)
 
     # Collect all sidecar-managed filenames so we can skip them
     managed_files = set()
@@ -564,6 +643,9 @@ def scan_host(host_id: str) -> dict:
                 continue
 
             rel_path = str(filepath.relative_to(host_path))
+
+            if ignore_patterns and _is_ignored(rel_path, ignore_patterns):
+                continue
             try:
                 size = filepath.stat().st_size
             except OSError:

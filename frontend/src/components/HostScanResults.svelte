@@ -1,7 +1,7 @@
 <script>
   import { formatSize } from '../lib/utils.js';
 
-  let { results, categories, onLink, onBulkLink, onImport, onDismiss, linking = {} } = $props();
+  let { results, categories, onLink, onBulkLink, onImport, onIgnore, onDelete, onDismiss, linking = {} } = $props();
 
   let items = $state(
     (results.unmanaged || []).map((u) => ({
@@ -9,6 +9,7 @@
       importName: u.filename.replace(/\.[^.]+$/, '').replace(/[_-]/g, ' '),
       importCategory: u.guessed_category || 'other',
       showImport: false,
+      confirmDelete: false,
     }))
   );
 
@@ -67,7 +68,7 @@
             <div class="flex items-center gap-2 shrink-0">
               <div class="text-right">
                 <p class="text-xs text-green-400">{item.match.library_name}</p>
-                <p class="text-xs text-gray-500">
+                <p class="text-xs {item.match.confidence === 'high' ? 'text-green-600' : 'text-yellow-500'}">
                   {item.match.confidence === 'high' ? 'Name + size match' : 'Name match only'}
                 </p>
               </div>
@@ -75,12 +76,13 @@
                 class="px-3 py-1 text-xs rounded bg-green-600 hover:bg-green-500 text-white disabled:opacity-50"
                 onclick={() => onLink(item.relative_path, item.match.library_model_id)}
                 disabled={linking[item.relative_path]}
+                title="Hash will be verified during linking"
               >
                 {linking[item.relative_path] ? 'Linking...' : 'Link'}
               </button>
             </div>
           {:else}
-            <!-- Unmatched: show Import option -->
+            <!-- Unmatched: show Import, Ignore, Delete options -->
             <div class="flex items-center gap-2 shrink-0">
               {#if item.showImport}
                 <div class="flex items-center gap-2">
@@ -109,13 +111,31 @@
                     onclick={() => { item.showImport = false; }}
                   >Cancel</button>
                 </div>
+              {:else if item.confirmDelete}
+                <span class="text-xs text-red-400">Delete this file?</span>
+                <button
+                  class="px-3 py-1 text-xs rounded bg-red-700 hover:bg-red-600 text-white"
+                  onclick={() => { onDelete(item); }}
+                >Confirm</button>
+                <button
+                  class="text-xs text-gray-500 hover:text-gray-300"
+                  onclick={() => { item.confirmDelete = false; }}
+                >Cancel</button>
               {:else}
                 <button
                   class="px-3 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 text-gray-300"
                   onclick={() => { item.showImport = true; }}
-                >
-                  Import to Library
-                </button>
+                >Import</button>
+                <button
+                  class="px-3 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 text-gray-400"
+                  onclick={() => onIgnore(item)}
+                  title="Add to .gaitor-ignore — hidden from future scans"
+                >Ignore</button>
+                <button
+                  class="px-3 py-1 text-xs rounded bg-gray-700 hover:bg-red-900/50 text-gray-400 hover:text-red-300"
+                  onclick={() => { item.confirmDelete = true; }}
+                  title="Delete this file from the host"
+                >Delete</button>
               {/if}
             </div>
           {/if}

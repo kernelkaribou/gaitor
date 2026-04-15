@@ -219,8 +219,31 @@
 
   function dismissScan() {
     scanResults = null;
-    // Refresh sync status since linking/importing may have changed it
     if (selectedHost) selectHost(selectedHost);
+  }
+
+  async function ignoreFile(item) {
+    error = null;
+    try {
+      await api.addIgnorePattern(selectedHost.id, item.relative_path);
+      const result = await api.scanHost(selectedHost.id);
+      scanResults = result;
+      scanKey += 1;
+    } catch (err) {
+      error = err.message;
+    }
+  }
+
+  async function deleteUnmanagedFile(item) {
+    error = null;
+    try {
+      await api.deleteUnmanagedFile(selectedHost.id, item.relative_path);
+      const result = await api.scanHost(selectedHost.id);
+      scanResults = result;
+      scanKey += 1;
+    } catch (err) {
+      error = err.message;
+    }
   }
 
   async function openModelDetail(item) {
@@ -478,6 +501,8 @@
               onLink={linkModel}
               onBulkLink={bulkLinkMatched}
               onImport={importModel}
+              onIgnore={ignoreFile}
+              onDelete={deleteUnmanagedFile}
               onDismiss={dismissScan}
             />
           {/key}

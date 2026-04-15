@@ -46,7 +46,8 @@
 
 <div class="bg-gray-800 border border-yellow-700/50 rounded-lg mb-4">
   <div class="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-3">
+      <input type="checkbox" checked={allSelected} onchange={(e) => toggleAll(e.target.checked)} class="rounded" />
       <span class="text-sm font-medium text-gray-200">{results.count} untracked model{results.count !== 1 ? 's' : ''} found</span>
     </div>
     <div class="flex items-center gap-2">
@@ -66,12 +67,6 @@
   {/if}
 
   <div class="divide-y divide-gray-700 max-h-[80vh] overflow-y-auto">
-    <!-- Select all row -->
-    <div class="px-4 py-2 flex items-center gap-3 bg-gray-750">
-      <input type="checkbox" checked={allSelected} onchange={(e) => toggleAll(e.target.checked)} class="rounded" />
-      <span class="text-xs text-gray-400">Select all</span>
-    </div>
-
     {#each items as item, idx}
       <div class="px-4 py-2.5 flex items-center gap-3">
         <input type="checkbox" bind:checked={item.selected} class="rounded shrink-0" />

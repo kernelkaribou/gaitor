@@ -165,6 +165,10 @@ export const api = {
     request(`/hosts/${encodeURIComponent(hostId)}/link/bulk`, { method: 'POST', body: JSON.stringify({ links }) }),
   importFromHost: (hostId, data) =>
     request(`/hosts/${encodeURIComponent(hostId)}/import`, { method: 'POST', body: JSON.stringify(data) }),
+  addIgnorePattern: (hostId, pattern) =>
+    request(`/hosts/${encodeURIComponent(hostId)}/ignore`, { method: 'POST', body: JSON.stringify({ pattern }) }),
+  deleteUnmanagedFile: (hostId, relativePath) =>
+    request(`/hosts/${encodeURIComponent(hostId)}/delete-file`, { method: 'POST', body: JSON.stringify({ relative_path: relativePath }) }),
 
   // Download (formerly Retrieve)
   getProviders: () => request('/retrieve/providers'),

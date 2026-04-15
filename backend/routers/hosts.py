@@ -17,6 +17,8 @@ from ..services.sync import (
     scan_host,
     link_host_model,
     import_from_host,
+    add_ignore_pattern,
+    delete_unmanaged_file,
 )
 from ..services.metadata import load_model
 from ..services.tasks import task_manager
@@ -69,6 +71,14 @@ class BulkLinkRequest(BaseModel):
     def model_post_init(self, __context):
         if len(self.links) > 100:
             raise ValueError("Bulk link limited to 100 models at a time")
+
+
+class IgnoreRequest(BaseModel):
+    pattern: str
+
+
+class DeleteFileRequest(BaseModel):
+    relative_path: str
 
 
 @router.get("/")
@@ -261,3 +271,25 @@ async def import_model_endpoint(host_id: str, req: ImportRequest):
     atask = asyncio.create_task(_do_import())
     task_manager.set_asyncio_task(task_id, atask)
     return {"task_id": task_id, "message": f"Importing {req.name} from {host_id}"}
+
+
+@router.post("/{host_id}/ignore")
+async def ignore_pattern_endpoint(host_id: str, req: IgnoreRequest):
+    """Add a pattern to the host's .gaitor-ignore file."""
+    host_id = _check_host_id(host_id)
+    try:
+        result = await asyncio.to_thread(add_ignore_pattern, host_id, req.pattern)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{host_id}/delete-file")
+async def delete_file_endpoint(host_id: str, req: DeleteFileRequest):
+    """Delete an unmanaged file from a host."""
+    host_id = _check_host_id(host_id)
+    try:
+        result = await asyncio.to_thread(delete_unmanaged_file, host_id, req.relative_path)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
