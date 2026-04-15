@@ -40,6 +40,63 @@
   // Sorting
   let sortBy = $state('date');
 
+  // Filter pane
+  let showFilters = $state(false);
+  let filterExtensions = $state(new Set());
+  let filterBaseModels = $state(new Set());
+  let filterTags = $state(new Set());
+  let filterAttrs = $state({ hasSource: false, hasGroup: false, syncedToHost: false, hashVerified: false, isDuplicate: false });
+  let filterSize = $state(null); // null, '<1', '1-5', '5-10', '10+'
+
+  // Derived filter options from loaded data
+  let availableExtensions = $derived.by(() => {
+    const exts = {};
+    for (const m of modelList) {
+      const ext = (m.filename || '').split('.').pop()?.toLowerCase() || '';
+      if (ext) exts[ext] = (exts[ext] || 0) + 1;
+    }
+    return Object.entries(exts).sort((a, b) => b[1] - a[1]);
+  });
+
+  let availableBaseModels = $derived.by(() => {
+    const bms = {};
+    for (const m of modelList) {
+      if (m.base_model) bms[m.base_model] = (bms[m.base_model] || 0) + 1;
+    }
+    return Object.entries(bms).sort((a, b) => b[1] - a[1]);
+  });
+
+  let availableTags = $derived.by(() => {
+    const tags = {};
+    for (const m of modelList) {
+      for (const t of (m.tags || [])) {
+        tags[t] = (tags[t] || 0) + 1;
+      }
+    }
+    return Object.entries(tags).sort((a, b) => b[1] - a[1]);
+  });
+
+  let activeFilterCount = $derived(
+    filterExtensions.size + filterBaseModels.size + filterTags.size +
+    Object.values(filterAttrs).filter(Boolean).length +
+    (filterSize ? 1 : 0)
+  );
+
+  function clearAllFilters() {
+    filterExtensions = new Set();
+    filterBaseModels = new Set();
+    filterTags = new Set();
+    filterAttrs = { hasSource: false, hasGroup: false, syncedToHost: false, hashVerified: false, isDuplicate: false };
+    filterSize = null;
+  }
+
+  function toggleFilterSet(set, value) {
+    const next = new Set(set);
+    if (next.has(value)) next.delete(value);
+    else next.add(value);
+    return next;
+  }
+
   // Reset to default sort if category sort is selected but a category filter is active
   $effect(() => {
     if (activeCategory && sortBy === 'category') sortBy = 'date';
@@ -273,6 +330,57 @@
           (m.tags || []).some((t) => t.toLowerCase().includes(q))
       );
     }
+    // Extension filter
+    if (filterExtensions.size > 0) {
+      result = result.filter(m => {
+        const ext = (m.filename || '').split('.').pop()?.toLowerCase() || '';
+        return filterExtensions.has(ext);
+      });
+    }
+    // Base model filter
+    if (filterBaseModels.size > 0) {
+      result = result.filter(m => m.base_model && filterBaseModels.has(m.base_model));
+    }
+    // Tags filter (model must have ALL selected tags)
+    if (filterTags.size > 0) {
+      result = result.filter(m => {
+        const mt = new Set(m.tags || []);
+        for (const t of filterTags) {
+          if (!mt.has(t)) return false;
+        }
+        return true;
+      });
+    }
+    // Attribute filters
+    if (filterAttrs.hasSource) {
+      result = result.filter(m => m.source?.url);
+    }
+    if (filterAttrs.hasGroup) {
+      result = result.filter(m => m.group_id);
+    }
+    if (filterAttrs.syncedToHost) {
+      result = result.filter(m => (hostCounts[m.id] || 0) > 0);
+    }
+    if (filterAttrs.hashVerified) {
+      result = result.filter(m => m.hash?.sha256);
+    }
+    if (filterAttrs.isDuplicate) {
+      result = result.filter(m => duplicateIds.has(m.id));
+    }
+    // Size filter
+    if (filterSize) {
+      const GB = 1024 * 1024 * 1024;
+      result = result.filter(m => {
+        const s = m.size || 0;
+        switch (filterSize) {
+          case '<1': return s < GB;
+          case '1-5': return s >= GB && s < 5 * GB;
+          case '5-10': return s >= 5 * GB && s < 10 * GB;
+          case '10+': return s >= 10 * GB;
+          default: return true;
+        }
+      });
+    }
     return [...result].sort((a, b) => {
       switch (sortBy) {
         case 'name':
@@ -505,8 +613,72 @@
         >
           {scanning ? 'Scanning...' : 'Scan'}
         </button>
+        <button
+          class="relative px-3 py-1.5 text-sm rounded-md transition-colors {showFilters ? 'bg-green-700 hover:bg-green-600 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-200'}"
+          onclick={() => showFilters = !showFilters}
+          title="Toggle filters"
+        >
+          <svg class="w-4 h-4 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+          </svg>
+          {#if activeFilterCount > 0}
+            <span class="absolute -top-1.5 -right-1.5 bg-green-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">{activeFilterCount}</span>
+          {/if}
+        </button>
       </div>
     </div>
+
+    <!-- Active filter chips -->
+    {#if activeFilterCount > 0}
+      <div class="flex items-center gap-1.5 flex-wrap mb-3">
+        {#each [...filterExtensions] as ext}
+          <button class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-blue-900/40 text-blue-300 border border-blue-800/50 hover:bg-blue-800/50" onclick={() => filterExtensions = toggleFilterSet(filterExtensions, ext)}>
+            .{ext} <span class="text-blue-500">&#x2715;</span>
+          </button>
+        {/each}
+        {#each [...filterBaseModels] as bm}
+          <button class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-purple-900/40 text-purple-300 border border-purple-800/50 hover:bg-purple-800/50" onclick={() => filterBaseModels = toggleFilterSet(filterBaseModels, bm)}>
+            {bm} <span class="text-purple-500">&#x2715;</span>
+          </button>
+        {/each}
+        {#each [...filterTags] as tag}
+          <button class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-yellow-900/40 text-yellow-300 border border-yellow-800/50 hover:bg-yellow-800/50" onclick={() => filterTags = toggleFilterSet(filterTags, tag)}>
+            {tag} <span class="text-yellow-500">&#x2715;</span>
+          </button>
+        {/each}
+        {#if filterAttrs.hasSource}
+          <button class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-gray-700 text-gray-300 border border-gray-600 hover:bg-gray-600" onclick={() => filterAttrs = { ...filterAttrs, hasSource: false }}>
+            Has Source <span class="text-gray-500">&#x2715;</span>
+          </button>
+        {/if}
+        {#if filterAttrs.hasGroup}
+          <button class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-gray-700 text-gray-300 border border-gray-600 hover:bg-gray-600" onclick={() => filterAttrs = { ...filterAttrs, hasGroup: false }}>
+            Grouped <span class="text-gray-500">&#x2715;</span>
+          </button>
+        {/if}
+        {#if filterAttrs.syncedToHost}
+          <button class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-gray-700 text-gray-300 border border-gray-600 hover:bg-gray-600" onclick={() => filterAttrs = { ...filterAttrs, syncedToHost: false }}>
+            Synced <span class="text-gray-500">&#x2715;</span>
+          </button>
+        {/if}
+        {#if filterAttrs.hashVerified}
+          <button class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-gray-700 text-gray-300 border border-gray-600 hover:bg-gray-600" onclick={() => filterAttrs = { ...filterAttrs, hashVerified: false }}>
+            Verified <span class="text-gray-500">&#x2715;</span>
+          </button>
+        {/if}
+        {#if filterAttrs.isDuplicate}
+          <button class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-gray-700 text-gray-300 border border-gray-600 hover:bg-gray-600" onclick={() => filterAttrs = { ...filterAttrs, isDuplicate: false }}>
+            Duplicate <span class="text-gray-500">&#x2715;</span>
+          </button>
+        {/if}
+        {#if filterSize}
+          <button class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-gray-700 text-gray-300 border border-gray-600 hover:bg-gray-600" onclick={() => filterSize = null}>
+            {filterSize === '<1' ? '< 1 GB' : filterSize === '1-5' ? '1-5 GB' : filterSize === '5-10' ? '5-10 GB' : '10+ GB'} <span class="text-gray-500">&#x2715;</span>
+          </button>
+        {/if}
+        <button class="text-xs text-gray-500 hover:text-gray-300 ml-1" onclick={clearAllFilters}>Clear all</button>
+      </div>
+    {/if}
 
     {#if error}
       <div class="bg-red-900/30 border border-red-700 rounded-md px-4 py-2 mb-4 text-red-300 text-sm">
@@ -588,6 +760,8 @@
       {/if}
     {/if}
 
+    <div class="flex gap-4">
+    <div class="flex-1 min-w-0">
     <!-- Scan results -->
     {#if scanResults && scanResults.count > 0}
       {#key scanKey}
@@ -724,6 +898,113 @@
       </div>
     {/if}
     {/if}
+    </div>
+
+    <!-- Filter pane -->
+    {#if showFilters}
+      <aside class="w-56 shrink-0">
+        <div class="sticky top-0 bg-gray-900 border border-gray-700 rounded-lg p-3 max-h-[calc(100vh-6rem)] overflow-y-auto">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-semibold text-gray-200">Filters</h3>
+            {#if activeFilterCount > 0}
+              <button class="text-xs text-gray-500 hover:text-gray-300" onclick={clearAllFilters}>Clear all</button>
+            {/if}
+          </div>
+
+          <!-- Extensions -->
+          {#if availableExtensions.length > 0}
+            <details class="mb-3" open>
+              <summary class="text-xs font-medium text-gray-400 cursor-pointer select-none mb-1.5">Extension</summary>
+              <div class="space-y-1 ml-1">
+                {#each availableExtensions as [ext, count]}
+                  <label class="flex items-center gap-2 text-xs text-gray-300 cursor-pointer hover:text-gray-100">
+                    <input type="checkbox" checked={filterExtensions.has(ext)} onchange={() => filterExtensions = toggleFilterSet(filterExtensions, ext)} class="rounded border-gray-600 bg-gray-800 text-green-500 focus:ring-0 w-3 h-3" />
+                    <span class="flex-1">.{ext}</span>
+                    <span class="text-gray-600">{count}</span>
+                  </label>
+                {/each}
+              </div>
+            </details>
+          {/if}
+
+          <!-- Base Model -->
+          {#if availableBaseModels.length > 0}
+            <details class="mb-3" open>
+              <summary class="text-xs font-medium text-gray-400 cursor-pointer select-none mb-1.5">Base Model</summary>
+              <div class="space-y-1 ml-1">
+                {#each availableBaseModels as [bm, count]}
+                  <label class="flex items-center gap-2 text-xs text-gray-300 cursor-pointer hover:text-gray-100">
+                    <input type="checkbox" checked={filterBaseModels.has(bm)} onchange={() => filterBaseModels = toggleFilterSet(filterBaseModels, bm)} class="rounded border-gray-600 bg-gray-800 text-green-500 focus:ring-0 w-3 h-3" />
+                    <span class="flex-1 truncate">{bm}</span>
+                    <span class="text-gray-600">{count}</span>
+                  </label>
+                {/each}
+              </div>
+            </details>
+          {/if}
+
+          <!-- Tags -->
+          {#if availableTags.length > 0}
+            <details class="mb-3">
+              <summary class="text-xs font-medium text-gray-400 cursor-pointer select-none mb-1.5">Tags</summary>
+              <div class="flex flex-wrap gap-1 ml-1">
+                {#each availableTags as [tag, count]}
+                  <button
+                    class="text-[11px] px-1.5 py-0.5 rounded-full border transition-colors {filterTags.has(tag) ? 'bg-yellow-900/50 text-yellow-300 border-yellow-700/50' : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-500'}"
+                    onclick={() => filterTags = toggleFilterSet(filterTags, tag)}
+                  >
+                    {tag}
+                  </button>
+                {/each}
+              </div>
+            </details>
+          {/if}
+
+          <!-- Attributes -->
+          <details class="mb-3" open>
+            <summary class="text-xs font-medium text-gray-400 cursor-pointer select-none mb-1.5">Attributes</summary>
+            <div class="space-y-1.5 ml-1">
+              <label class="flex items-center gap-2 text-xs text-gray-300 cursor-pointer hover:text-gray-100">
+                <input type="checkbox" checked={filterAttrs.hasSource} onchange={() => filterAttrs = { ...filterAttrs, hasSource: !filterAttrs.hasSource }} class="rounded border-gray-600 bg-gray-800 text-green-500 focus:ring-0 w-3 h-3" />
+                Has source URL
+              </label>
+              <label class="flex items-center gap-2 text-xs text-gray-300 cursor-pointer hover:text-gray-100">
+                <input type="checkbox" checked={filterAttrs.hasGroup} onchange={() => filterAttrs = { ...filterAttrs, hasGroup: !filterAttrs.hasGroup }} class="rounded border-gray-600 bg-gray-800 text-green-500 focus:ring-0 w-3 h-3" />
+                In a group
+              </label>
+              <label class="flex items-center gap-2 text-xs text-gray-300 cursor-pointer hover:text-gray-100">
+                <input type="checkbox" checked={filterAttrs.syncedToHost} onchange={() => filterAttrs = { ...filterAttrs, syncedToHost: !filterAttrs.syncedToHost }} class="rounded border-gray-600 bg-gray-800 text-green-500 focus:ring-0 w-3 h-3" />
+                Synced to host
+              </label>
+              <label class="flex items-center gap-2 text-xs text-gray-300 cursor-pointer hover:text-gray-100">
+                <input type="checkbox" checked={filterAttrs.hashVerified} onchange={() => filterAttrs = { ...filterAttrs, hashVerified: !filterAttrs.hashVerified }} class="rounded border-gray-600 bg-gray-800 text-green-500 focus:ring-0 w-3 h-3" />
+                Hash verified
+              </label>
+              <label class="flex items-center gap-2 text-xs text-gray-300 cursor-pointer hover:text-gray-100">
+                <input type="checkbox" checked={filterAttrs.isDuplicate} onchange={() => filterAttrs = { ...filterAttrs, isDuplicate: !filterAttrs.isDuplicate }} class="rounded border-gray-600 bg-gray-800 text-green-500 focus:ring-0 w-3 h-3" />
+                Duplicate hash
+              </label>
+            </div>
+          </details>
+
+          <!-- Size Range -->
+          <details class="mb-1">
+            <summary class="text-xs font-medium text-gray-400 cursor-pointer select-none mb-1.5">Size</summary>
+            <div class="flex flex-wrap gap-1 ml-1">
+              {#each [['<1', '< 1 GB'], ['1-5', '1-5 GB'], ['5-10', '5-10 GB'], ['10+', '10+ GB']] as [val, label]}
+                <button
+                  class="text-[11px] px-2 py-0.5 rounded-full border transition-colors {filterSize === val ? 'bg-green-900/50 text-green-300 border-green-700/50' : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-500'}"
+                  onclick={() => filterSize = filterSize === val ? null : val}
+                >
+                  {label}
+                </button>
+              {/each}
+            </div>
+          </details>
+        </div>
+      </aside>
+    {/if}
+    </div>
   </div>
 </div>
 
