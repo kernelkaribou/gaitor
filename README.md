@@ -127,6 +127,67 @@ make test
 - **Metadata**: JSON files (no database - network share friendly)
 - **Transfers**: Server-side file copy between Docker volume mounts (browser only receives progress updates)
 
+## Storage & Sidecar Files
+
+gAItor stores all metadata as lightweight JSON files alongside your models — no database required. Here is what gets created and where, so you know exactly what to expect (and clean up) at the filesystem level.
+
+### Library (`/library`)
+
+All library metadata lives in a hidden `.gaitor/` directory at the library root. Your actual model files are never modified.
+
+```
+/library/
+├── .gaitor/                        # All gAItor metadata lives here
+│   ├── config.json                 # Library configuration and settings
+│   ├── categories.json             # Category definitions (checkpoints, loras, etc.)
+│   ├── models/                     # One JSON file per cataloged model
+│   │   ├── <model-uuid>.json       # Name, description, source URL, tags, hash, path
+│   │   └── ...
+│   └── thumbnails/                 # Optional model thumbnail images
+│       └── <model-uuid>.webp
+├── checkpoints/
+│   └── my-model.safetensors        # Actual model file (untouched)
+└── loras/
+    └── detail-enhancer.safetensors
+```
+
+To fully remove gAItor from your library, delete the `.gaitor/` directory. Your model files remain intact.
+
+### Hosts (`/hosts/<host_id>`)
+
+Each synced model on a host gets a hidden sidecar file placed next to it. This is how gAItor tracks which library model a file belongs to and detects renames, moves, or content changes.
+
+```
+/hosts/my-server/
+├── checkpoints/
+│   ├── my-model.safetensors              # Copied model file
+│   └── .my-model.safetensors.gaitor.json # Sidecar metadata
+└── .gaitor-ignore                        # Optional: patterns to exclude from scans
+```
+
+**Sidecar file** (`.{filename}.gaitor.json`) — created when a model is synced or linked:
+
+```json
+{
+  "library_model_id": "abc-123-uuid",
+  "library_name": "My Model",
+  "library_relative_path": "checkpoints/my-model.safetensors",
+  "current_filename": "my-model.safetensors",
+  "synced_at": "2026-04-15T12:00:00Z",
+  "hash": "sha256:abcdef..."
+}
+```
+
+**`.gaitor-ignore`** — optional file at the host root, one pattern per line (fnmatch syntax). Files matching these patterns are excluded from host scans:
+
+```
+# Ignore application-generated files
+*.bin
+temp-models/*
+```
+
+To fully remove gAItor tracking from a host, delete all `.gaitor.json` sidecar files and the `.gaitor-ignore` file. Your model files remain intact.
+
 ## License
 
 MIT - see [LICENSE](LICENSE)
