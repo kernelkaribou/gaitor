@@ -558,9 +558,13 @@ def add_ignore_pattern(host_id: str, pattern: str) -> dict:
     if pattern in existing:
         return {"pattern": pattern, "added": False, "reason": "already exists"}
 
-    with open(ignore_file, "a") as f:
-        if ignore_file.exists() and ignore_file.stat().st_size > 0:
-            f.write("\n")
+    with open(ignore_file, "a+") as f:
+        f.seek(0, 2)
+        pos = f.tell()
+        if pos > 0:
+            f.seek(pos - 1)
+            if f.read(1) != "\n":
+                f.write("\n")
         f.write(pattern + "\n")
 
     logger.info(f"Added ignore pattern '{pattern}' for host {host_id}")
