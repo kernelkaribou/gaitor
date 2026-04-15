@@ -628,58 +628,6 @@
       </div>
     </div>
 
-    <!-- Active filter chips -->
-    {#if activeFilterCount > 0}
-      <div class="flex items-center gap-1.5 flex-wrap mb-3">
-        {#each [...filterExtensions] as ext}
-          <button class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-blue-900/40 text-blue-300 border border-blue-800/50 hover:bg-blue-800/50" onclick={() => filterExtensions = toggleFilterSet(filterExtensions, ext)}>
-            .{ext} <span class="text-blue-500">&#x2715;</span>
-          </button>
-        {/each}
-        {#each [...filterBaseModels] as bm}
-          <button class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-purple-900/40 text-purple-300 border border-purple-800/50 hover:bg-purple-800/50" onclick={() => filterBaseModels = toggleFilterSet(filterBaseModels, bm)}>
-            {bm} <span class="text-purple-500">&#x2715;</span>
-          </button>
-        {/each}
-        {#each [...filterTags] as tag}
-          <button class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-yellow-900/40 text-yellow-300 border border-yellow-800/50 hover:bg-yellow-800/50" onclick={() => filterTags = toggleFilterSet(filterTags, tag)}>
-            {tag} <span class="text-yellow-500">&#x2715;</span>
-          </button>
-        {/each}
-        {#if filterAttrs.hasSource}
-          <button class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-gray-700 text-gray-300 border border-gray-600 hover:bg-gray-600" onclick={() => filterAttrs = { ...filterAttrs, hasSource: false }}>
-            Has Source <span class="text-gray-500">&#x2715;</span>
-          </button>
-        {/if}
-        {#if filterAttrs.hasGroup}
-          <button class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-gray-700 text-gray-300 border border-gray-600 hover:bg-gray-600" onclick={() => filterAttrs = { ...filterAttrs, hasGroup: false }}>
-            Grouped <span class="text-gray-500">&#x2715;</span>
-          </button>
-        {/if}
-        {#if filterAttrs.syncedToHost}
-          <button class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-gray-700 text-gray-300 border border-gray-600 hover:bg-gray-600" onclick={() => filterAttrs = { ...filterAttrs, syncedToHost: false }}>
-            Synced <span class="text-gray-500">&#x2715;</span>
-          </button>
-        {/if}
-        {#if filterAttrs.hashVerified}
-          <button class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-gray-700 text-gray-300 border border-gray-600 hover:bg-gray-600" onclick={() => filterAttrs = { ...filterAttrs, hashVerified: false }}>
-            Verified <span class="text-gray-500">&#x2715;</span>
-          </button>
-        {/if}
-        {#if filterAttrs.isDuplicate}
-          <button class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-gray-700 text-gray-300 border border-gray-600 hover:bg-gray-600" onclick={() => filterAttrs = { ...filterAttrs, isDuplicate: false }}>
-            Duplicate <span class="text-gray-500">&#x2715;</span>
-          </button>
-        {/if}
-        {#if filterSize}
-          <button class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-gray-700 text-gray-300 border border-gray-600 hover:bg-gray-600" onclick={() => filterSize = null}>
-            {filterSize === '<1' ? '< 1 GB' : filterSize === '1-5' ? '1-5 GB' : filterSize === '5-10' ? '5-10 GB' : '10+ GB'} <span class="text-gray-500">&#x2715;</span>
-          </button>
-        {/if}
-        <button class="text-xs text-gray-500 hover:text-gray-300 ml-1" onclick={clearAllFilters}>Clear all</button>
-      </div>
-    {/if}
-
     {#if error}
       <div class="bg-red-900/30 border border-red-700 rounded-md px-4 py-2 mb-4 text-red-300 text-sm">
         {error}
@@ -760,7 +708,7 @@
       {/if}
     {/if}
 
-    <div class="flex gap-4">
+    <div class="flex gap-4 items-start">
     <div class="flex-1 min-w-0">
     <!-- Scan results -->
     {#if scanResults && scanResults.count > 0}
