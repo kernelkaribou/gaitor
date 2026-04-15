@@ -50,11 +50,10 @@
       <span>{formatSize(model.size)}</span>
       <div class="flex items-center gap-2">
         {#if model.source?.url}
-          <svg class="w-3.5 h-3.5 text-gray-400" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <svg class="w-3.5 h-3.5 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <title>Has source URL</title>
-            <path d="M6.5 9.5l3-3" />
-            <path d="M9 10.5l1.5-1.5a2.5 2.5 0 0 0-3.5-3.5L5.5 7" />
-            <path d="M7 5.5L5.5 7a2.5 2.5 0 0 0 3.5 3.5L10.5 9" />
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
           </svg>
         {/if}
         {#if model.group_id}
