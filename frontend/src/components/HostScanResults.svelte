@@ -9,6 +9,7 @@
       importName: u.filename.replace(/\.[^.]+$/, '').replace(/[_-]/g, ' '),
       importCategory: u.guessed_category || 'other',
       showImport: false,
+      confirmIgnore: false,
       confirmDelete: false,
     }))
   );
@@ -145,6 +146,16 @@
                     onclick={() => { item.showImport = false; }}
                   >Cancel</button>
                 </div>
+              {:else if item.confirmIgnore}
+                <span class="text-xs text-yellow-400">Ignore from scans?</span>
+                <button
+                  class="px-3 py-1 text-xs rounded bg-yellow-700 hover:bg-yellow-600 text-white"
+                  onclick={() => { handleIgnore(item); }}
+                >Confirm</button>
+                <button
+                  class="text-xs text-gray-500 hover:text-gray-300"
+                  onclick={() => { item.confirmIgnore = false; }}
+                >Cancel</button>
               {:else if item.confirmDelete}
                 <span class="text-xs text-red-400">Delete this file?</span>
                 <button
@@ -162,8 +173,8 @@
                 >Import</button>
                 <button
                   class="px-3 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 text-gray-400"
-                  onclick={() => handleIgnore(item)}
-                  title="Add to .gaitor-ignore — hidden from future scans"
+                  onclick={() => { item.confirmIgnore = true; }}
+                  title="Ignore model from scans"
                 >Ignore</button>
                 <button
                   class="px-3 py-1 text-xs rounded bg-gray-700 hover:bg-red-900/50 text-gray-400 hover:text-red-300"

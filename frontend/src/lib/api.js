@@ -167,6 +167,10 @@ export const api = {
     request(`/hosts/${encodeURIComponent(hostId)}/import`, { method: 'POST', body: JSON.stringify(data) }),
   addIgnorePattern: (hostId, pattern) =>
     request(`/hosts/${encodeURIComponent(hostId)}/ignore`, { method: 'POST', body: JSON.stringify({ pattern }) }),
+  getIgnorePatterns: (hostId) =>
+    request(`/hosts/${encodeURIComponent(hostId)}/ignore`),
+  removeIgnorePattern: (hostId, pattern) =>
+    request(`/hosts/${encodeURIComponent(hostId)}/ignore`, { method: 'DELETE', body: JSON.stringify({ pattern }) }),
   deleteUnmanagedFile: (hostId, relativePath) =>
     request(`/hosts/${encodeURIComponent(hostId)}/delete-file`, { method: 'POST', body: JSON.stringify({ relative_path: relativePath }) }),
 

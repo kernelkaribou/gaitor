@@ -571,6 +571,40 @@ def add_ignore_pattern(host_id: str, pattern: str) -> dict:
     return {"pattern": pattern, "added": True}
 
 
+def get_ignore_patterns(host_id: str) -> list[str]:
+    """Return all ignore patterns for a host."""
+    validate_host_id(host_id)
+    host_path = safe_resolve(config.HOSTS_ROOT, host_id)
+    if not host_path.exists():
+        raise ValueError(f"Host not found: {host_id}")
+    return _load_ignore_patterns(host_path)
+
+
+def remove_ignore_pattern(host_id: str, pattern: str) -> dict:
+    """Remove a pattern from the host's .gaitor-ignore file."""
+    validate_host_id(host_id)
+    host_path = safe_resolve(config.HOSTS_ROOT, host_id)
+    if not host_path.exists():
+        raise ValueError(f"Host not found: {host_id}")
+
+    pattern = pattern.strip()
+    if not pattern:
+        raise ValueError("Pattern cannot be empty")
+
+    ignore_file = host_path / IGNORE_FILENAME
+    existing = _load_ignore_patterns(host_path)
+    if pattern not in existing:
+        return {"pattern": pattern, "removed": False, "reason": "not found"}
+
+    existing.remove(pattern)
+    with open(ignore_file, "w") as f:
+        for p in existing:
+            f.write(p + "\n")
+
+    logger.info(f"Removed ignore pattern '{pattern}' for host {host_id}")
+    return {"pattern": pattern, "removed": True}
+
+
 def delete_unmanaged_file(host_id: str, relative_path: str) -> dict:
     """Delete an unmanaged file from a host. Only allows deleting non-sidecar-managed files."""
     validate_host_id(host_id)

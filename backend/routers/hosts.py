@@ -18,6 +18,8 @@ from ..services.sync import (
     link_host_model,
     import_from_host,
     add_ignore_pattern,
+    get_ignore_patterns,
+    remove_ignore_pattern,
     delete_unmanaged_file,
 )
 from ..services.metadata import load_model
@@ -279,6 +281,28 @@ async def ignore_pattern_endpoint(host_id: str, req: IgnoreRequest):
     host_id = _check_host_id(host_id)
     try:
         result = await asyncio.to_thread(add_ignore_pattern, host_id, req.pattern)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/{host_id}/ignore")
+async def list_ignore_patterns_endpoint(host_id: str):
+    """List all ignore patterns for a host."""
+    host_id = _check_host_id(host_id)
+    try:
+        patterns = await asyncio.to_thread(get_ignore_patterns, host_id)
+        return {"patterns": patterns}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/{host_id}/ignore")
+async def remove_ignore_pattern_endpoint(host_id: str, req: IgnoreRequest):
+    """Remove a pattern from the host's .gaitor-ignore file."""
+    host_id = _check_host_id(host_id)
+    try:
+        result = await asyncio.to_thread(remove_ignore_pattern, host_id, req.pattern)
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

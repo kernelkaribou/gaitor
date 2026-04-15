@@ -24,6 +24,8 @@
   let linking = $state({});
   let selectedModel = $state(null);
   let selectedHostItem = $state(null);
+  let showIgnoreList = $state(false);
+  let ignorePatterns = $state([]);
 
   function usagePercent(total, free) {
     if (!total) return 0;
@@ -46,6 +48,8 @@
     selectedModel = null;
     selectedHostItem = null;
     scanResults = null;
+    showIgnoreList = false;
+    ignorePatterns = [];
     // Re-apply auto-select for single host when triggered from navbar
     if (reselect && hosts.length === 1 && hosts[0].health?.status !== 'offline' && hosts[0].health?.status !== 'error') {
       selectHost(hosts[0]);
@@ -254,6 +258,30 @@
       selectedHostItem = item;
     } catch {
       error = 'Could not load model details from the library.';
+    }
+  }
+
+  async function loadIgnorePatterns() {
+    if (!selectedHost) return;
+    try {
+      const result = await api.getIgnorePatterns(selectedHost.id);
+      ignorePatterns = result.patterns || [];
+    } catch (err) {
+      error = err.message;
+    }
+  }
+
+  async function toggleIgnoreList() {
+    showIgnoreList = !showIgnoreList;
+    if (showIgnoreList) await loadIgnorePatterns();
+  }
+
+  async function removeIgnorePattern(pattern) {
+    try {
+      await api.removeIgnorePattern(selectedHost.id, pattern);
+      ignorePatterns = ignorePatterns.filter(p => p !== pattern);
+    } catch (err) {
+      error = err.message;
     }
   }
 
@@ -469,6 +497,13 @@
             >
               {scanning ? 'Scanning...' : 'Scan Host'}
             </button>
+            <button
+              class="px-3 py-1.5 text-sm rounded-md {showIgnoreList ? 'bg-gray-600 text-gray-200' : 'bg-gray-700 text-gray-400 hover:bg-gray-600 hover:text-gray-300'}"
+              onclick={toggleIgnoreList}
+              title="View and manage ignored files"
+            >
+              Ignored{ignorePatterns.length > 0 ? ` (${ignorePatterns.length})` : ''}
+            </button>
           </div>
           <div class="flex items-center gap-2">
             <div class="relative">
@@ -487,6 +522,32 @@
             </div>
           </div>
         </div>
+
+        <!-- Ignore list -->
+        {#if showIgnoreList}
+          <div class="bg-gray-800 border border-gray-700 rounded-lg mb-4">
+            <div class="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
+              <span class="text-sm font-medium text-gray-200">Ignored Patterns</span>
+              <button class="text-gray-400 hover:text-gray-200 text-sm" onclick={() => showIgnoreList = false}>&#x2715;</button>
+            </div>
+            {#if ignorePatterns.length === 0}
+              <div class="px-4 py-3 text-sm text-gray-500">No ignored patterns configured for this host.</div>
+            {:else}
+              <div class="divide-y divide-gray-700 max-h-60 overflow-y-auto">
+                {#each ignorePatterns as pattern}
+                  <div class="px-4 py-2 flex items-center justify-between group">
+                    <span class="text-sm text-gray-300 font-mono truncate">{pattern}</span>
+                    <button
+                      class="text-xs text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onclick={() => removeIgnorePattern(pattern)}
+                      title="Remove pattern — file will appear in future scans"
+                    >Remove</button>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        {/if}
 
         <!-- Host scan results -->
         {#if scanResults && scanResults.count > 0}
