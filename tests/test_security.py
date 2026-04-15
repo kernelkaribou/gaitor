@@ -74,6 +74,7 @@ class TestSanitizeFilename:
     def test_strips_dangerous_chars(self):
         result = sanitize_filename("../../etc/passwd", ".txt")
         assert "/" not in result
+        assert "\\" not in result
         assert ".." not in result
 
     def test_rejects_empty_result(self):
@@ -82,3 +83,12 @@ class TestSanitizeFilename:
 
     def test_collapses_whitespace(self):
         assert sanitize_filename("a   b  c", "") == "a_b_c"
+
+    def test_preserves_dots_in_name(self):
+        assert sanitize_filename("Qwen3.5-9B", ".safetensors") == "Qwen3.5-9B.safetensors"
+
+    def test_preserves_parens_and_plus(self):
+        assert sanitize_filename("SDXL(v2)+lora", "") == "SDXL(v2)+lora"
+
+    def test_strips_leading_dots(self):
+        assert not sanitize_filename("..hidden", "").startswith(".")
