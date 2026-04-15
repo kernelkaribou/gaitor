@@ -275,8 +275,13 @@
   }
 
   async function toggleIgnoreList() {
-    showIgnoreList = !showIgnoreList;
-    if (showIgnoreList) await loadIgnorePatterns();
+    if (showIgnoreList) {
+      showIgnoreList = false;
+      if (selectedHost) selectHost(selectedHost);
+    } else {
+      showIgnoreList = true;
+      await loadIgnorePatterns();
+    }
   }
 
   async function removeIgnorePattern(pattern) {
@@ -468,11 +473,11 @@
             {/if}
             {#if ignorePatterns.length > 0}
               <button
-                class="flex items-center gap-2 hover:text-gray-100 transition-colors w-full text-left"
+                class="flex items-center gap-2 w-full text-left group"
                 onclick={toggleIgnoreList}
               >
                 <span class="w-2 h-2 rounded-full bg-gray-500 shrink-0"></span>
-                <span class="text-gray-400">{ignorePatterns.length} ignored</span>
+                <span class="text-gray-400 group-hover:text-gray-200 underline decoration-gray-600 group-hover:decoration-gray-400 transition-colors">{ignorePatterns.length} ignored</span>
               </button>
             {/if}
           </div>
@@ -528,12 +533,12 @@
           </div>
         </div>
 
-        <!-- Ignore list -->
+        <!-- Ignore list (replaces main content when open) -->
         {#if showIgnoreList}
           <div class="bg-gray-800 border border-gray-700 rounded-lg mb-4">
             <div class="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
               <span class="text-sm font-medium text-gray-200">{ignorePatterns.length} ignored pattern{ignorePatterns.length !== 1 ? 's' : ''}</span>
-              <button class="text-gray-400 hover:text-gray-200 text-sm" onclick={() => showIgnoreList = false}>&#x2715;</button>
+              <button class="text-gray-400 hover:text-gray-200 text-sm" onclick={() => toggleIgnoreList()}>&#x2715;</button>
             </div>
             {#if ignorePatterns.length === 0}
               <div class="px-4 py-3 text-sm text-gray-500">No ignored patterns configured for this host.</div>
@@ -557,7 +562,7 @@
               </div>
             {/if}
           </div>
-        {/if}
+        {:else}
 
         <!-- Host scan results -->
         {#if scanResults && scanResults.count > 0}
@@ -687,6 +692,7 @@
               {/if}
             </p>
           </div>
+        {/if}
         {/if}
         {/if}
       </div>
