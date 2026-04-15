@@ -119,7 +119,9 @@
           {:else}
             <!-- Unmatched: show Import, Ignore, Delete options -->
             <div class="flex items-center gap-2 shrink-0">
-              {#if item.showImport}
+              {#if linking[item.relative_path]}
+                <span class="text-xs text-blue-400">Importing...</span>
+              {:else if item.showImport}
                 <div class="flex items-center gap-2">
                   <input
                     bind:value={item.importName}
@@ -137,9 +139,9 @@
                   <button
                     class="px-3 py-1 text-xs rounded bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50"
                     onclick={() => handleImport(item, item.importName, item.importCategory)}
-                    disabled={linking[item.relative_path] || !item.importName.trim()}
+                    disabled={!item.importName.trim()}
                   >
-                    {linking[item.relative_path] ? 'Importing...' : 'Import'}
+                    Import
                   </button>
                   <button
                     class="text-xs text-gray-500 hover:text-gray-300"

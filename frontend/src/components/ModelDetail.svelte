@@ -34,6 +34,9 @@
   let saving = $state(false);
   let hashing = $state(false);
   let error = $state(null);
+  let confirmApplyRename = $state(false);
+  let applyingRename = $state(false);
+  let resyncing = $state(false);
 
   // Edit form state
   let editName = $state('');
@@ -553,6 +556,48 @@
                  hostContext.status}
               </span>
             </div>
+            {#if hostContext.status === 'rename_pending'}
+              <div class="mt-2">
+                {#if confirmApplyRename}
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs text-blue-400">Rename host file to match library?</span>
+                    <button
+                      class="px-2.5 py-1 text-xs rounded bg-blue-700 hover:bg-blue-600 text-white disabled:opacity-50"
+                      onclick={async () => {
+                        applyingRename = true;
+                        try {
+                          await hostContext.onApplyRename();
+                          confirmApplyRename = false;
+                        } catch (e) { error = e.message; }
+                        applyingRename = false;
+                      }}
+                      disabled={applyingRename}
+                    >{applyingRename ? 'Applying...' : 'Confirm'}</button>
+                    <button class="text-xs text-gray-500 hover:text-gray-300" onclick={() => confirmApplyRename = false}>Cancel</button>
+                  </div>
+                {:else}
+                  <button
+                    class="px-2.5 py-1 text-xs rounded bg-blue-700 hover:bg-blue-600 text-white"
+                    onclick={() => confirmApplyRename = true}
+                  >Apply Rename</button>
+                  <span class="text-xs text-gray-500 ml-2">Host: {hostContext.host_filename}</span>
+                {/if}
+              </div>
+            {:else if hostContext.status === 'outdated'}
+              <div class="mt-2">
+                <button
+                  class="px-2.5 py-1 text-xs rounded bg-yellow-700 hover:bg-yellow-600 text-white disabled:opacity-50"
+                  onclick={async () => {
+                    resyncing = true;
+                    try {
+                      await hostContext.onResync();
+                    } catch (e) { error = e.message; }
+                    resyncing = false;
+                  }}
+                  disabled={resyncing}
+                >{resyncing ? 'Syncing...' : 'Re-sync'}</button>
+              </div>
+            {/if}
           </div>
         {:else}
           <!-- Hosts -->

@@ -727,6 +727,16 @@
         selectedModel = null;
         selectedHostItem = null;
       },
+      onApplyRename: async () => {
+        await applyRename(selectedHostItem.model_id);
+        selectedModel = null;
+        selectedHostItem = null;
+      },
+      onResync: async () => {
+        await syncModel(selectedHostItem.model_id);
+        selectedModel = null;
+        selectedHostItem = null;
+      },
     } : undefined}
   />
 {/if}
