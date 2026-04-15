@@ -414,3 +414,134 @@ class TestImportFromHost:
                 "test-gpu", "loras/nonexistent.safetensors",
                 name="Missing", category="loras",
             )
+
+
+class TestIgnorePatterns:
+    def test_add_and_list_patterns(self, setup_library, host_path):
+        from backend.services.sync import add_ignore_pattern, get_ignore_patterns
+        result = add_ignore_pattern("test-gpu", "vae/model.pth")
+        assert result["added"] is True
+
+        patterns = get_ignore_patterns("test-gpu")
+        assert "vae/model.pth" in patterns
+
+    def test_add_duplicate_pattern(self, setup_library, host_path):
+        from backend.services.sync import add_ignore_pattern
+        add_ignore_pattern("test-gpu", "vae/model.pth")
+        result = add_ignore_pattern("test-gpu", "vae/model.pth")
+        assert result["added"] is False
+
+    def test_remove_pattern(self, setup_library, host_path):
+        from backend.services.sync import add_ignore_pattern, remove_ignore_pattern, get_ignore_patterns
+        add_ignore_pattern("test-gpu", "vae/model.pth")
+        result = remove_ignore_pattern("test-gpu", "vae/model.pth")
+        assert result["removed"] is True
+        assert "vae/model.pth" not in get_ignore_patterns("test-gpu")
+
+    def test_remove_nonexistent_pattern(self, setup_library, host_path):
+        from backend.services.sync import remove_ignore_pattern
+        result = remove_ignore_pattern("test-gpu", "no/such.pth")
+        assert result["removed"] is False
+
+    def test_rejects_newline_in_pattern(self, setup_library, host_path):
+        from backend.services.sync import add_ignore_pattern
+        with pytest.raises(ValueError, match="newline"):
+            add_ignore_pattern("test-gpu", "file.bin\nevil.pth")
+
+    def test_rejects_carriage_return_in_pattern(self, setup_library, host_path):
+        from backend.services.sync import add_ignore_pattern
+        with pytest.raises(ValueError, match="newline"):
+            add_ignore_pattern("test-gpu", "file.bin\revil.pth")
+
+    def test_rejects_comment_pattern(self, setup_library, host_path):
+        from backend.services.sync import add_ignore_pattern
+        with pytest.raises(ValueError, match="comment"):
+            add_ignore_pattern("test-gpu", "#this is a comment")
+
+    def test_rejects_control_chars(self, setup_library, host_path):
+        from backend.services.sync import add_ignore_pattern
+        with pytest.raises(ValueError, match="control"):
+            add_ignore_pattern("test-gpu", "file\x00.bin")
+
+    def test_rejects_empty_pattern(self, setup_library, host_path):
+        from backend.services.sync import add_ignore_pattern
+        with pytest.raises(ValueError, match="empty"):
+            add_ignore_pattern("test-gpu", "   ")
+
+    def test_scan_skips_ignored_files(self, setup_library, host_path):
+        from backend.services.sync import add_ignore_pattern, scan_host
+        model_dir = host_path / "checkpoints"
+        model_dir.mkdir()
+        (model_dir / "ignored.safetensors").write_bytes(b"data" * 50)
+        (model_dir / "visible.safetensors").write_bytes(b"data" * 50)
+
+        add_ignore_pattern("test-gpu", "checkpoints/ignored.safetensors")
+        result = scan_host("test-gpu")
+        filenames = [u["filename"] for u in result["unmanaged"]]
+        assert "ignored.safetensors" not in filenames
+        assert "visible.safetensors" in filenames
+
+    def test_literal_bracket_in_filename_ignored(self, setup_library, host_path):
+        from backend.services.sync import add_ignore_pattern, scan_host
+        model_dir = host_path / "checkpoints"
+        model_dir.mkdir()
+        (model_dir / "model[v2].safetensors").write_bytes(b"data" * 50)
+
+        add_ignore_pattern("test-gpu", "checkpoints/model[v2].safetensors")
+        result = scan_host("test-gpu")
+        filenames = [u["filename"] for u in result["unmanaged"]]
+        assert "model[v2].safetensors" not in filenames
+
+
+class TestDeleteUnmanagedFile:
+    def test_delete_unmanaged_file(self, setup_library, host_path):
+        from backend.services.sync import delete_unmanaged_file
+        target = host_path / "checkpoints" / "old_model.safetensors"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"data")
+
+        result = delete_unmanaged_file("test-gpu", "checkpoints/old_model.safetensors")
+        assert result["deleted"] == "checkpoints/old_model.safetensors"
+        assert not target.exists()
+
+    def test_refuses_managed_file(self, sample_model, host_path):
+        from backend.services.sync import delete_unmanaged_file
+        sync_model_to_host(sample_model.id, "test-gpu")
+
+        with pytest.raises(ValueError, match="sidecar-managed"):
+            delete_unmanaged_file("test-gpu", "checkpoints/sdxl.safetensors")
+
+    def test_refuses_nonexistent_file(self, setup_library, host_path):
+        from backend.services.sync import delete_unmanaged_file
+        with pytest.raises(ValueError, match="not found"):
+            delete_unmanaged_file("test-gpu", "no/such/file.bin")
+
+
+class TestGetModelHostCounts:
+    def test_empty_hosts(self, setup_library, host_path):
+        from backend.services.sync import get_model_host_counts
+        counts = get_model_host_counts()
+        assert counts == {}
+
+    def test_counts_synced_models(self, sample_model, host_path):
+        from backend.services.sync import get_model_host_counts
+        sync_model_to_host(sample_model.id, "test-gpu")
+        counts = get_model_host_counts()
+        assert counts[sample_model.id] == 1
+
+    def test_counts_multiple_hosts(self, sample_model):
+        from backend.services.sync import get_model_host_counts
+        (config.HOSTS_ROOT / "gpu-a").mkdir()
+        (config.HOSTS_ROOT / "gpu-b").mkdir()
+        sync_model_to_host(sample_model.id, "gpu-a")
+        sync_model_to_host(sample_model.id, "gpu-b")
+        counts = get_model_host_counts()
+        assert counts[sample_model.id] == 2
+
+    def test_excludes_missing_files(self, sample_model, host_path):
+        from backend.services.sync import get_model_host_counts
+        sync_model_to_host(sample_model.id, "test-gpu")
+        # Delete the actual file but leave the sidecar
+        (host_path / "checkpoints" / "sdxl.safetensors").unlink()
+        counts = get_model_host_counts()
+        assert sample_model.id not in counts

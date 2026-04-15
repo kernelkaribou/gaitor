@@ -83,7 +83,8 @@ def sanitize_filename(name: str, extension: str = "") -> str:
     safe = "".join(c for c in name if c.isalnum() or c in " -_.()+" ).strip()
     safe = re.sub(r"\s+", "_", safe)  # spaces → underscores
     safe = safe.lstrip(".")  # no hidden files
-    safe = safe.replace("..", ".")  # collapse double dots
+    while ".." in safe:
+        safe = safe.replace("..", ".")  # collapse consecutive dots
     if not safe:
         raise ValueError("Name produces an empty filename after sanitization")
     return f"{safe}{extension}" if extension else safe

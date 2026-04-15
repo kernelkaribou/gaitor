@@ -3,7 +3,7 @@ Host management API endpoints.
 """
 import asyncio
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import logging
 
 from ..services.sync import (
@@ -76,7 +76,7 @@ class BulkLinkRequest(BaseModel):
 
 
 class IgnoreRequest(BaseModel):
-    pattern: str
+    pattern: str = Field(max_length=500)
 
 
 class DeleteFileRequest(BaseModel):
@@ -284,6 +284,8 @@ async def ignore_pattern_endpoint(host_id: str, req: IgnoreRequest):
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to write ignore file: {e}")
 
 
 @router.get("/{host_id}/ignore")
@@ -306,6 +308,8 @@ async def remove_ignore_pattern_endpoint(host_id: str, req: IgnoreRequest):
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update ignore file: {e}")
 
 
 @router.post("/{host_id}/delete-file")
@@ -317,3 +321,5 @@ async def delete_file_endpoint(host_id: str, req: DeleteFileRequest):
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete file: {e}")

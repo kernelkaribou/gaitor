@@ -92,3 +92,12 @@ class TestSanitizeFilename:
 
     def test_strips_leading_dots(self):
         assert not sanitize_filename("..hidden", "").startswith(".")
+
+    def test_collapses_triple_dots(self):
+        result = sanitize_filename("test...name", "")
+        assert ".." not in result
+
+    def test_collapses_many_dots(self):
+        result = sanitize_filename("a....b", "")
+        assert ".." not in result
+        assert result == "a.b"
