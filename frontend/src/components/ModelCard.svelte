@@ -57,7 +57,10 @@
           </svg>
         {/if}
         {#if model.group_id}
-          <span class="text-blue-400" title="Grouped with other models">&#x229E;</span>
+          <svg class="w-3.5 h-3.5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <title>Grouped with other models</title>
+            <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
+          </svg>
         {/if}
         {#if isDuplicate}
           <span class="text-yellow-500" title="Duplicate hash detected">DUP</span>
