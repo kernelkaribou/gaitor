@@ -50,7 +50,10 @@
       <span>{formatSize(model.size)}</span>
       <div class="flex items-center gap-2">
         {#if model.source?.url}
-          <span class="text-gray-400" title="Has source URL">&#x2197;</span>
+          <svg class="w-3.5 h-3.5 text-gray-400" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" title="Has source URL">
+            <path d="M6.5 3.5H3a1 1 0 0 0-1 1V13a1 1 0 0 0 1 1h8.5a1 1 0 0 0 1-1V9.5" />
+            <path d="M9.5 2h4.5v4.5M14 2L7.5 8.5" />
+          </svg>
         {/if}
         {#if model.group_id}
           <span class="text-blue-400" title="Grouped with other models">&#x229E;</span>
