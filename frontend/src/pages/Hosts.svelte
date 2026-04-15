@@ -91,6 +91,7 @@
     loading = true;
     search = '';
     activeCategory = null;
+    showIgnoreList = false;
     try {
       const data = await api.getHostSyncStatus(host.id);
       syncStatus = data.status || [];
@@ -99,6 +100,8 @@
       syncStatus = [];
     }
     loading = false;
+    // Load ignore count in background
+    api.getIgnorePatterns(host.id).then(r => { ignorePatterns = r.patterns || []; }).catch(() => {});
   }
 
   async function syncModel(modelId) {
@@ -463,6 +466,15 @@
                 <span class="text-gray-300">{syncSummary.orphaned} orphaned</span>
               </div>
             {/if}
+            {#if ignorePatterns.length > 0}
+              <button
+                class="flex items-center gap-2 hover:text-gray-100 transition-colors w-full text-left"
+                onclick={toggleIgnoreList}
+              >
+                <span class="w-2 h-2 rounded-full bg-gray-500 shrink-0"></span>
+                <span class="text-gray-400">{ignorePatterns.length} ignored</span>
+              </button>
+            {/if}
           </div>
         </div>
 
@@ -497,13 +509,6 @@
             >
               {scanning ? 'Scanning...' : 'Scan Host'}
             </button>
-            <button
-              class="px-3 py-1.5 text-sm rounded-md {showIgnoreList ? 'bg-gray-600 text-gray-200' : 'bg-gray-700 text-gray-400 hover:bg-gray-600 hover:text-gray-300'}"
-              onclick={toggleIgnoreList}
-              title="View and manage ignored files"
-            >
-              Ignored{ignorePatterns.length > 0 ? ` (${ignorePatterns.length})` : ''}
-            </button>
           </div>
           <div class="flex items-center gap-2">
             <div class="relative">
@@ -527,21 +532,26 @@
         {#if showIgnoreList}
           <div class="bg-gray-800 border border-gray-700 rounded-lg mb-4">
             <div class="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
-              <span class="text-sm font-medium text-gray-200">Ignored Patterns</span>
+              <span class="text-sm font-medium text-gray-200">{ignorePatterns.length} ignored pattern{ignorePatterns.length !== 1 ? 's' : ''}</span>
               <button class="text-gray-400 hover:text-gray-200 text-sm" onclick={() => showIgnoreList = false}>&#x2715;</button>
             </div>
             {#if ignorePatterns.length === 0}
               <div class="px-4 py-3 text-sm text-gray-500">No ignored patterns configured for this host.</div>
             {:else}
-              <div class="divide-y divide-gray-700 max-h-60 overflow-y-auto">
+              <div class="divide-y divide-gray-700 max-h-[60vh] overflow-y-auto">
                 {#each ignorePatterns as pattern}
-                  <div class="px-4 py-2 flex items-center justify-between group">
-                    <span class="text-sm text-gray-300 font-mono truncate">{pattern}</span>
+                  <div class="px-4 py-2.5 flex items-center gap-3">
+                    <div class="flex-1 min-w-0">
+                      <p class="text-sm text-gray-300 truncate">
+                        {pattern.replace(/.*\//, '').replace(/\.[^.]+$/, '').replace(/[_-]/g, ' ')}
+                      </p>
+                      <p class="text-xs text-gray-500 font-mono truncate">{pattern}</p>
+                    </div>
                     <button
-                      class="text-xs text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                      class="px-3 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 text-gray-400 hover:text-gray-200 shrink-0"
                       onclick={() => removeIgnorePattern(pattern)}
-                      title="Remove pattern — file will appear in future scans"
-                    >Remove</button>
+                      title="Unignore — file will appear in future scans"
+                    >Unignore</button>
                   </div>
                 {/each}
               </div>
