@@ -313,6 +313,23 @@ def get_model_host_status(model_id: str) -> list[dict]:
     return result
 
 
+def get_model_host_counts() -> dict[str, int]:
+    """Return a map of library_model_id -> number of hosts that have it synced."""
+    counts: dict[str, int] = {}
+    hosts = list_hosts()
+    for host in hosts:
+        host_id = host["id"]
+        try:
+            host_models = get_host_models(host_id)
+        except (ValueError, OSError):
+            continue
+        for hm in host_models:
+            mid = hm.get("library_model_id")
+            if mid:
+                counts[mid] = counts.get(mid, 0) + 1
+    return counts
+
+
 def sync_model_to_host(
     model_id: str,
     host_id: str,

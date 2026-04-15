@@ -46,6 +46,7 @@ export const api = {
   // Models
   listModels: () => request('/models/'),
   getModelStats: () => request('/models/stats'),
+  getModelHostCounts: () => request('/models/host-counts'),
   getModel: (id) => request(`/models/${encodeURIComponent(id)}`),
   catalogModel: (data) =>
     request('/models/catalog', { method: 'POST', body: JSON.stringify(data) }),

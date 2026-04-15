@@ -37,7 +37,7 @@ from ..services.metadata import (
     save_model,
     rebuild_index,
 )
-from ..services.sync import get_model_host_status
+from ..services.sync import get_model_host_status, get_model_host_counts
 from ..utils import validate_model_id, safe_resolve, to_iso, get_now
 
 router = APIRouter()
@@ -131,6 +131,13 @@ async def model_stats():
         "duplicates": duplicates,
         "duplicate_ids": list(duplicate_ids),
     }
+
+
+@router.get("/host-counts")
+async def model_host_counts():
+    """Get the number of hosts each model is synced to."""
+    counts = await asyncio.to_thread(get_model_host_counts)
+    return {"counts": counts}
 
 
 @router.get("/{model_id}")

@@ -2,7 +2,7 @@
   import { api } from '../lib/api.js';
   import defaultThumb from '../assets/default-thumb.webp';
 
-  let { model, formatSize, onSelect, isDuplicate, hostMode } = $props();
+  let { model, formatSize, onSelect, isDuplicate, hostMode, hostCount } = $props();
 
   const ext = $derived(model.filename?.split('.').pop()?.toLowerCase() || '');
   const extBadge = $derived(ext.toUpperCase());
@@ -61,6 +61,14 @@
             <title>Grouped with other models</title>
             <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
           </svg>
+        {/if}
+        {#if hostCount > 0}
+          <span class="flex items-center gap-0.5 text-emerald-400" title="Synced to {hostCount} host{hostCount !== 1 ? 's' : ''}">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="3" width="20" height="14" rx="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" />
+            </svg>
+            <span class="text-[10px] font-medium">{hostCount}</span>
+          </span>
         {/if}
         {#if isDuplicate}
           <span class="text-yellow-500" title="Duplicate hash detected">DUP</span>
