@@ -4,7 +4,6 @@
   import Hosts from './pages/Hosts.svelte';
   import AddModel from './pages/AddModel.svelte';
   import Settings from './pages/Settings.svelte';
-  import UpdateBanner from './components/UpdateBanner.svelte';
   import { onMount, onDestroy } from 'svelte';
 
   const validPages = ['library', 'hosts', 'add', 'settings'];
@@ -45,7 +44,6 @@
 </script>
 
 <Layout {currentPage} {navigate}>
-  <UpdateBanner />
   {#if currentPage === 'library'}
     <Library onNavigate={navigate} />
   {:else if currentPage === 'hosts'}

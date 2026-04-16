@@ -3,8 +3,6 @@
  */
 import { writable } from 'svelte/store';
 
-export const updateInfo = writable(null); // { latest, release_url } when update available
-
 /**
  * Global toast notifications and active tasks.
  * Each toast: { id, type, title, message, progress, speed, eta, persistent, timestamp }
