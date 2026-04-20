@@ -21,6 +21,7 @@ Think of it as a smart FTP specifically designed for AI models - browse, sync, r
 
 - **Library Management** - Centralized model library with metadata, common categories, search, and tagging
 - **Host Sync** - Copy models to inferencing machines with real-time progress tracking
+- **Bookmarks** - Save references to models of interest without downloading them, with tags, categories, and notes. Download to library when ready.
 - **External Retrieval** - Download models from Hugging Face, CivitAI and external locations directly into your library
 - **Model Organization** - Rename models in the library, add descriptions and thumbnails, organize in folders and create groups of partner models
 - **Web Upload & Scan** - Upload models through the browser or scan for files added directly to storage
@@ -143,8 +144,14 @@ All library metadata lives in a hidden `.gaitor/` directory at the library root.
 │   ├── models/                     # One JSON file per cataloged model
 │   │   ├── <model-uuid>.json       # Name, description, source URL, tags, hash, path
 │   │   └── ...
-│   └── thumbnails/                 # Optional model thumbnail images
-│       └── <model-uuid>.webp
+│   ├── bookmarks/                  # One JSON file per bookmark (metadata only, no model files)
+│   │   ├── <bookmark-uuid>.json    # Name, source URL, tags, notes, target category
+│   │   └── ...
+│   ├── index.json                  # Compiled model index for fast reads
+│   ├── index_bookmarks.json        # Compiled bookmark index for fast reads
+│   └── thumbnails/                 # Thumbnail images for models and bookmarks
+│       ├── <model-uuid>.webp
+│       └── bm-<bookmark-uuid>.webp
 ├── checkpoints/
 │   └── my-model.safetensors        # Actual model file (untouched)
 └── loras/
