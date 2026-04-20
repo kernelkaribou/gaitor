@@ -184,6 +184,31 @@ export const api = {
   listHfFiles: (repoId) => request(`/retrieve/hf/${encodeURIComponent(repoId)}/files`),
   getCivitaiModel: (modelId) => request(`/retrieve/civitai/${encodeURIComponent(modelId)}`),
 
+  // Bookmarks
+  listBookmarks: () => request('/bookmarks/'),
+  createBookmark: (data) =>
+    request('/bookmarks/', { method: 'POST', body: JSON.stringify(data) }),
+  updateBookmark: (id, data) =>
+    request(`/bookmarks/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteBookmark: (id) =>
+    request(`/bookmarks/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  getBookmarkThumbnailUrl: (id) => `${BASE_URL}/bookmarks/${encodeURIComponent(id)}/thumbnail`,
+  async uploadBookmarkThumbnail(bookmarkId, file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await fetch(`${BASE_URL}/bookmarks/${encodeURIComponent(bookmarkId)}/thumbnail`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(error.detail || `HTTP ${response.status}`);
+    }
+    return response.json();
+  },
+  deleteBookmarkThumbnail: (id) =>
+    request(`/bookmarks/${encodeURIComponent(id)}/thumbnail`, { method: 'DELETE' }),
+
   // Tasks
   getActiveTasks: () => request('/tasks'),
   cancelTask: (taskId) =>

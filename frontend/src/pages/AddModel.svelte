@@ -4,7 +4,7 @@
   import { addToast } from '../lib/stores.js';
   import { formatSize } from '../lib/utils.js';
 
-  let { onBack } = $props();
+  let { onBack, prefill, onPrefillConsumed } = $props();
 
   let activeTab = $state('retrieve');
   let categories = $state([]);
@@ -51,6 +51,9 @@
   let uploadProgressBytes = $state({ loaded: 0, total: 0 });
   let uploadError = $state(null);
 
+  // Track bookmark ID for auto-delete on successful download
+  let promotingBookmarkId = $state(null);
+
   onMount(async () => {
     try {
       const [provData, catData] = await Promise.all([
@@ -61,6 +64,20 @@
       categories = catData.categories || [];
     } catch (err) {
       retrieveError = err.message;
+    }
+
+    // Apply prefill from bookmark promotion
+    if (prefill) {
+      activeTab = 'retrieve';
+      url = prefill.source_url || '';
+      retrieveName = prefill.name || '';
+      retrieveDescription = prefill.description || '';
+      retrieveBaseModel = prefill.base_model || '';
+      retrieveThumbnailUrl = prefill.thumbnail_url || '';
+      if (prefill.target_category) retrieveCategory = prefill.target_category;
+      if (prefill.bookmark_id) promotingBookmarkId = prefill.bookmark_id;
+      onPrefillConsumed?.();
+      if (url) resolveUrl();
     }
   });
 
@@ -121,6 +138,16 @@
       };
       await api.startDownload(params);
       addToast({ type: 'info', title: 'Download started', message: `${retrieveName || selectedFile.filename}` });
+
+      // Auto-delete bookmark if promoting
+      if (promotingBookmarkId) {
+        try {
+          await api.deleteBookmark(promotingBookmarkId);
+          addToast({ type: 'success', title: 'Bookmark removed', message: 'Promoted to library' });
+        } catch { /* bookmark may already be gone */ }
+        promotingBookmarkId = null;
+      }
+
       resolved = null;
       selectedFile = null;
       url = '';

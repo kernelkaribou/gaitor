@@ -4,9 +4,10 @@
   import Hosts from './pages/Hosts.svelte';
   import AddModel from './pages/AddModel.svelte';
   import Settings from './pages/Settings.svelte';
+  import Bookmarks from './pages/Bookmarks.svelte';
   import { onMount, onDestroy } from 'svelte';
 
-  const validPages = ['library', 'hosts', 'add', 'settings'];
+  const validPages = ['library', 'hosts', 'bookmarks', 'add', 'settings'];
 
   function pageFromHash() {
     const hash = location.hash.replace('#', '');
@@ -15,13 +16,17 @@
 
   let currentPage = $state(pageFromHash());
   let hostsResetFn = $state(null);
+  let addModelPrefill = $state(null);
 
-  function navigate(page) {
+  function navigate(page, data = null) {
     if (!validPages.includes(page)) page = 'library';
     // If already on hosts and clicking hosts again, reset view
     if (page === 'hosts' && currentPage === 'hosts' && hostsResetFn) {
       hostsResetFn(true);
       return;
+    }
+    if (page === 'add' && data) {
+      addModelPrefill = data;
     }
     currentPage = page;
     const target = '#' + page;
@@ -48,8 +53,10 @@
     <Library onNavigate={navigate} />
   {:else if currentPage === 'hosts'}
     <Hosts onBack={() => navigate('library')} onResetRef={(fn) => hostsResetFn = fn} />
+  {:else if currentPage === 'bookmarks'}
+    <Bookmarks onNavigate={navigate} />
   {:else if currentPage === 'add'}
-    <AddModel onBack={() => navigate('library')} />
+    <AddModel onBack={() => navigate('library')} prefill={addModelPrefill} onPrefillConsumed={() => { addModelPrefill = null; }} />
   {:else if currentPage === 'settings'}
     <Settings />
   {/if}
