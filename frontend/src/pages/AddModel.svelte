@@ -88,19 +88,22 @@
     retrieveError = null;
     resolved = null;
     selectedFile = null;
-    retrieveDescription = '';
+    // Preserve bookmark prefill values; only clear non-prefilled fields
+    const hadPrefill = !!promotingBookmarkId;
+    if (!hadPrefill) {
+      retrieveDescription = '';
+      retrieveBaseModel = '';
+      retrieveThumbnailUrl = '';
+    }
     retrieveFilename = '';
     retrieveSubfolder = '';
-    retrieveBaseModel = '';
-    retrieveThumbnailUrl = '';
     try {
       resolved = await api.resolveUrl(url);
-      if (resolved.description) {
-        // Safely strip HTML using the browser's DOM parser instead of regex
+      if (resolved.description && !retrieveDescription) {
         const doc = new DOMParser().parseFromString(resolved.description, 'text/html');
         retrieveDescription = (doc.body.textContent || '').slice(0, 500);
       }
-      if (resolved.model_type && civitaiTypeMap[resolved.model_type]) {
+      if (resolved.model_type && civitaiTypeMap[resolved.model_type] && !hadPrefill) {
         retrieveCategory = civitaiTypeMap[resolved.model_type];
       }
     } catch (err) {
@@ -139,12 +142,9 @@
       await api.startDownload(params);
       addToast({ type: 'info', title: 'Download started', message: `${retrieveName || selectedFile.filename}` });
 
-      // Auto-delete bookmark if promoting
+      // Advisory: bookmark should be deleted after download completes, not now
       if (promotingBookmarkId) {
-        try {
-          await api.deleteBookmark(promotingBookmarkId);
-          addToast({ type: 'success', title: 'Bookmark removed', message: 'Promoted to library' });
-        } catch { /* bookmark may already be gone */ }
+        addToast({ type: 'info', title: 'Bookmark kept', message: 'Remove it from Bookmarks once the download completes' });
         promotingBookmarkId = null;
       }
 

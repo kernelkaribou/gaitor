@@ -3,8 +3,12 @@ Bookmark API endpoints - CRUD for metadata-only model references.
 """
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
+from typing import Optional
 from io import BytesIO
 from PIL import Image
+
+Image.MAX_IMAGE_PIXELS = 25_000_000
 
 from ..schemas.bookmark import BookmarkMetadata, BookmarkSource
 from ..services.bookmarks import (
@@ -13,6 +17,7 @@ from ..services.bookmarks import (
     delete_bookmark,
     load_bookmark_index,
 )
+from ..services.metadata import load_categories
 from ..services import metadata as meta_service
 from ..utils import validate_model_id
 from datetime import datetime, timezone
@@ -21,6 +26,68 @@ router = APIRouter()
 
 ALLOWED_THUMBNAIL_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 MAX_THUMBNAIL_UPLOAD = 12 * 1024 * 1024
+VALID_PROVIDERS = {"huggingface", "civitai", "url", "other"}
+
+
+class CreateBookmarkRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+    source_url: Optional[str] = None
+    provider: Optional[str] = None
+    description: str = Field(default="", max_length=2000)
+    notes: str = Field(default="", max_length=2000)
+    base_model: Optional[str] = Field(default=None, max_length=200)
+    tags: list[str] = Field(default_factory=list, max_length=50)
+    thumbnail_url: Optional[str] = None
+    target_category: Optional[str] = None
+
+
+class UpdateBookmarkRequest(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    source_url: Optional[str] = None
+    provider: Optional[str] = None
+    description: Optional[str] = Field(default=None, max_length=2000)
+    notes: Optional[str] = Field(default=None, max_length=2000)
+    base_model: Optional[str] = Field(default=None, max_length=200)
+    tags: Optional[list[str]] = None
+    thumbnail_url: Optional[str] = None
+    target_category: Optional[str] = None
+
+
+def _validate_url(url: Optional[str]) -> Optional[str]:
+    """Validate URL is https or None."""
+    if not url:
+        return None
+    url = url.strip()
+    if not url:
+        return None
+    if not url.startswith("https://"):
+        raise HTTPException(status_code=400, detail="URLs must use HTTPS")
+    if len(url) > 2000:
+        raise HTTPException(status_code=400, detail="URL too long")
+    return url
+
+
+def _validate_provider(provider: Optional[str]) -> Optional[str]:
+    """Validate provider is a known value or None."""
+    if not provider:
+        return None
+    provider = provider.strip().lower()
+    if provider and provider not in VALID_PROVIDERS:
+        raise HTTPException(status_code=400, detail=f"Invalid provider. Allowed: {', '.join(VALID_PROVIDERS)}")
+    return provider or None
+
+
+def _validate_target_category(category: Optional[str]) -> Optional[str]:
+    """Validate target_category exists in library categories."""
+    if not category:
+        return None
+    category = category.strip()
+    if not category:
+        return None
+    known = {c.id for c in load_categories()}
+    if category not in known:
+        raise HTTPException(status_code=400, detail=f"Unknown category '{category}'")
+    return category
 
 
 @router.get("/")
@@ -30,26 +97,24 @@ async def list_bookmarks():
 
 
 @router.post("/")
-async def create_bookmark(data: dict):
+async def create_bookmark(req: CreateBookmarkRequest):
     """Create a new bookmark."""
-    name = data.get("name", "").strip()
-    if not name:
-        raise HTTPException(status_code=400, detail="Name is required")
+    source_url = _validate_url(req.source_url)
+    provider = _validate_provider(req.provider)
+    target_cat = _validate_target_category(req.target_category)
+    thumb_url = _validate_url(req.thumbnail_url)
 
-    source = BookmarkSource(
-        url=data.get("source_url", "").strip() or None,
-        provider=data.get("provider", "").strip() or None,
-    )
+    source = BookmarkSource(url=source_url, provider=provider)
 
     bookmark = BookmarkMetadata(
-        name=name,
-        description=data.get("description", "").strip(),
-        notes=data.get("notes", "").strip(),
+        name=req.name.strip(),
+        description=req.description.strip(),
+        notes=req.notes.strip(),
         source=source,
-        thumbnail_url=data.get("thumbnail_url", "").strip() or None,
-        base_model=data.get("base_model", "").strip() or None,
-        tags=[t.strip() for t in data.get("tags", []) if t.strip()],
-        target_category=data.get("target_category", "").strip() or None,
+        thumbnail_url=thumb_url,
+        base_model=req.base_model.strip() if req.base_model else None,
+        tags=[t.strip() for t in req.tags if t.strip()][:50],
+        target_category=target_cat,
     )
 
     save_bookmark(bookmark)
@@ -57,7 +122,7 @@ async def create_bookmark(data: dict):
 
 
 @router.put("/{bookmark_id}")
-async def update_bookmark(bookmark_id: str, data: dict):
+async def update_bookmark(bookmark_id: str, req: UpdateBookmarkRequest):
     """Update an existing bookmark."""
     try:
         bookmark_id = validate_model_id(bookmark_id)
@@ -68,28 +133,24 @@ async def update_bookmark(bookmark_id: str, data: dict):
     if not bookmark:
         raise HTTPException(status_code=404, detail="Bookmark not found")
 
-    if "name" in data:
-        name = data["name"].strip()
-        if not name:
-            raise HTTPException(status_code=400, detail="Name cannot be empty")
-        bookmark.name = name
-    if "description" in data:
-        bookmark.description = data["description"].strip()
-    if "notes" in data:
-        bookmark.notes = data["notes"].strip()
-    if "source_url" in data or "provider" in data:
-        bookmark.source = BookmarkSource(
-            url=data.get("source_url", bookmark.source.url),
-            provider=data.get("provider", bookmark.source.provider),
-        )
-    if "thumbnail_url" in data:
-        bookmark.thumbnail_url = data["thumbnail_url"].strip() or None
-    if "base_model" in data:
-        bookmark.base_model = data["base_model"].strip() or None
-    if "tags" in data:
-        bookmark.tags = [t.strip() for t in data["tags"] if t.strip()]
-    if "target_category" in data:
-        bookmark.target_category = data["target_category"].strip() or None
+    if req.name is not None:
+        bookmark.name = req.name.strip()
+    if req.description is not None:
+        bookmark.description = req.description.strip()
+    if req.notes is not None:
+        bookmark.notes = req.notes.strip()
+    if req.source_url is not None or req.provider is not None:
+        new_url = _validate_url(req.source_url) if req.source_url is not None else bookmark.source.url
+        new_provider = _validate_provider(req.provider) if req.provider is not None else bookmark.source.provider
+        bookmark.source = BookmarkSource(url=new_url, provider=new_provider)
+    if req.thumbnail_url is not None:
+        bookmark.thumbnail_url = _validate_url(req.thumbnail_url)
+    if req.base_model is not None:
+        bookmark.base_model = req.base_model.strip() or None
+    if req.tags is not None:
+        bookmark.tags = [t.strip() for t in req.tags if t.strip()][:50]
+    if req.target_category is not None:
+        bookmark.target_category = _validate_target_category(req.target_category)
 
     bookmark.updated_at = datetime.now(timezone.utc).isoformat()
     save_bookmark(bookmark)

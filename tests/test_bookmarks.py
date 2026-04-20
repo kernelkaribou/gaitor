@@ -77,7 +77,11 @@ class TestBookmarkCRUD:
 
     def test_create_requires_name(self, client):
         resp = client.post("/api/bookmarks/", json={"name": ""})
-        assert resp.status_code == 400
+        assert resp.status_code == 422
+
+    def test_create_missing_name(self, client):
+        resp = client.post("/api/bookmarks/", json={})
+        assert resp.status_code == 422
 
     def test_list_after_create(self, client):
         client.post("/api/bookmarks/", json={"name": "BM1"})
@@ -104,7 +108,7 @@ class TestBookmarkCRUD:
         create = client.post("/api/bookmarks/", json={"name": "Test"})
         bm_id = create.json()["id"]
         resp = client.put(f"/api/bookmarks/{bm_id}", json={"name": ""})
-        assert resp.status_code == 400
+        assert resp.status_code == 422
 
     def test_update_nonexistent(self, client):
         resp = client.put("/api/bookmarks/00000000-0000-0000-0000-000000000000", json={"name": "X"})
@@ -212,3 +216,46 @@ class TestBookmarkThumbnails:
 
         # Thumbnail should be cleaned up
         assert not thumb_path.exists()
+
+
+class TestBookmarkValidation:
+    """Test input validation for bookmark endpoints."""
+
+    def test_http_url_rejected(self, client):
+        resp = client.post("/api/bookmarks/", json={
+            "name": "Bad URL",
+            "source_url": "http://insecure.example.com/model",
+        })
+        assert resp.status_code == 400
+        assert "HTTPS" in resp.json()["detail"]
+
+    def test_invalid_provider_rejected(self, client):
+        resp = client.post("/api/bookmarks/", json={
+            "name": "Bad Provider",
+            "provider": "unknown_source",
+        })
+        assert resp.status_code == 400
+        assert "provider" in resp.json()["detail"].lower()
+
+    def test_malformed_types_rejected(self, client):
+        """Pydantic rejects wrong types (e.g. list for name, string for tags)."""
+        resp = client.post("/api/bookmarks/", json={"name": ["not", "a", "string"]})
+        assert resp.status_code == 422
+
+        resp = client.post("/api/bookmarks/", json={"name": "OK", "tags": "not-a-list"})
+        assert resp.status_code == 422
+
+    def test_thumbnail_url_must_be_https(self, client):
+        resp = client.post("/api/bookmarks/", json={
+            "name": "Bad Thumb",
+            "thumbnail_url": "http://example.com/img.png",
+        })
+        assert resp.status_code == 400
+
+    def test_valid_provider_accepted(self, client):
+        for provider in ("huggingface", "civitai", "url", "other"):
+            resp = client.post("/api/bookmarks/", json={
+                "name": f"Provider {provider}",
+                "provider": provider,
+            })
+            assert resp.status_code == 200, f"Provider {provider} should be accepted"
