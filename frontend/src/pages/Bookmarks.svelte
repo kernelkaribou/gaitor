@@ -32,10 +32,28 @@
   let addTargetCategory = $state('');
   let adding = $state(false);
 
-  // Derived filter options from data
-  let allTags = $derived([...new Set(bookmarks.flatMap(b => b.tags || []))].sort());
-  let allBaseModels = $derived([...new Set(bookmarks.map(b => b.base_model).filter(Boolean))].sort());
-  let allCategories = $derived([...new Set(bookmarks.map(b => b.target_category).filter(Boolean))].sort());
+  // Derived filter options from data (with counts, sorted by frequency)
+  let availableTags = $derived.by(() => {
+    const tags = {};
+    for (const b of bookmarks) {
+      for (const t of (b.tags || [])) tags[t] = (tags[t] || 0) + 1;
+    }
+    return Object.entries(tags).sort((a, b) => b[1] - a[1]);
+  });
+  let availableBaseModels = $derived.by(() => {
+    const bms = {};
+    for (const b of bookmarks) {
+      if (b.base_model) bms[b.base_model] = (bms[b.base_model] || 0) + 1;
+    }
+    return Object.entries(bms).sort((a, b) => b[1] - a[1]);
+  });
+  let availableCategories = $derived.by(() => {
+    const cats = {};
+    for (const b of bookmarks) {
+      if (b.target_category) cats[b.target_category] = (cats[b.target_category] || 0) + 1;
+    }
+    return Object.entries(cats).sort((a, b) => b[1] - a[1]);
+  });
   let activeFilterCount = $derived(filterTags.size + filterBaseModels.size + filterCategories.size);
 
   function toggleFilterSet(set, value) {
@@ -182,7 +200,9 @@
         onclick={() => showFilters = !showFilters}
         title="Toggle filters"
       >
-        Filters
+        <svg class="w-4 h-4 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+        </svg>
         {#if activeFilterCount > 0}
           <span class="absolute -top-1.5 -right-1.5 bg-amber-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">{activeFilterCount}</span>
         {/if}
@@ -257,59 +277,8 @@
     </div>
   {/if}
 
-  <!-- Filter pane -->
-  {#if showFilters}
-    <div class="bg-gray-800 border border-gray-700 rounded-lg p-4 mb-6">
-      <div class="flex items-center justify-between mb-3">
-        <h3 class="text-sm font-semibold text-gray-200">Filters</h3>
-        {#if activeFilterCount > 0}
-          <button class="text-xs text-gray-500 hover:text-gray-300" onclick={clearAllFilters}>Clear all</button>
-        {/if}
-      </div>
-      <div class="space-y-3">
-        {#if allTags.length > 0}
-          <div>
-            <h4 class="text-xs font-medium text-gray-400 mb-1.5">Tags</h4>
-            <div class="flex flex-wrap gap-1.5">
-              {#each allTags as tag}
-                <button
-                  class="text-[11px] px-1.5 py-0.5 rounded-full border transition-colors {filterTags.has(tag) ? 'bg-yellow-900/50 text-yellow-300 border-yellow-700/50' : 'bg-gray-900 text-gray-400 border-gray-700 hover:border-gray-500'}"
-                  onclick={() => filterTags = toggleFilterSet(filterTags, tag)}
-                >{tag}</button>
-              {/each}
-            </div>
-          </div>
-        {/if}
-        {#if allBaseModels.length > 0}
-          <div>
-            <h4 class="text-xs font-medium text-gray-400 mb-1.5">Base Model</h4>
-            <div class="flex flex-wrap gap-1.5">
-              {#each allBaseModels as bm}
-                <button
-                  class="text-[11px] px-1.5 py-0.5 rounded-full border transition-colors {filterBaseModels.has(bm) ? 'bg-amber-900/50 text-amber-300 border-amber-700/50' : 'bg-gray-900 text-gray-400 border-gray-700 hover:border-gray-500'}"
-                  onclick={() => filterBaseModels = toggleFilterSet(filterBaseModels, bm)}
-                >{bm}</button>
-              {/each}
-            </div>
-          </div>
-        {/if}
-        {#if allCategories.length > 0}
-          <div>
-            <h4 class="text-xs font-medium text-gray-400 mb-1.5">Category</h4>
-            <div class="flex flex-wrap gap-1.5">
-              {#each allCategories as cat}
-                <button
-                  class="text-[11px] px-1.5 py-0.5 rounded-full border transition-colors {filterCategories.has(cat) ? 'bg-green-900/50 text-green-300 border-green-700/50' : 'bg-gray-900 text-gray-400 border-gray-700 hover:border-gray-500'}"
-                  onclick={() => filterCategories = toggleFilterSet(filterCategories, cat)}
-                >{categories.find(c => c.id === cat)?.label || cat}</button>
-              {/each}
-            </div>
-          </div>
-        {/if}
-      </div>
-    </div>
-  {/if}
-
+  <div class="flex gap-4 items-start">
+  <div class="flex-1 min-w-0">
   <!-- Content -->
   {#if loading}
     <div class="text-center py-12 text-gray-500">Loading bookmarks...</div>
@@ -334,6 +303,71 @@
       {/each}
     </div>
   {/if}
+  </div>
+
+  <!-- Filter side panel -->
+  {#if showFilters}
+    <aside class="w-56 shrink-0">
+      <div class="sticky top-0 bg-gray-900 border border-gray-700 rounded-lg p-3 max-h-[calc(100vh-6rem)] overflow-y-auto">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-semibold text-gray-200">Filters</h3>
+          {#if activeFilterCount > 0}
+            <button class="text-xs text-gray-500 hover:text-gray-300" onclick={clearAllFilters}>Clear all</button>
+          {/if}
+        </div>
+
+        <!-- Tags -->
+        {#if availableTags.length > 0}
+          <details class="mb-3" open>
+            <summary class="text-xs font-medium text-gray-400 cursor-pointer select-none mb-1.5">Tags</summary>
+            <div class="flex flex-wrap gap-1 ml-1">
+              {#each availableTags as [tag, count]}
+                <button
+                  class="text-[11px] px-1.5 py-0.5 rounded-full border transition-colors {filterTags.has(tag) ? 'bg-yellow-900/50 text-yellow-300 border-yellow-700/50' : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-500'}"
+                  onclick={() => filterTags = toggleFilterSet(filterTags, tag)}
+                >
+                  {tag}
+                </button>
+              {/each}
+            </div>
+          </details>
+        {/if}
+
+        <!-- Base Model -->
+        {#if availableBaseModels.length > 0}
+          <details class="mb-3" open>
+            <summary class="text-xs font-medium text-gray-400 cursor-pointer select-none mb-1.5">Base Model</summary>
+            <div class="space-y-1 ml-1">
+              {#each availableBaseModels as [bm, count]}
+                <label class="flex items-center gap-2 text-xs text-gray-300 cursor-pointer hover:text-gray-100">
+                  <input type="checkbox" checked={filterBaseModels.has(bm)} onchange={() => filterBaseModels = toggleFilterSet(filterBaseModels, bm)} class="rounded border-gray-600 bg-gray-800 text-amber-500 focus:ring-0 w-3 h-3" />
+                  <span class="flex-1 truncate">{bm}</span>
+                  <span class="text-gray-600">{count}</span>
+                </label>
+              {/each}
+            </div>
+          </details>
+        {/if}
+
+        <!-- Category -->
+        {#if availableCategories.length > 0}
+          <details class="mb-3" open>
+            <summary class="text-xs font-medium text-gray-400 cursor-pointer select-none mb-1.5">Category</summary>
+            <div class="space-y-1 ml-1">
+              {#each availableCategories as [cat, count]}
+                <label class="flex items-center gap-2 text-xs text-gray-300 cursor-pointer hover:text-gray-100">
+                  <input type="checkbox" checked={filterCategories.has(cat)} onchange={() => filterCategories = toggleFilterSet(filterCategories, cat)} class="rounded border-gray-600 bg-gray-800 text-amber-500 focus:ring-0 w-3 h-3" />
+                  <span class="flex-1 truncate">{categories.find(c => c.id === cat)?.label || cat}</span>
+                  <span class="text-gray-600">{count}</span>
+                </label>
+              {/each}
+            </div>
+          </details>
+        {/if}
+      </div>
+    </aside>
+  {/if}
+  </div>
 </div>
 
 {#if selectedBookmark}
