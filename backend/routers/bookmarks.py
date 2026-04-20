@@ -2,14 +2,19 @@
 Bookmark API endpoints - CRUD for metadata-only model references.
 """
 import os
+import logging
+import tempfile
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from typing import Optional
 from io import BytesIO
 from PIL import Image
+import httpx
 
 Image.MAX_IMAGE_PIXELS = 25_000_000
+
+logger = logging.getLogger(__name__)
 
 from ..schemas.bookmark import BookmarkMetadata, BookmarkSource
 from ..services.bookmarks import (
@@ -90,6 +95,58 @@ def _validate_target_category(category: Optional[str]) -> Optional[str]:
     return category
 
 
+MAX_REMOTE_THUMB = 12 * 1024 * 1024  # 12MB download limit
+
+
+async def _fetch_and_store_thumbnail(url: str, bookmark_id: str) -> str:
+    """Download a remote image URL, convert to webp, store locally.
+
+    Returns the relative thumbnail path (e.g. 'thumbnails/bm-{id}.webp').
+    On failure, logs a warning and returns None (non-fatal).
+    """
+    try:
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+
+        content_type = resp.headers.get("content-type", "")
+        if not content_type.startswith("image/"):
+            logger.warning(f"Thumbnail URL is not an image: {content_type}")
+            return None
+
+        if len(resp.content) > MAX_REMOTE_THUMB:
+            logger.warning(f"Thumbnail URL too large: {len(resp.content)} bytes")
+            return None
+
+        img = Image.open(BytesIO(resp.content))
+        img.thumbnail((400, 400), Image.LANCZOS)
+        buf = BytesIO()
+        img.save(buf, format="WEBP", quality=85)
+        webp_data = buf.getvalue()
+
+        meta_service.ensure_metadata_dir()
+        thumb_path = meta_service.THUMBNAILS_DIR / f"bm-{bookmark_id}.webp"
+        fd, tmp_path = tempfile.mkstemp(
+            dir=str(meta_service.THUMBNAILS_DIR), suffix=".tmp"
+        )
+        try:
+            os.fdopen(fd, "wb").write(webp_data)
+            os.chmod(tmp_path, 0o644)
+            os.replace(tmp_path, str(thumb_path))
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
+
+        return f"thumbnails/bm-{bookmark_id}.webp"
+
+    except Exception as e:
+        logger.warning(f"Failed to fetch thumbnail from {url}: {e}")
+        return None
+
+
 @router.get("/")
 async def list_bookmarks():
     """List all bookmarks."""
@@ -118,6 +175,12 @@ async def create_bookmark(req: CreateBookmarkRequest):
         tags=[t.strip() for t in req.tags if t.strip()][:50],
         target_category=target_cat,
     )
+
+    # Download remote thumbnail and store locally
+    if thumb_url and not bookmark.thumbnail:
+        local_thumb = await _fetch_and_store_thumbnail(thumb_url, bookmark.id)
+        if local_thumb:
+            bookmark.thumbnail = local_thumb
 
     save_bookmark(bookmark)
     return bookmark.model_dump()
@@ -148,7 +211,15 @@ async def update_bookmark(bookmark_id: str, req: UpdateBookmarkRequest):
         new_url = _validate_url(req.source_url)
         bookmark.source = BookmarkSource(url=new_url, provider=_derive_provider(new_url))
     if req.thumbnail_url is not None:
-        bookmark.thumbnail_url = _validate_url(req.thumbnail_url)
+        new_thumb_url = _validate_url(req.thumbnail_url)
+        bookmark.thumbnail_url = new_thumb_url
+        # Download new remote thumbnail if URL changed
+        if new_thumb_url:
+            local_thumb = await _fetch_and_store_thumbnail(
+                new_thumb_url, bookmark_id
+            )
+            if local_thumb:
+                bookmark.thumbnail = local_thumb
     if req.base_model is not None:
         bookmark.base_model = req.base_model.strip() or None
     if req.tags is not None:

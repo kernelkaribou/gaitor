@@ -270,6 +270,7 @@
         <div class="col-span-2">
           <label class="block text-xs text-gray-400 mb-1">Thumbnail URL</label>
           <input bind:value={addThumbnailUrl} class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-amber-500" placeholder="https://..." />
+          <p class="text-xs text-gray-600 mt-0.5">Remote image URL (downloaded and stored locally as thumbnail)</p>
         </div>
       </div>
       <div class="flex gap-2 mt-4">

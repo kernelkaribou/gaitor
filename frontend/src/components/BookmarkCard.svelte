@@ -5,8 +5,7 @@
   let { bookmark, onSelect } = $props();
 
   const thumbUrl = $derived(
-    bookmark.thumbnail ? api.getBookmarkThumbnailUrl(bookmark.id) :
-    bookmark.thumbnail_url ? bookmark.thumbnail_url : null
+    bookmark.thumbnail ? api.getBookmarkThumbnailUrl(bookmark.id) : null
   );
 
   const providerLabel = $derived.by(() => {

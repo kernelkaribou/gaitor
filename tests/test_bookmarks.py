@@ -317,3 +317,111 @@ class TestBookmarkValidation:
         })
         assert resp.status_code == 200
         assert resp.json()["target_category"] == "checkpoints"
+
+
+class TestThumbnailUrlLocalization:
+    """Tests for downloading remote thumbnail URLs and storing locally."""
+
+    def test_create_with_thumbnail_url_downloads_locally(self, client, monkeypatch):
+        """Creating a bookmark with thumbnail_url should download & store webp."""
+        import httpx
+
+        # Create a small test image
+        img = Image.new("RGB", (200, 200), color="blue")
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        png_bytes = buf.getvalue()
+
+        class FakeResponse:
+            status_code = 200
+            content = png_bytes
+            headers = {"content-type": "image/png"}
+            def raise_for_status(self):
+                pass
+
+        class FakeClient:
+            async def get(self, url):
+                return FakeResponse()
+            async def __aenter__(self):
+                return self
+            async def __aexit__(self, *args):
+                pass
+
+        monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: FakeClient())
+
+        resp = client.post("/api/bookmarks/", json={
+            "name": "Remote Thumb",
+            "thumbnail_url": "https://example.com/img.png",
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["thumbnail_url"] == "https://example.com/img.png"
+        assert data["thumbnail"] is not None
+        assert data["thumbnail"].endswith(".webp")
+
+        # Verify the local file exists
+        thumb_path = meta.THUMBNAILS_DIR / f"bm-{data['id']}.webp"
+        assert thumb_path.exists()
+
+    def test_create_with_failed_download_still_saves(self, client, monkeypatch):
+        """If thumbnail download fails, bookmark is still created (no thumbnail)."""
+        import httpx
+
+        class FakeClient:
+            async def get(self, url):
+                raise httpx.ConnectError("connection refused")
+            async def __aenter__(self):
+                return self
+            async def __aexit__(self, *args):
+                pass
+
+        monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: FakeClient())
+
+        resp = client.post("/api/bookmarks/", json={
+            "name": "Failed Thumb",
+            "thumbnail_url": "https://example.com/img.png",
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["thumbnail_url"] == "https://example.com/img.png"
+        assert data["thumbnail"] is None
+
+    def test_update_thumbnail_url_downloads_new(self, client, monkeypatch):
+        """Updating thumbnail_url should download & replace local thumbnail."""
+        import httpx
+
+        create = client.post("/api/bookmarks/", json={"name": "Update Test"})
+        bm_id = create.json()["id"]
+
+        img = Image.new("RGB", (100, 100), color="red")
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        png_bytes = buf.getvalue()
+
+        class FakeResponse:
+            status_code = 200
+            content = png_bytes
+            headers = {"content-type": "image/png"}
+            def raise_for_status(self):
+                pass
+
+        class FakeClient:
+            async def get(self, url):
+                return FakeResponse()
+            async def __aenter__(self):
+                return self
+            async def __aexit__(self, *args):
+                pass
+
+        monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: FakeClient())
+
+        resp = client.put(f"/api/bookmarks/{bm_id}", json={
+            "thumbnail_url": "https://example.com/new.png",
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["thumbnail"] is not None
+        assert data["thumbnail"].endswith(".webp")
+
+        thumb_path = meta.THUMBNAILS_DIR / f"bm-{bm_id}.webp"
+        assert thumb_path.exists()

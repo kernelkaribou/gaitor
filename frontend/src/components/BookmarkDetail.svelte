@@ -12,8 +12,7 @@
   let confirmDelete = $state(false);
 
   let thumbUrl = $derived(
-    bookmark.thumbnail ? api.getBookmarkThumbnailUrl(bookmark.id) + '?t=' + thumbCacheBust :
-    bookmark.thumbnail_url ? bookmark.thumbnail_url : null
+    bookmark.thumbnail ? api.getBookmarkThumbnailUrl(bookmark.id) + '?t=' + thumbCacheBust : null
   );
 
   // Edit form state
@@ -228,7 +227,7 @@
         <div>
           <label class="block text-sm text-gray-400 mb-1">Thumbnail URL</label>
           <input bind:value={editThumbnailUrl} class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-amber-500" placeholder="https://..." />
-          <p class="text-xs text-gray-600 mt-0.5">Remote image URL (used if no uploaded thumbnail)</p>
+          <p class="text-xs text-gray-600 mt-0.5">Remote image URL (downloaded and stored locally as thumbnail)</p>
         </div>
 
         <div class="flex gap-2 pt-2">
