@@ -9,11 +9,13 @@
     bookmark.thumbnail_url ? bookmark.thumbnail_url : null
   );
 
-  const providerLabel = $derived(
-    bookmark.source?.provider === 'huggingface' ? 'HF' :
-    bookmark.source?.provider === 'civitai' ? 'Civit' :
-    bookmark.source?.provider ? bookmark.source.provider : null
-  );
+  const providerLabel = $derived.by(() => {
+    const url = bookmark.source?.url?.toLowerCase() || '';
+    if (url.includes('huggingface.co') || url.includes('hf.co')) return 'HF';
+    if (url.includes('civitai.com')) return 'Civit';
+    if (url) return null;
+    return null;
+  });
 </script>
 
 <button

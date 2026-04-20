@@ -15,10 +15,15 @@
   let selectedBookmark = $state(null);
   let showAddForm = $state(false);
 
+  // Filters
+  let filterTags = $state(new Set());
+  let filterBaseModels = $state(new Set());
+  let filterCategories = $state(new Set());
+  let showFilters = $state(false);
+
   // Add form state
   let addName = $state('');
   let addSourceUrl = $state('');
-  let addProvider = $state('');
   let addDescription = $state('');
   let addNotes = $state('');
   let addBaseModel = $state('');
@@ -26,6 +31,24 @@
   let addThumbnailUrl = $state('');
   let addTargetCategory = $state('');
   let adding = $state(false);
+
+  // Derived filter options from data
+  let allTags = $derived([...new Set(bookmarks.flatMap(b => b.tags || []))].sort());
+  let allBaseModels = $derived([...new Set(bookmarks.map(b => b.base_model).filter(Boolean))].sort());
+  let allCategories = $derived([...new Set(bookmarks.map(b => b.target_category).filter(Boolean))].sort());
+  let activeFilterCount = $derived(filterTags.size + filterBaseModels.size + filterCategories.size);
+
+  function toggleFilterSet(set, value) {
+    const next = new Set(set);
+    next.has(value) ? next.delete(value) : next.add(value);
+    return next;
+  }
+
+  function clearAllFilters() {
+    filterTags = new Set();
+    filterBaseModels = new Set();
+    filterCategories = new Set();
+  }
 
   let filteredBookmarks = $derived.by(() => {
     let list = bookmarks;
@@ -37,9 +60,21 @@
         b.notes?.toLowerCase().includes(q) ||
         b.base_model?.toLowerCase().includes(q) ||
         b.source?.url?.toLowerCase().includes(q) ||
-        b.source?.provider?.toLowerCase().includes(q) ||
         b.tags?.some(t => t.toLowerCase().includes(q))
       );
+    }
+    if (filterTags.size > 0) {
+      list = list.filter(b => {
+        const bt = b.tags || [];
+        for (const t of filterTags) { if (!bt.includes(t)) return false; }
+        return true;
+      });
+    }
+    if (filterBaseModels.size > 0) {
+      list = list.filter(b => b.base_model && filterBaseModels.has(b.base_model));
+    }
+    if (filterCategories.size > 0) {
+      list = list.filter(b => b.target_category && filterCategories.has(b.target_category));
     }
     return list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   });
@@ -55,7 +90,7 @@
         api.getCategories(),
       ]);
       bookmarks = bData.bookmarks || [];
-      categories = cData || [];
+      categories = cData.categories || [];
     } catch (err) {
       error = err.message;
     }
@@ -65,7 +100,6 @@
   function resetAddForm() {
     addName = '';
     addSourceUrl = '';
-    addProvider = '';
     addDescription = '';
     addNotes = '';
     addBaseModel = '';
@@ -82,7 +116,6 @@
       await api.createBookmark({
         name: addName.trim(),
         source_url: addSourceUrl.trim() || undefined,
-        provider: addProvider || undefined,
         description: addDescription.trim() || undefined,
         notes: addNotes.trim() || undefined,
         base_model: addBaseModel.trim() || undefined,
@@ -145,6 +178,16 @@
         class="bg-gray-800 border border-gray-600 rounded-md px-3 py-1.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-amber-500 w-64"
       />
       <button
+        class="relative px-3 py-1.5 text-sm rounded-md transition-colors {showFilters ? 'bg-amber-700 hover:bg-amber-600 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-200'}"
+        onclick={() => showFilters = !showFilters}
+        title="Toggle filters"
+      >
+        Filters
+        {#if activeFilterCount > 0}
+          <span class="absolute -top-1.5 -right-1.5 bg-amber-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">{activeFilterCount}</span>
+        {/if}
+      </button>
+      <button
         onclick={() => { showAddForm = !showAddForm; if (!showAddForm) resetAddForm(); }}
         class="px-3 py-1.5 text-sm rounded-md transition-colors {showAddForm ? 'bg-amber-600 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'}"
       >
@@ -173,16 +216,6 @@
           <input bind:value={addSourceUrl} class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-amber-500" placeholder="https://..." />
         </div>
         <div>
-          <label class="block text-xs text-gray-400 mb-1">Provider</label>
-          <select bind:value={addProvider} class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-amber-500">
-            <option value="">None</option>
-            <option value="huggingface">Hugging Face</option>
-            <option value="civitai">CivitAI</option>
-            <option value="url">Direct URL</option>
-            <option value="other">Other</option>
-          </select>
-        </div>
-        <div>
           <label class="block text-xs text-gray-400 mb-1">Base Model</label>
           <input bind:value={addBaseModel} class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-amber-500" placeholder="e.g. SDXL 1.0, Flux.1" />
         </div>
@@ -195,7 +228,7 @@
             {/each}
           </select>
         </div>
-        <div>
+        <div class="col-span-2">
           <label class="block text-xs text-gray-400 mb-1">Tags</label>
           <input bind:value={addTags} class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-amber-500" placeholder="Comma separated" />
         </div>
@@ -224,6 +257,59 @@
     </div>
   {/if}
 
+  <!-- Filter pane -->
+  {#if showFilters}
+    <div class="bg-gray-800 border border-gray-700 rounded-lg p-4 mb-6">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-sm font-semibold text-gray-200">Filters</h3>
+        {#if activeFilterCount > 0}
+          <button class="text-xs text-gray-500 hover:text-gray-300" onclick={clearAllFilters}>Clear all</button>
+        {/if}
+      </div>
+      <div class="space-y-3">
+        {#if allTags.length > 0}
+          <div>
+            <h4 class="text-xs font-medium text-gray-400 mb-1.5">Tags</h4>
+            <div class="flex flex-wrap gap-1.5">
+              {#each allTags as tag}
+                <button
+                  class="text-[11px] px-1.5 py-0.5 rounded-full border transition-colors {filterTags.has(tag) ? 'bg-yellow-900/50 text-yellow-300 border-yellow-700/50' : 'bg-gray-900 text-gray-400 border-gray-700 hover:border-gray-500'}"
+                  onclick={() => filterTags = toggleFilterSet(filterTags, tag)}
+                >{tag}</button>
+              {/each}
+            </div>
+          </div>
+        {/if}
+        {#if allBaseModels.length > 0}
+          <div>
+            <h4 class="text-xs font-medium text-gray-400 mb-1.5">Base Model</h4>
+            <div class="flex flex-wrap gap-1.5">
+              {#each allBaseModels as bm}
+                <button
+                  class="text-[11px] px-1.5 py-0.5 rounded-full border transition-colors {filterBaseModels.has(bm) ? 'bg-amber-900/50 text-amber-300 border-amber-700/50' : 'bg-gray-900 text-gray-400 border-gray-700 hover:border-gray-500'}"
+                  onclick={() => filterBaseModels = toggleFilterSet(filterBaseModels, bm)}
+                >{bm}</button>
+              {/each}
+            </div>
+          </div>
+        {/if}
+        {#if allCategories.length > 0}
+          <div>
+            <h4 class="text-xs font-medium text-gray-400 mb-1.5">Category</h4>
+            <div class="flex flex-wrap gap-1.5">
+              {#each allCategories as cat}
+                <button
+                  class="text-[11px] px-1.5 py-0.5 rounded-full border transition-colors {filterCategories.has(cat) ? 'bg-green-900/50 text-green-300 border-green-700/50' : 'bg-gray-900 text-gray-400 border-gray-700 hover:border-gray-500'}"
+                  onclick={() => filterCategories = toggleFilterSet(filterCategories, cat)}
+                >{categories.find(c => c.id === cat)?.label || cat}</button>
+              {/each}
+            </div>
+          </div>
+        {/if}
+      </div>
+    </div>
+  {/if}
+
   <!-- Content -->
   {#if loading}
     <div class="text-center py-12 text-gray-500">Loading bookmarks...</div>
@@ -235,9 +321,9 @@
         </svg>
       </div>
       <p class="text-gray-500 text-sm mb-2">
-        {search ? 'No bookmarks match your search' : 'No bookmarks yet'}
+        {search || activeFilterCount > 0 ? 'No bookmarks match your search or filters' : 'No bookmarks yet'}
       </p>
-      {#if !search}
+      {#if !search && activeFilterCount === 0}
         <p class="text-gray-600 text-xs">Save references to models you want to remember</p>
       {/if}
     </div>

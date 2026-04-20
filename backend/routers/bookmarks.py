@@ -26,13 +26,11 @@ router = APIRouter()
 
 ALLOWED_THUMBNAIL_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 MAX_THUMBNAIL_UPLOAD = 12 * 1024 * 1024
-VALID_PROVIDERS = {"huggingface", "civitai", "url", "other"}
 
 
 class CreateBookmarkRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     source_url: Optional[str] = None
-    provider: Optional[str] = None
     description: str = Field(default="", max_length=2000)
     notes: str = Field(default="", max_length=2000)
     base_model: Optional[str] = Field(default=None, max_length=200)
@@ -44,7 +42,6 @@ class CreateBookmarkRequest(BaseModel):
 class UpdateBookmarkRequest(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=200)
     source_url: Optional[str] = None
-    provider: Optional[str] = None
     description: Optional[str] = Field(default=None, max_length=2000)
     notes: Optional[str] = Field(default=None, max_length=2000)
     base_model: Optional[str] = Field(default=None, max_length=200)
@@ -67,14 +64,16 @@ def _validate_url(url: Optional[str]) -> Optional[str]:
     return url
 
 
-def _validate_provider(provider: Optional[str]) -> Optional[str]:
-    """Validate provider is a known value or None."""
-    if not provider:
+def _derive_provider(url: Optional[str]) -> Optional[str]:
+    """Derive provider from URL hostname."""
+    if not url:
         return None
-    provider = provider.strip().lower()
-    if provider and provider not in VALID_PROVIDERS:
-        raise HTTPException(status_code=400, detail=f"Invalid provider. Allowed: {', '.join(VALID_PROVIDERS)}")
-    return provider or None
+    lower = url.lower()
+    if "huggingface.co" in lower or "hf.co" in lower:
+        return "huggingface"
+    if "civitai.com" in lower:
+        return "civitai"
+    return "url"
 
 
 def _validate_target_category(category: Optional[str]) -> Optional[str]:
@@ -100,11 +99,10 @@ async def list_bookmarks():
 async def create_bookmark(req: CreateBookmarkRequest):
     """Create a new bookmark."""
     source_url = _validate_url(req.source_url)
-    provider = _validate_provider(req.provider)
     target_cat = _validate_target_category(req.target_category)
     thumb_url = _validate_url(req.thumbnail_url)
 
-    source = BookmarkSource(url=source_url, provider=provider)
+    source = BookmarkSource(url=source_url, provider=_derive_provider(source_url))
 
     bookmark = BookmarkMetadata(
         name=req.name.strip(),
@@ -139,10 +137,9 @@ async def update_bookmark(bookmark_id: str, req: UpdateBookmarkRequest):
         bookmark.description = req.description.strip()
     if req.notes is not None:
         bookmark.notes = req.notes.strip()
-    if req.source_url is not None or req.provider is not None:
-        new_url = _validate_url(req.source_url) if req.source_url is not None else bookmark.source.url
-        new_provider = _validate_provider(req.provider) if req.provider is not None else bookmark.source.provider
-        bookmark.source = BookmarkSource(url=new_url, provider=new_provider)
+    if req.source_url is not None:
+        new_url = _validate_url(req.source_url)
+        bookmark.source = BookmarkSource(url=new_url, provider=_derive_provider(new_url))
     if req.thumbnail_url is not None:
         bookmark.thumbnail_url = _validate_url(req.thumbnail_url)
     if req.base_model is not None:

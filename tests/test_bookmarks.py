@@ -62,7 +62,6 @@ class TestBookmarkCRUD:
         resp = client.post("/api/bookmarks/", json={
             "name": "Test Model",
             "source_url": "https://huggingface.co/test/model",
-            "provider": "huggingface",
             "description": "A test model",
             "base_model": "SDXL 1.0",
             "tags": ["test", "sdxl"],
@@ -229,13 +228,32 @@ class TestBookmarkValidation:
         assert resp.status_code == 400
         assert "HTTPS" in resp.json()["detail"]
 
-    def test_invalid_provider_rejected(self, client):
+    def test_provider_derived_from_url(self, client):
+        """Provider should be auto-derived from source URL."""
         resp = client.post("/api/bookmarks/", json={
-            "name": "Bad Provider",
-            "provider": "unknown_source",
+            "name": "HF Model",
+            "source_url": "https://huggingface.co/stabilityai/sdxl",
         })
-        assert resp.status_code == 400
-        assert "provider" in resp.json()["detail"].lower()
+        assert resp.status_code == 200
+        assert resp.json()["source"]["provider"] == "huggingface"
+
+        resp = client.post("/api/bookmarks/", json={
+            "name": "Civit Model",
+            "source_url": "https://civitai.com/models/12345",
+        })
+        assert resp.status_code == 200
+        assert resp.json()["source"]["provider"] == "civitai"
+
+        resp = client.post("/api/bookmarks/", json={
+            "name": "Other Model",
+            "source_url": "https://example.com/model.safetensors",
+        })
+        assert resp.status_code == 200
+        assert resp.json()["source"]["provider"] == "url"
+
+        resp = client.post("/api/bookmarks/", json={"name": "No URL"})
+        assert resp.status_code == 200
+        assert resp.json()["source"]["provider"] is None
 
     def test_malformed_types_rejected(self, client):
         """Pydantic rejects wrong types (e.g. list for name, string for tags)."""
@@ -252,10 +270,17 @@ class TestBookmarkValidation:
         })
         assert resp.status_code == 400
 
-    def test_valid_provider_accepted(self, client):
-        for provider in ("huggingface", "civitai", "url", "other"):
-            resp = client.post("/api/bookmarks/", json={
-                "name": f"Provider {provider}",
-                "provider": provider,
-            })
-            assert resp.status_code == 200, f"Provider {provider} should be accepted"
+    def test_provider_updates_on_url_change(self, client):
+        """Changing source URL on update should re-derive provider."""
+        create = client.post("/api/bookmarks/", json={
+            "name": "Update Test",
+            "source_url": "https://huggingface.co/model",
+        })
+        bm_id = create.json()["id"]
+        assert create.json()["source"]["provider"] == "huggingface"
+
+        resp = client.put(f"/api/bookmarks/{bm_id}", json={
+            "source_url": "https://civitai.com/models/999",
+        })
+        assert resp.status_code == 200
+        assert resp.json()["source"]["provider"] == "civitai"

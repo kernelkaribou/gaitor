@@ -21,7 +21,6 @@
   let editDescription = $state('');
   let editNotes = $state('');
   let editSourceUrl = $state('');
-  let editProvider = $state('');
   let editBaseModel = $state('');
   let editTags = $state('');
   let editThumbnailUrl = $state('');
@@ -32,7 +31,6 @@
   let origDescription = $state('');
   let origNotes = $state('');
   let origSourceUrl = $state('');
-  let origProvider = $state('');
   let origBaseModel = $state('');
   let origTags = $state('');
   let origThumbnailUrl = $state('');
@@ -43,7 +41,6 @@
     editDescription !== origDescription ||
     editNotes !== origNotes ||
     editSourceUrl !== origSourceUrl ||
-    editProvider !== origProvider ||
     editBaseModel !== origBaseModel ||
     editTags !== origTags ||
     editThumbnailUrl !== origThumbnailUrl ||
@@ -55,7 +52,6 @@
     editDescription = bookmark.description || '';
     editNotes = bookmark.notes || '';
     editSourceUrl = bookmark.source?.url || '';
-    editProvider = bookmark.source?.provider || '';
     editBaseModel = bookmark.base_model || '';
     editTags = (bookmark.tags || []).join(', ');
     editThumbnailUrl = bookmark.thumbnail_url || '';
@@ -65,7 +61,6 @@
     origDescription = editDescription;
     origNotes = editNotes;
     origSourceUrl = editSourceUrl;
-    origProvider = editProvider;
     origBaseModel = editBaseModel;
     origTags = editTags;
     origThumbnailUrl = editThumbnailUrl;
@@ -85,7 +80,6 @@
       if (editDescription !== origDescription) updates.description = editDescription;
       if (editNotes !== origNotes) updates.notes = editNotes;
       if (editSourceUrl !== origSourceUrl) updates.source_url = editSourceUrl || null;
-      if (editProvider !== origProvider) updates.provider = editProvider || null;
       if (editBaseModel !== origBaseModel) updates.base_model = editBaseModel.trim() || null;
       if (editTags !== origTags) updates.tags = tags;
       if (editThumbnailUrl !== origThumbnailUrl) updates.thumbnail_url = editThumbnailUrl || null;
@@ -201,17 +195,6 @@
         </div>
 
         <div>
-          <label class="block text-sm text-gray-400 mb-1">Provider</label>
-          <select bind:value={editProvider} class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-amber-500">
-            <option value="">None</option>
-            <option value="huggingface">Hugging Face</option>
-            <option value="civitai">CivitAI</option>
-            <option value="url">Direct URL</option>
-            <option value="other">Other</option>
-          </select>
-        </div>
-
-        <div>
           <label class="block text-sm text-gray-400 mb-1">Base Model</label>
           <input bind:value={editBaseModel} class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-amber-500" placeholder="e.g. SDXL 1.0, Flux.1" />
         </div>
@@ -274,9 +257,6 @@
             {:else}
               <p class="text-sm text-gray-300">{bookmark.source.url}</p>
             {/if}
-            {#if bookmark.source.provider}
-              <span class="ml-2 text-xs px-2 py-0.5 rounded bg-amber-900/40 text-amber-400 border border-amber-700/40">{bookmark.source.provider}</span>
-            {/if}
           </div>
         {/if}
 
@@ -290,7 +270,7 @@
         {#if bookmark.target_category}
           <div>
             <h4 class="text-xs font-medium text-gray-400 mb-1">Target Category</h4>
-            <p class="text-sm text-gray-300">{bookmark.target_category}</p>
+            <p class="text-sm text-gray-300">{categories.find(c => c.id === bookmark.target_category)?.label || bookmark.target_category}</p>
           </div>
         {/if}
 
