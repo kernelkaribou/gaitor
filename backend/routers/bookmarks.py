@@ -1,6 +1,7 @@
 """
 Bookmark API endpoints - CRUD for metadata-only model references.
 """
+import os
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
@@ -98,6 +99,9 @@ async def list_bookmarks():
 @router.post("/")
 async def create_bookmark(req: CreateBookmarkRequest):
     """Create a new bookmark."""
+    name = req.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Name cannot be blank")
     source_url = _validate_url(req.source_url)
     target_cat = _validate_target_category(req.target_category)
     thumb_url = _validate_url(req.thumbnail_url)
@@ -105,7 +109,7 @@ async def create_bookmark(req: CreateBookmarkRequest):
     source = BookmarkSource(url=source_url, provider=_derive_provider(source_url))
 
     bookmark = BookmarkMetadata(
-        name=req.name.strip(),
+        name=name,
         description=req.description.strip(),
         notes=req.notes.strip(),
         source=source,
@@ -132,7 +136,10 @@ async def update_bookmark(bookmark_id: str, req: UpdateBookmarkRequest):
         raise HTTPException(status_code=404, detail="Bookmark not found")
 
     if req.name is not None:
-        bookmark.name = req.name.strip()
+        stripped = req.name.strip()
+        if not stripped:
+            raise HTTPException(status_code=400, detail="Name cannot be blank")
+        bookmark.name = stripped
     if req.description is not None:
         bookmark.description = req.description.strip()
     if req.notes is not None:
@@ -199,9 +206,21 @@ async def upload_bookmark_thumbnail(bookmark_id: str, file: UploadFile = File(..
 
     meta_service.ensure_metadata_dir()
     thumb_path = meta_service.THUMBNAILS_DIR / f"bm-{bookmark_id}.webp"
-    for old in meta_service.THUMBNAILS_DIR.glob(f"bm-{bookmark_id}.*"):
-        old.unlink(missing_ok=True)
-    thumb_path.write_bytes(webp_data)
+    # Atomic write: temp file + replace (NFS-safe, matches JSON write pattern)
+    import tempfile
+    fd, tmp_path = tempfile.mkstemp(
+        dir=str(meta_service.THUMBNAILS_DIR), suffix=".tmp"
+    )
+    try:
+        os.fdopen(fd, "wb").write(webp_data)
+        os.chmod(tmp_path, 0o644)
+        os.replace(tmp_path, str(thumb_path))
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
     bookmark.thumbnail = f"thumbnails/bm-{bookmark_id}.webp"
     bookmark.updated_at = datetime.now(timezone.utc).isoformat()

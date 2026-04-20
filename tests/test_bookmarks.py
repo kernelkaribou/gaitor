@@ -284,3 +284,36 @@ class TestBookmarkValidation:
         })
         assert resp.status_code == 200
         assert resp.json()["source"]["provider"] == "civitai"
+
+    def test_whitespace_only_name_rejected_create(self, client):
+        """Name that is only whitespace should be rejected."""
+        resp = client.post("/api/bookmarks/", json={"name": "   "})
+        assert resp.status_code == 400
+        assert "blank" in resp.json()["detail"].lower()
+
+    def test_whitespace_only_name_rejected_update(self, client):
+        """Updating name to whitespace-only should be rejected."""
+        create = client.post("/api/bookmarks/", json={"name": "Valid Name"})
+        bm_id = create.json()["id"]
+
+        resp = client.put(f"/api/bookmarks/{bm_id}", json={"name": "   "})
+        assert resp.status_code == 400
+        assert "blank" in resp.json()["detail"].lower()
+
+    def test_invalid_target_category_rejected(self, client):
+        """Unknown target_category should be rejected."""
+        resp = client.post("/api/bookmarks/", json={
+            "name": "Bad Cat",
+            "target_category": "nonexistent_category_xyz",
+        })
+        assert resp.status_code == 400
+        assert "Unknown category" in resp.json()["detail"]
+
+    def test_valid_target_category_accepted(self, client):
+        """Known target_category should be accepted."""
+        resp = client.post("/api/bookmarks/", json={
+            "name": "Good Cat",
+            "target_category": "checkpoints",
+        })
+        assert resp.status_code == 200
+        assert resp.json()["target_category"] == "checkpoints"

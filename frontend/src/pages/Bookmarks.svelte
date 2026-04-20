@@ -109,6 +109,10 @@
       ]);
       bookmarks = bData?.bookmarks || [];
       categories = cData?.categories || [];
+      // Reconcile selected bookmark with fresh data
+      if (selectedBookmark) {
+        selectedBookmark = bookmarks.find(b => b.id === selectedBookmark.id) || null;
+      }
     } catch (err) {
       console.error('[Bookmarks] loadData error:', err);
       error = err?.message || 'Failed to load bookmarks';
