@@ -107,12 +107,13 @@
         api.listBookmarks(),
         api.getCategories(),
       ]);
-      bookmarks = bData.bookmarks || [];
-      categories = cData.categories || [];
+      bookmarks = bData?.bookmarks || [];
+      categories = cData?.categories || [];
     } catch (err) {
-      error = err.message;
+      error = err?.message || 'Failed to load bookmarks';
+    } finally {
+      loading = false;
     }
-    loading = false;
   }
 
   function resetAddForm() {
@@ -146,9 +147,10 @@
       resetAddForm();
       await loadData();
     } catch (err) {
-      error = err.message;
+      error = err?.message || 'Failed to add bookmark';
+    } finally {
+      adding = false;
     }
-    adding = false;
   }
 
   async function handleDelete(id) {

@@ -14,7 +14,13 @@ async function request(path, options = {}) {
   });
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: response.statusText }));
-    throw new Error(error.detail || `HTTP ${response.status}`);
+    let message = `HTTP ${response.status}`;
+    if (typeof error.detail === 'string') {
+      message = error.detail;
+    } else if (Array.isArray(error.detail)) {
+      message = error.detail.map(e => e.msg || e.message || JSON.stringify(e)).join('; ');
+    }
+    throw new Error(message);
   }
   return response.json();
 }

@@ -59,10 +59,10 @@
     {/if}
     <div class="flex items-center justify-between text-xs text-gray-500">
       <div class="flex items-center gap-1.5 flex-wrap">
-        {#each bookmark.tags.slice(0, 3) as tag}
+        {#each (bookmark.tags || []).slice(0, 3) as tag}
           <span class="px-1.5 py-0.5 rounded bg-gray-700 text-gray-400 text-[10px]">{tag}</span>
         {/each}
-        {#if bookmark.tags.length > 3}
+        {#if (bookmark.tags || []).length > 3}
           <span class="text-gray-600 text-[10px]">+{bookmark.tags.length - 3}</span>
         {/if}
       </div>
