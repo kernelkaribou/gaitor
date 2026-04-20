@@ -72,8 +72,9 @@
   );
 
   // Thumbnail
-  let thumbUrl = $derived(model.thumbnail ? api.getThumbnailUrl(model.id) + '?t=' + Date.now() : null);
+  let thumbUrl = $derived(model.thumbnail ? api.getThumbnailUrl(model.id) + '?t=' + thumbCacheBust : null);
   let uploadingThumb = $state(false);
+  let thumbCacheBust = $state(Date.now());
 
   // Host sync status
   let hostStatuses = $state([]);
@@ -271,7 +272,8 @@
     error = null;
     try {
       await api.uploadThumbnail(model.id, file);
-      onUpdated();
+      thumbCacheBust = Date.now();
+      if (!editing) onUpdated();
     } catch (err) {
       error = err.message;
     }
@@ -282,7 +284,8 @@
     error = null;
     try {
       await api.deleteThumbnail(model.id);
-      onUpdated();
+      thumbCacheBust = Date.now();
+      if (!editing) onUpdated();
     } catch (err) {
       error = err.message;
     }
