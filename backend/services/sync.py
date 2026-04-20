@@ -361,7 +361,8 @@ def sync_model_to_host(
 
     dest_file = host_model_dir / model.filename
 
-    # Clean up any previous copy at a different location before syncing
+    # Check for existing copy at a different location and move instead of re-copying
+    moved_from_old = False
     for root, dirs, files in os.walk(host_path):
         for fname in files:
             if not fname.endswith(SIDECAR_SUFFIX):
@@ -376,36 +377,48 @@ def sync_model_to_host(
                 continue
             # Skip if already at the target location
             if old_model_file == dest_file.resolve():
-                continue
+                moved_from_old = True
+                sc_path.unlink()
+                break
+            # Move the existing file instead of re-copying from library
             if old_model_file.exists():
-                old_model_file.unlink()
-                logger.info(f"Cleaned up old copy at {old_model_file.relative_to(host_path)}")
+                try:
+                    os.replace(str(old_model_file), str(dest_file))
+                    moved_from_old = True
+                    logger.info(
+                        f"Moved {old_model_file.relative_to(host_path)} -> "
+                        f"{dest_file.relative_to(host_path)}"
+                    )
+                except OSError:
+                    # Cross-device move not supported, fall back to copy
+                    old_model_file.unlink()
+                    logger.info(f"Cleaned up old copy at {old_model_file.relative_to(host_path)}")
             sc_path.unlink()
             cleanup_empty_parents(old_model_file, host_path)
             break
 
-    total_size = src_path.stat().st_size
-    copied_size = 0
+    if not moved_from_old:
+        # Full copy from library only when no existing host file to relocate
+        total_size = src_path.stat().st_size
+        copied_size = 0
 
-    # Copy with progress
-    temp_path = str(dest_file) + ".syncing"
-    try:
-        with open(src_path, "rb") as src, open(temp_path, "wb") as dst:
-            while True:
-                chunk = src.read(config.COPY_BUFFER_SIZE)
-                if not chunk:
-                    break
-                dst.write(chunk)
-                copied_size += len(chunk)
-                if progress_callback:
-                    progress_callback(copied_size, total_size)
-    except Exception:
-        if os.path.exists(temp_path):
-            os.unlink(temp_path)
-        raise
+        temp_path = str(dest_file) + ".syncing"
+        try:
+            with open(src_path, "rb") as src, open(temp_path, "wb") as dst:
+                while True:
+                    chunk = src.read(config.COPY_BUFFER_SIZE)
+                    if not chunk:
+                        break
+                    dst.write(chunk)
+                    copied_size += len(chunk)
+                    if progress_callback:
+                        progress_callback(copied_size, total_size)
+        except Exception:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+            raise
 
-    # Atomic rename
-    os.replace(temp_path, str(dest_file))
+        os.replace(temp_path, str(dest_file))
 
     # Write sidecar metadata
     now = to_iso(get_now())
