@@ -94,7 +94,7 @@
     if (filterCategories.size > 0) {
       list = list.filter(b => b.target_category && filterCategories.has(b.target_category));
     }
-    return list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    return [...list].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   });
 
   onMount(() => loadData());
@@ -110,6 +110,7 @@
       bookmarks = bData?.bookmarks || [];
       categories = cData?.categories || [];
     } catch (err) {
+      console.error('[Bookmarks] loadData error:', err);
       error = err?.message || 'Failed to load bookmarks';
     } finally {
       loading = false;
