@@ -559,7 +559,7 @@ async def download_model(model_id: str):
 
 
 ALLOWED_THUMBNAIL_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
-MAX_THUMBNAIL_SIZE = 5 * 1024 * 1024  # 5MB
+MAX_THUMBNAIL_UPLOAD = 12 * 1024 * 1024  # 12MB raw upload limit (converted to webp)
 
 
 @router.post("/{model_id}/thumbnail")
@@ -580,8 +580,8 @@ async def upload_thumbnail(model_id: str, file: UploadFile = File(...)):
         )
 
     content = await file.read()
-    if len(content) > MAX_THUMBNAIL_SIZE:
-        raise HTTPException(status_code=400, detail="Thumbnail must be under 5MB")
+    if len(content) > MAX_THUMBNAIL_UPLOAD:
+        raise HTTPException(status_code=400, detail="Thumbnail must be under 12MB")
 
     try:
         img = Image.open(BytesIO(content))
