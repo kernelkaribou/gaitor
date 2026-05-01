@@ -113,7 +113,10 @@ class TaskManager:
             task._last_bytes = downloaded
 
     def update_percent(self, task_id: str, percent: int, message: str = ""):
-        """Update progress as a simple percentage (no byte stats/speed)."""
+        """Update progress as a simple percentage (no byte stats/speed).
+
+        Throttled to broadcast at most every 0.5s to avoid flooding WebSocket.
+        """
         task = self._tasks.get(task_id)
         if not task:
             return
@@ -123,7 +126,10 @@ class TaskManager:
         task.progress = max(0, min(100, percent))
         if message:
             task.message = message
-        self._broadcast(task)
+        now = time.time()
+        if now - task._last_update >= 0.5:
+            task._last_update = now
+            self._broadcast(task)
 
     def complete_task(self, task_id: str, message: str = ""):
         task = self._tasks.get(task_id)
