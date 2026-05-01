@@ -361,6 +361,8 @@ def sync_model_to_host(
 
     dest_file = host_model_dir / model.filename
 
+    total_size = src_path.stat().st_size
+
     # Check for existing copy at a different location and move instead of re-copying
     moved_from_old = False
     for root, dirs, files in os.walk(host_path):
@@ -399,7 +401,6 @@ def sync_model_to_host(
 
     if not moved_from_old:
         # Full copy from library only when no existing host file to relocate
-        total_size = src_path.stat().st_size
         copied_size = 0
 
         temp_path = str(dest_file) + ".syncing"
