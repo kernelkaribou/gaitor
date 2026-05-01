@@ -872,11 +872,11 @@
               <p class="text-xs text-gray-500 truncate">{item.profile_path}</p>
             </div>
             {#if item.status === 'missing'}
-              <span class="text-xs text-red-400 shrink-0">Missing</span>
+              <span class="text-xs text-red-400 shrink-0">Missing from library</span>
             {:else if item.status === 'synced'}
               <span class="text-xs text-green-400 shrink-0">Already synced</span>
-            {:else if item.size}
-              <span class="text-xs text-gray-500 shrink-0">{formatSize(item.size)}</span>
+            {:else}
+              <span class="text-xs text-yellow-400 shrink-0">Needs sync{item.size ? ` (${formatSize(item.size)})` : ''}</span>
             {/if}
           </label>
         {/each}

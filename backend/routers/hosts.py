@@ -167,7 +167,7 @@ async def bulk_sync(host_id: str, req: BulkSyncRequest):
                 try:
                     def progress_cb(copied, total, idx=i):
                         overall = int(((idx + copied / max(total, 1)) / total_models) * 100)
-                        task_manager.update_progress(task_id, overall, 100)
+                        task_manager.update_percent(task_id, overall)
                     result = await asyncio.to_thread(
                         sync_model_to_host, model_id, host_id, progress_cb
                     )
@@ -508,7 +508,7 @@ async def import_host_profile(host_id: str, req: ProfileImportRequest):
                 try:
                     def progress_cb(copied, file_total, idx=i):
                         overall = int(((idx + copied / max(file_total, 1)) / total) * 100)
-                        task_manager.update_progress(task_id, overall, 100)
+                        task_manager.update_percent(task_id, overall)
                     result = await asyncio.to_thread(
                         sync_model_to_host, model_id, host_id, progress_cb
                     )
