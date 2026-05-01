@@ -545,3 +545,129 @@ class TestGetModelHostCounts:
         (host_path / "checkpoints" / "sdxl.safetensors").unlink()
         counts = get_model_host_counts()
         assert sample_model.id not in counts
+
+
+class TestHostProfileExport:
+    """Tests for host profile export endpoint."""
+
+    def test_export_empty_host(self, client, host_path):
+        resp = client.get("/api/hosts/test-gpu/profile/export")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["gaitor_profile_version"] == 1
+        assert data["host_id"] == "test-gpu"
+        assert data["models"] == []
+        assert isinstance(data["ignore_patterns"], list)
+        assert "exported_at" in data
+
+    def test_export_with_synced_models(self, client, sample_model, host_path):
+        sync_model_to_host(sample_model.id, "test-gpu")
+        resp = client.get("/api/hosts/test-gpu/profile/export")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["models"]) == 1
+        assert data["models"][0]["library_model_id"] == sample_model.id
+        assert data["models"][0]["library_name"] == "SDXL Base"
+
+    def test_export_includes_ignore_patterns(self, client, host_path):
+        from backend.services.sync import add_ignore_pattern
+        add_ignore_pattern("test-gpu", "*.txt")
+        resp = client.get("/api/hosts/test-gpu/profile/export")
+        data = resp.json()
+        assert "*.txt" in data["ignore_patterns"]
+
+    def test_export_has_content_disposition(self, client, host_path):
+        resp = client.get("/api/hosts/test-gpu/profile/export")
+        cd = resp.headers.get("content-disposition", "")
+        assert "gaitor_export.json" in cd
+        assert "test-gpu" in cd
+
+    def test_export_invalid_host(self, client):
+        resp = client.get("/api/hosts/nonexistent/profile/export")
+        assert resp.status_code == 404
+
+
+class TestHostProfilePreview:
+    """Tests for profile import preview endpoint."""
+
+    def test_preview_all_available(self, client, sample_model, host_path):
+        profile = {
+            "gaitor_profile_version": 1,
+            "host_id": "old-gpu",
+            "models": [{"library_model_id": sample_model.id, "library_name": "SDXL Base", "library_relative_path": "checkpoints/sdxl.safetensors"}],
+            "ignore_patterns": ["*.log"],
+        }
+        resp = client.post("/api/hosts/test-gpu/profile/preview", json=profile)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["available_count"] == 1
+        assert data["missing_count"] == 0
+        assert data["items"][0]["available"] is True
+        assert data["items"][0]["current_name"] == "SDXL Base"
+
+    def test_preview_missing_model(self, client, host_path, setup_library):
+        import uuid
+        fake_id = str(uuid.uuid4())
+        profile = {
+            "gaitor_profile_version": 1,
+            "models": [{"library_model_id": fake_id, "library_name": "Gone Model", "library_relative_path": "gone/model.safetensors"}],
+            "ignore_patterns": [],
+        }
+        resp = client.post("/api/hosts/test-gpu/profile/preview", json=profile)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["available_count"] == 0
+        assert data["missing_count"] == 1
+        assert data["items"][0]["available"] is False
+
+    def test_preview_includes_ignore_patterns(self, client, host_path, setup_library):
+        profile = {
+            "gaitor_profile_version": 1,
+            "models": [],
+            "ignore_patterns": ["*.tmp", "*.log"],
+        }
+        resp = client.post("/api/hosts/test-gpu/profile/preview", json=profile)
+        data = resp.json()
+        assert data["ignore_patterns"] == ["*.tmp", "*.log"]
+
+
+class TestHostProfileImport:
+    """Tests for profile import execution endpoint."""
+
+    def test_import_syncs_models(self, client, sample_model, host_path):
+        resp = client.post("/api/hosts/test-gpu/profile/import", json={
+            "model_ids": [sample_model.id],
+            "ignore_patterns": [],
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "task_id" in data
+
+    def test_import_restores_ignore_patterns(self, client, host_path, setup_library):
+        resp = client.post("/api/hosts/test-gpu/profile/import", json={
+            "model_ids": [],
+            "ignore_patterns": ["*.tmp", "*.log"],
+        })
+        assert resp.status_code == 200
+        from backend.services.sync import get_ignore_patterns
+        patterns = get_ignore_patterns("test-gpu")
+        assert "*.tmp" in patterns
+        assert "*.log" in patterns
+
+    def test_import_skips_invalid_models(self, client, host_path, setup_library):
+        import uuid
+        fake_id = str(uuid.uuid4())
+        resp = client.post("/api/hosts/test-gpu/profile/import", json={
+            "model_ids": [fake_id],
+            "ignore_patterns": ["*.log"],
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "patterns_added" in data
+
+    def test_import_empty_rejected(self, client, host_path, setup_library):
+        resp = client.post("/api/hosts/test-gpu/profile/import", json={
+            "model_ids": [],
+            "ignore_patterns": [],
+        })
+        assert resp.status_code == 400

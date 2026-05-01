@@ -180,6 +180,12 @@ export const api = {
     request(`/hosts/${encodeURIComponent(hostId)}/ignore`, { method: 'DELETE', body: JSON.stringify({ pattern }) }),
   deleteUnmanagedFile: (hostId, relativePath) =>
     request(`/hosts/${encodeURIComponent(hostId)}/delete-file`, { method: 'POST', body: JSON.stringify({ relative_path: relativePath }) }),
+  exportHostProfile: (hostId) =>
+    request(`/hosts/${encodeURIComponent(hostId)}/profile/export`),
+  previewProfileImport: (hostId, profile) =>
+    request(`/hosts/${encodeURIComponent(hostId)}/profile/preview`, { method: 'POST', body: JSON.stringify(profile) }),
+  importHostProfile: (hostId, modelIds, ignorePatterns) =>
+    request(`/hosts/${encodeURIComponent(hostId)}/profile/import`, { method: 'POST', body: JSON.stringify({ model_ids: modelIds, ignore_patterns: ignorePatterns }) }),
 
   // Download (formerly Retrieve)
   getProviders: () => request('/retrieve/providers'),
