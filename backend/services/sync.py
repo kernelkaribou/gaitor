@@ -117,8 +117,10 @@ def check_host_health(path: Path) -> dict:
         result["message"] = f"Not accessible: {e}"
         return result
 
-    probe = path / ".gaitor_health_probe"
+    probe_dir = path / ".gaitor"
+    probe = probe_dir / ".health_probe"
     try:
+        probe_dir.mkdir(exist_ok=True)
         probe.write_text("ok")
         probe.unlink()
         result["writable"] = True
