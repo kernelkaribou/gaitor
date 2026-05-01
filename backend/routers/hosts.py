@@ -389,9 +389,9 @@ async def preview_profile_import(host_id: str, profile: dict):
     """Validate a profile against the current library and return what can be synced."""
     host_id = _check_host_id(host_id)
 
-    # Verify host exists
+    # Verify host exists and get current state
     try:
-        await asyncio.to_thread(get_host_models, host_id)
+        host_models = await asyncio.to_thread(get_host_models, host_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -408,16 +408,34 @@ async def preview_profile_import(host_id: str, profile: dict):
     all_models = await asyncio.to_thread(load_all_models)
     library_models = {m.id: m for m in all_models}
 
+    # Build set of model IDs already synced on this host
+    synced_ids = {
+        hm["library_model_id"]
+        for hm in host_models
+        if hm.get("file_exists", False)
+    }
+
     items = []
     for pm in profile_models:
         if not isinstance(pm, dict):
             continue
         model_id = pm.get("library_model_id", "")
         lib_model = library_models.get(model_id)
+        already_synced = model_id in synced_ids
+
+        # Status: already_synced > available (needs sync) > missing from library
+        if not lib_model:
+            status = "missing"
+        elif already_synced:
+            status = "synced"
+        else:
+            status = "available"
+
         items.append({
             "library_model_id": model_id,
             "profile_name": pm.get("library_name", ""),
             "profile_path": pm.get("library_relative_path", ""),
+            "status": status,
             "available": lib_model is not None,
             "current_name": lib_model.name if lib_model else None,
             "current_category": lib_model.category if lib_model else None,
@@ -430,8 +448,9 @@ async def preview_profile_import(host_id: str, profile: dict):
         "exported_at": profile.get("exported_at", ""),
         "items": items,
         "ignore_patterns": ignore_patterns,
-        "available_count": sum(1 for i in items if i["available"]),
-        "missing_count": sum(1 for i in items if not i["available"]),
+        "available_count": sum(1 for i in items if i["status"] == "available"),
+        "synced_count": sum(1 for i in items if i["status"] == "synced"),
+        "missing_count": sum(1 for i in items if i["status"] == "missing"),
     }
 
 

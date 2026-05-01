@@ -344,7 +344,8 @@
         importPreview = preview;
         importSelections = {};
         preview.items.forEach(item => {
-          if (item.available) {
+          // Default-check only models that need syncing (not already synced, not missing)
+          if (item.status === 'available') {
             importSelections[item.library_model_id] = true;
           }
         });
@@ -842,7 +843,12 @@
           {importPreview.exported_at ? new Date(importPreview.exported_at).toLocaleString() : ''}
         </p>
         <div class="flex gap-4 mt-2 text-xs">
-          <span class="text-green-400">{importPreview.available_count} available</span>
+          {#if importPreview.available_count > 0}
+            <span class="text-yellow-400">{importPreview.available_count} needs sync</span>
+          {/if}
+          {#if importPreview.synced_count > 0}
+            <span class="text-green-400">{importPreview.synced_count} already synced</span>
+          {/if}
           {#if importPreview.missing_count > 0}
             <span class="text-red-400">{importPreview.missing_count} missing from library</span>
           {/if}
@@ -854,19 +860,21 @@
 
       <div class="flex-1 overflow-y-auto p-4 space-y-1">
         {#each importPreview.items as item}
-          <label class="flex items-center gap-3 px-3 py-2 rounded-md {item.available ? 'hover:bg-gray-700/50 cursor-pointer' : 'opacity-50'}">
+          <label class="flex items-center gap-3 px-3 py-2 rounded-md {item.status === 'missing' ? 'opacity-50' : 'hover:bg-gray-700/50 cursor-pointer'}">
             <input
               type="checkbox"
               bind:checked={importSelections[item.library_model_id]}
-              disabled={!item.available}
+              disabled={item.status === 'missing'}
               class="rounded border-gray-600 bg-gray-900 text-green-500 focus:ring-green-500 focus:ring-offset-0 shrink-0"
             />
             <div class="flex-1 min-w-0">
               <p class="text-sm text-gray-200 truncate">{item.current_name || item.profile_name}</p>
               <p class="text-xs text-gray-500 truncate">{item.profile_path}</p>
             </div>
-            {#if !item.available}
+            {#if item.status === 'missing'}
               <span class="text-xs text-red-400 shrink-0">Missing</span>
+            {:else if item.status === 'synced'}
+              <span class="text-xs text-green-400 shrink-0">Already synced</span>
             {:else if item.size}
               <span class="text-xs text-gray-500 shrink-0">{formatSize(item.size)}</span>
             {/if}
@@ -895,10 +903,11 @@
           <button
             class="text-xs text-gray-400 hover:text-gray-200"
             onclick={() => {
-              const allChecked = importPreview.items.filter(i => i.available).every(i => importSelections[i.library_model_id]);
-              importPreview.items.filter(i => i.available).forEach(i => { importSelections[i.library_model_id] = !allChecked; });
+              const selectable = importPreview.items.filter(i => i.status !== 'missing');
+              const allChecked = selectable.every(i => importSelections[i.library_model_id]);
+              selectable.forEach(i => { importSelections[i.library_model_id] = !allChecked; });
             }}
-          >{importPreview.items.filter(i => i.available).every(i => importSelections[i.library_model_id]) ? 'Deselect all' : 'Select all'}</button>
+          >{importPreview.items.filter(i => i.status !== 'missing').every(i => importSelections[i.library_model_id]) ? 'Deselect all' : 'Select all'}</button>
         </div>
         <div class="flex gap-2">
           <button

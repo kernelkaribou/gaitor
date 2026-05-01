@@ -602,8 +602,23 @@ class TestHostProfilePreview:
         data = resp.json()
         assert data["available_count"] == 1
         assert data["missing_count"] == 0
-        assert data["items"][0]["available"] is True
+        assert data["synced_count"] == 0
+        assert data["items"][0]["status"] == "available"
         assert data["items"][0]["current_name"] == "SDXL Base"
+
+    def test_preview_already_synced(self, client, sample_model, host_path):
+        sync_model_to_host(sample_model.id, "test-gpu")
+        profile = {
+            "gaitor_profile_version": 1,
+            "models": [{"library_model_id": sample_model.id, "library_name": "SDXL Base", "library_relative_path": "checkpoints/sdxl.safetensors"}],
+            "ignore_patterns": [],
+        }
+        resp = client.post("/api/hosts/test-gpu/profile/preview", json=profile)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["synced_count"] == 1
+        assert data["available_count"] == 0
+        assert data["items"][0]["status"] == "synced"
 
     def test_preview_missing_model(self, client, host_path, setup_library):
         import uuid
@@ -618,7 +633,7 @@ class TestHostProfilePreview:
         data = resp.json()
         assert data["available_count"] == 0
         assert data["missing_count"] == 1
-        assert data["items"][0]["available"] is False
+        assert data["items"][0]["status"] == "missing"
 
     def test_preview_includes_ignore_patterns(self, client, host_path, setup_library):
         profile = {
