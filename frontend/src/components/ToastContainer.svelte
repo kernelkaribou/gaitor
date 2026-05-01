@@ -34,9 +34,9 @@
   }
 
   const typeStyles = {
-    info: 'border-blue-700 bg-blue-900/30',
-    success: 'border-green-700 bg-green-900/30',
-    error: 'border-red-700 bg-red-900/30',
+    info: 'border-blue-700 bg-blue-900/80',
+    success: 'border-green-700 bg-green-900/80',
+    error: 'border-red-700 bg-red-900/80',
     progress: 'border-green-700 bg-gray-800',
   };
   const typeText = {

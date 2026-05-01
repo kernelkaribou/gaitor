@@ -36,6 +36,8 @@ def _atomic_write_json(path: Path, data: dict | list) -> None:
     try:
         with os.fdopen(fd, "w") as f:
             json.dump(data, f, indent=2, default=str)
+        # Ensure readable permissions (mkstemp creates 0o600 by default)
+        os.chmod(tmp_path, 0o644)
         os.replace(tmp_path, str(path))
     except Exception:
         try:
@@ -53,6 +55,12 @@ def _read_json(path: Path) -> Optional[dict | list]:
     except (FileNotFoundError, json.JSONDecodeError) as e:
         if isinstance(e, json.JSONDecodeError):
             logger.warning(f"Corrupt JSON file: {path}")
+        return None
+    except PermissionError:
+        logger.warning(f"Permission denied reading: {path}")
+        return None
+    except OSError as e:
+        logger.warning(f"OS error reading {path}: {e}")
         return None
 
 

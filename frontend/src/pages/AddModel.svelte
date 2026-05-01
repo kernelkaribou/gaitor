@@ -4,7 +4,7 @@
   import { addToast } from '../lib/stores.js';
   import { formatSize } from '../lib/utils.js';
 
-  let { onBack } = $props();
+  let { onBack, prefill, onPrefillConsumed } = $props();
 
   let activeTab = $state('retrieve');
   let categories = $state([]);
@@ -51,6 +51,9 @@
   let uploadProgressBytes = $state({ loaded: 0, total: 0 });
   let uploadError = $state(null);
 
+  // Track bookmark ID for auto-delete on successful download
+  let promotingBookmarkId = $state(null);
+
   onMount(async () => {
     try {
       const [provData, catData] = await Promise.all([
@@ -62,6 +65,20 @@
     } catch (err) {
       retrieveError = err.message;
     }
+
+    // Apply prefill from bookmark promotion
+    if (prefill) {
+      activeTab = 'retrieve';
+      url = prefill.source_url || '';
+      retrieveName = prefill.name || '';
+      retrieveDescription = prefill.description || '';
+      retrieveBaseModel = prefill.base_model || '';
+      retrieveThumbnailUrl = prefill.thumbnail_url || '';
+      if (prefill.target_category) retrieveCategory = prefill.target_category;
+      if (prefill.bookmark_id) promotingBookmarkId = prefill.bookmark_id;
+      onPrefillConsumed?.();
+      if (url) resolveUrl();
+    }
   });
 
   // --- Retrieve functions ---
@@ -71,19 +88,22 @@
     retrieveError = null;
     resolved = null;
     selectedFile = null;
-    retrieveDescription = '';
+    // Preserve bookmark prefill values; only clear non-prefilled fields
+    const hadPrefill = !!promotingBookmarkId;
+    if (!hadPrefill) {
+      retrieveDescription = '';
+      retrieveBaseModel = '';
+      retrieveThumbnailUrl = '';
+    }
     retrieveFilename = '';
     retrieveSubfolder = '';
-    retrieveBaseModel = '';
-    retrieveThumbnailUrl = '';
     try {
       resolved = await api.resolveUrl(url);
-      if (resolved.description) {
-        // Safely strip HTML using the browser's DOM parser instead of regex
+      if (resolved.description && !retrieveDescription) {
         const doc = new DOMParser().parseFromString(resolved.description, 'text/html');
         retrieveDescription = (doc.body.textContent || '').slice(0, 500);
       }
-      if (resolved.model_type && civitaiTypeMap[resolved.model_type]) {
+      if (resolved.model_type && civitaiTypeMap[resolved.model_type] && !hadPrefill) {
         retrieveCategory = civitaiTypeMap[resolved.model_type];
       }
     } catch (err) {
@@ -121,6 +141,13 @@
       };
       await api.startDownload(params);
       addToast({ type: 'info', title: 'Download started', message: `${retrieveName || selectedFile.filename}` });
+
+      // Advisory: bookmark should be deleted after download completes, not now
+      if (promotingBookmarkId) {
+        addToast({ type: 'info', title: 'Bookmark kept', message: 'Remove it from Bookmarks once the download completes' });
+        promotingBookmarkId = null;
+      }
+
       resolved = null;
       selectedFile = null;
       url = '';

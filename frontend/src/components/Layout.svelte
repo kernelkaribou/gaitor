@@ -25,6 +25,12 @@
       >
         Hosts
       </button>
+      <button
+        class="px-3 py-1.5 text-sm rounded-md transition-colors {currentPage === 'bookmarks' ? 'bg-gray-700 text-gray-200' : 'hover:bg-gray-700 text-gray-400'}"
+        onclick={() => navigate('bookmarks')}
+      >
+        Bookmarks
+      </button>
       <div class="w-px h-6 bg-gray-600"></div>
       <button
         class="p-1.5 rounded-md transition-colors {currentPage === 'settings' ? 'bg-gray-700 text-gray-200' : 'hover:bg-gray-700 text-gray-400'}"

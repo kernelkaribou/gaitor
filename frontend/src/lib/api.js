@@ -14,7 +14,13 @@ async function request(path, options = {}) {
   });
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: response.statusText }));
-    throw new Error(error.detail || `HTTP ${response.status}`);
+    let message = `HTTP ${response.status}`;
+    if (typeof error.detail === 'string') {
+      message = error.detail;
+    } else if (Array.isArray(error.detail)) {
+      message = error.detail.map(e => e.msg || e.message || JSON.stringify(e)).join('; ');
+    }
+    throw new Error(message);
   }
   return response.json();
 }
@@ -174,6 +180,12 @@ export const api = {
     request(`/hosts/${encodeURIComponent(hostId)}/ignore`, { method: 'DELETE', body: JSON.stringify({ pattern }) }),
   deleteUnmanagedFile: (hostId, relativePath) =>
     request(`/hosts/${encodeURIComponent(hostId)}/delete-file`, { method: 'POST', body: JSON.stringify({ relative_path: relativePath }) }),
+  exportHostProfile: (hostId) =>
+    request(`/hosts/${encodeURIComponent(hostId)}/profile/export`),
+  previewProfileImport: (hostId, profile) =>
+    request(`/hosts/${encodeURIComponent(hostId)}/profile/preview`, { method: 'POST', body: JSON.stringify(profile) }),
+  importHostProfile: (hostId, modelIds, ignorePatterns) =>
+    request(`/hosts/${encodeURIComponent(hostId)}/profile/import`, { method: 'POST', body: JSON.stringify({ model_ids: modelIds, ignore_patterns: ignorePatterns }) }),
 
   // Download (formerly Retrieve)
   getProviders: () => request('/retrieve/providers'),
@@ -183,6 +195,31 @@ export const api = {
     request('/retrieve/download', { method: 'POST', body: JSON.stringify(params) }),
   listHfFiles: (repoId) => request(`/retrieve/hf/${encodeURIComponent(repoId)}/files`),
   getCivitaiModel: (modelId) => request(`/retrieve/civitai/${encodeURIComponent(modelId)}`),
+
+  // Bookmarks
+  listBookmarks: () => request('/bookmarks/'),
+  createBookmark: (data) =>
+    request('/bookmarks/', { method: 'POST', body: JSON.stringify(data) }),
+  updateBookmark: (id, data) =>
+    request(`/bookmarks/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteBookmark: (id) =>
+    request(`/bookmarks/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  getBookmarkThumbnailUrl: (id) => `${BASE_URL}/bookmarks/${encodeURIComponent(id)}/thumbnail`,
+  async uploadBookmarkThumbnail(bookmarkId, file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await fetch(`${BASE_URL}/bookmarks/${encodeURIComponent(bookmarkId)}/thumbnail`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(error.detail || `HTTP ${response.status}`);
+    }
+    return response.json();
+  },
+  deleteBookmarkThumbnail: (id) =>
+    request(`/bookmarks/${encodeURIComponent(id)}/thumbnail`, { method: 'DELETE' }),
 
   // Tasks
   getActiveTasks: () => request('/tasks'),

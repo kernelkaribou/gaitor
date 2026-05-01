@@ -17,7 +17,7 @@ import os
 from pathlib import Path
 
 from . import config
-from .routers import settings, library, models, hosts, retrieve
+from .routers import settings, library, models, hosts, retrieve, bookmarks
 from .services.tasks import task_manager
 
 
@@ -128,6 +128,7 @@ app.include_router(library.router, prefix="/api/library", tags=["library"])
 app.include_router(models.router, prefix="/api/models", tags=["models"])
 app.include_router(hosts.router, prefix="/api/hosts", tags=["hosts"])
 app.include_router(retrieve.router, prefix="/api/retrieve", tags=["retrieve"])
+app.include_router(bookmarks.router, prefix="/api/bookmarks", tags=["bookmarks"])
 
 
 # --- WebSocket for real-time task progress ---

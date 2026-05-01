@@ -2,7 +2,9 @@
 Host management API endpoints.
 """
 import asyncio
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 import logging
 
@@ -22,7 +24,7 @@ from ..services.sync import (
     remove_ignore_pattern,
     delete_unmanaged_file,
 )
-from ..services.metadata import load_model
+from ..services.metadata import load_model, load_all_models
 from ..services.tasks import task_manager
 from ..utils import validate_host_id as _validate_host_id
 
@@ -81,6 +83,16 @@ class IgnoreRequest(BaseModel):
 
 class DeleteFileRequest(BaseModel):
     relative_path: str
+
+
+class ProfileImportRequest(BaseModel):
+    """Import a host profile — list of model IDs to sync + ignore patterns."""
+    model_ids: list[str] = []
+    ignore_patterns: list[str] = []
+
+    def model_post_init(self, __context):
+        if len(self.model_ids) > 500:
+            raise ValueError("Profile import limited to 500 models")
 
 
 @router.get("/")
@@ -155,7 +167,7 @@ async def bulk_sync(host_id: str, req: BulkSyncRequest):
                 try:
                     def progress_cb(copied, total, idx=i):
                         overall = int(((idx + copied / max(total, 1)) / total_models) * 100)
-                        task_manager.update_progress(task_id, overall, 100)
+                        task_manager.update_percent(task_id, overall)
                     result = await asyncio.to_thread(
                         sync_model_to_host, model_id, host_id, progress_cb
                     )
@@ -323,3 +335,197 @@ async def delete_file_endpoint(host_id: str, req: DeleteFileRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete file: {e}")
+
+
+@router.get("/{host_id}/profile/export")
+async def export_host_profile(host_id: str):
+    """Export a host profile — all synced models and ignore patterns as JSON."""
+    host_id = _check_host_id(host_id)
+    try:
+        host_models = await asyncio.to_thread(get_host_models, host_id)
+        ignore = await asyncio.to_thread(get_ignore_patterns, host_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    now = datetime.now(timezone.utc)
+    version = "unknown"
+    try:
+        with open("VERSION") as f:
+            version = f.read().strip()
+    except OSError:
+        pass
+
+    # Build model entries from sidecar data
+    models = []
+    for hm in host_models:
+        models.append({
+            "library_model_id": hm["library_model_id"],
+            "library_name": hm.get("library_name", ""),
+            "library_relative_path": hm.get("library_relative_path", ""),
+            "current_filename": hm.get("current_filename", ""),
+            "synced_at": hm.get("synced_at", ""),
+        })
+
+    timestamp = now.strftime("%Y%m%d%H%M%S")
+    filename = f"{host_id}_{timestamp}_gaitor_export.json"
+
+    profile = {
+        "gaitor_profile_version": 1,
+        "gaitor_version": version,
+        "host_id": host_id,
+        "exported_at": now.isoformat(),
+        "models": models,
+        "ignore_patterns": ignore,
+    }
+
+    return JSONResponse(
+        content=profile,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/{host_id}/profile/preview")
+async def preview_profile_import(host_id: str, profile: dict):
+    """Validate a profile against the current library and return what can be synced."""
+    host_id = _check_host_id(host_id)
+
+    # Verify host exists and get current state
+    try:
+        host_models = await asyncio.to_thread(get_host_models, host_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    profile_models = profile.get("models", [])
+    if not isinstance(profile_models, list):
+        raise HTTPException(status_code=400, detail="Invalid profile: models must be a list")
+    if len(profile_models) > 500:
+        raise HTTPException(status_code=400, detail="Profile exceeds 500 model limit")
+
+    # Validate ignore_patterns type
+    raw_patterns = profile.get("ignore_patterns", [])
+    ignore_patterns = raw_patterns if isinstance(raw_patterns, list) else []
+
+    all_models = await asyncio.to_thread(load_all_models)
+    library_models = {m.id: m for m in all_models}
+
+    # Build set of model IDs already synced on this host
+    synced_ids = {
+        hm["library_model_id"]
+        for hm in host_models
+        if hm.get("file_exists", False)
+    }
+
+    items = []
+    for pm in profile_models:
+        if not isinstance(pm, dict):
+            continue
+        model_id = pm.get("library_model_id", "")
+        lib_model = library_models.get(model_id)
+        already_synced = model_id in synced_ids
+
+        # Status: already_synced > available (needs sync) > missing from library
+        if not lib_model:
+            status = "missing"
+        elif already_synced:
+            status = "synced"
+        else:
+            status = "available"
+
+        items.append({
+            "library_model_id": model_id,
+            "profile_name": pm.get("library_name", ""),
+            "profile_path": pm.get("library_relative_path", ""),
+            "status": status,
+            "available": lib_model is not None,
+            "current_name": lib_model.name if lib_model else None,
+            "current_category": lib_model.category if lib_model else None,
+            "size": lib_model.size if lib_model else None,
+        })
+
+    return {
+        "host_id": host_id,
+        "profile_host_id": profile.get("host_id", ""),
+        "exported_at": profile.get("exported_at", ""),
+        "items": items,
+        "ignore_patterns": ignore_patterns,
+        "available_count": sum(1 for i in items if i["status"] == "available"),
+        "synced_count": sum(1 for i in items if i["status"] == "synced"),
+        "missing_count": sum(1 for i in items if i["status"] == "missing"),
+    }
+
+
+@router.post("/{host_id}/profile/import")
+async def import_host_profile(host_id: str, req: ProfileImportRequest):
+    """Import a profile: bulk sync selected models and restore ignore patterns."""
+    host_id = _check_host_id(host_id)
+
+    # Verify host exists before creating background tasks
+    try:
+        await asyncio.to_thread(get_host_models, host_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    # Validate all model IDs exist in library
+    valid_ids = []
+    for model_id in req.model_ids:
+        try:
+            model = load_model(model_id)
+            if model:
+                valid_ids.append(model_id)
+        except ValueError:
+            pass
+
+    if not valid_ids and not req.ignore_patterns:
+        raise HTTPException(status_code=400, detail="No valid models or patterns to import")
+
+    # Restore ignore patterns (additive merge)
+    patterns_added = 0
+    for pattern in req.ignore_patterns:
+        try:
+            result = add_ignore_pattern(host_id, pattern)
+            if result.get("added"):
+                patterns_added += 1
+        except (ValueError, OSError):
+            pass
+
+    if not valid_ids:
+        return {
+            "message": f"Restored {patterns_added} ignore patterns, no models to sync",
+            "patterns_added": patterns_added,
+        }
+
+    # Bulk sync as a background task
+    task_id = task_manager.create_task(
+        "sync", f"Profile import: {len(valid_ids)} models to {host_id}"
+    )
+
+    async def _do_profile_sync():
+        results = []
+        errors = []
+        total = len(valid_ids)
+        try:
+            for i, model_id in enumerate(valid_ids):
+                try:
+                    def progress_cb(copied, file_total, idx=i):
+                        overall = int(((idx + copied / max(file_total, 1)) / total) * 100)
+                        task_manager.update_percent(task_id, overall)
+                    result = await asyncio.to_thread(
+                        sync_model_to_host, model_id, host_id, progress_cb
+                    )
+                    results.append(result)
+                except Exception as e:
+                    errors.append({"model_id": model_id, "error": str(e)})
+            msg = f"Synced {len(results)}/{total} models"
+            if errors:
+                msg += f" ({len(errors)} failed)"
+            task_manager.complete_task(task_id, msg)
+        except Exception as e:
+            task_manager.fail_task(task_id, str(e))
+
+    atask = asyncio.create_task(_do_profile_sync())
+    task_manager.set_asyncio_task(task_id, atask)
+    return {
+        "task_id": task_id,
+        "message": f"Syncing {len(valid_ids)} models to {host_id}",
+        "patterns_added": patterns_added,
+    }
