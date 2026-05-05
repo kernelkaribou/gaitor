@@ -184,8 +184,11 @@ export const api = {
     request(`/hosts/${encodeURIComponent(hostId)}/profile/export`),
   previewProfileImport: (hostId, profile) =>
     request(`/hosts/${encodeURIComponent(hostId)}/profile/preview`, { method: 'POST', body: JSON.stringify(profile) }),
+  validateProfileImport: (hostId, modelIds) =>
+    request(`/hosts/${encodeURIComponent(hostId)}/profile/validate`, { method: 'POST', body: JSON.stringify({ model_ids: modelIds }) }),
   importHostProfile: (hostId, modelIds, ignorePatterns) =>
     request(`/hosts/${encodeURIComponent(hostId)}/profile/import`, { method: 'POST', body: JSON.stringify({ model_ids: modelIds, ignore_patterns: ignorePatterns }) }),
+  getTask: (taskId) => request(`/tasks/${encodeURIComponent(taskId)}`),
 
   // Download (formerly Retrieve)
   getProviders: () => request('/retrieve/providers'),
