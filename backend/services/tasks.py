@@ -17,13 +17,14 @@ class TaskProgress:
     task_id: str
     task_type: str  # "download", "sync"
     title: str
-    status: str = "pending"  # pending, running, completed, failed, cancelled
+    status: str = "pending"  # pending, running, completed, completed_with_errors, failed, cancelled
     progress: int = 0
     downloaded: int = 0
     total: int = 0
     speed: float = 0.0
     eta: float = 0.0
     message: str = ""
+    metadata: dict = field(default_factory=dict)
     started_at: float = field(default_factory=time.time)
     _last_update: float = field(default=0.0, repr=False)
     _last_bytes: int = field(default=0, repr=False)
@@ -141,13 +142,28 @@ class TaskManager:
             task.eta = 0
             self._broadcast(task)
 
-    def fail_task(self, task_id: str, message: str = ""):
+    def complete_task_partial(self, task_id: str, message: str = "", metadata: dict = None):
+        """Complete a task that had partial failures (some succeeded, some didn't)."""
+        task = self._tasks.get(task_id)
+        if task:
+            task.status = "completed_with_errors"
+            task.progress = 100
+            task.message = message
+            task.speed = 0
+            task.eta = 0
+            if metadata:
+                task.metadata = metadata
+            self._broadcast(task)
+
+    def fail_task(self, task_id: str, message: str = "", metadata: dict = None):
         task = self._tasks.get(task_id)
         if task:
             task.status = "failed"
             task.message = message
             task.speed = 0
             task.eta = 0
+            if metadata:
+                task.metadata = metadata
             self._broadcast(task)
 
     def get_active_tasks(self) -> list[dict]:
@@ -179,7 +195,7 @@ class TaskManager:
 
     @staticmethod
     def _task_dict(task: TaskProgress) -> dict:
-        return {
+        d = {
             "task_id": task.task_id,
             "task_type": task.task_type,
             "title": task.title,
@@ -191,13 +207,18 @@ class TaskManager:
             "eta": task.eta,
             "message": task.message,
         }
+        # Include metadata only for terminal states (keep WS payloads small during progress)
+        if task.status in ("completed", "completed_with_errors", "failed", "cancelled") and task.metadata:
+            d["metadata"] = task.metadata
+        return d
 
     def cleanup_old(self, max_age: float = 300):
         """Remove completed/failed/cancelled tasks older than max_age seconds."""
         now = time.time()
+        terminal = ("completed", "completed_with_errors", "failed", "cancelled")
         to_remove = [
             tid for tid, t in self._tasks.items()
-            if t.status in ("completed", "failed", "cancelled") and (now - t.started_at) > max_age
+            if t.status in terminal and (now - t.started_at) > max_age
         ]
         for tid in to_remove:
             del self._tasks[tid]

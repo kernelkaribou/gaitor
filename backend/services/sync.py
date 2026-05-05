@@ -1,6 +1,7 @@
 """
 Sync service - file copy operations between library and hosts with progress tracking.
 """
+import errno
 import fnmatch
 import hashlib
 import json
@@ -21,6 +22,112 @@ from .library import cleanup_empty_parents
 logger = logging.getLogger(__name__)
 
 SIDECAR_SUFFIX = ".gaitor.json"
+
+
+def classify_sync_error(exc: Exception) -> tuple[str, str]:
+    """Classify a sync exception into a safe user-facing code and message.
+
+    Returns (error_code, user_message) — never exposes raw filesystem paths.
+    """
+    if isinstance(exc, PermissionError):
+        return "permission_denied", "Permission denied on host directory"
+    if isinstance(exc, OSError):
+        if exc.errno == errno.ENOSPC:
+            return "disk_full", "Host disk is full"
+        if exc.errno in (errno.ENOENT, errno.ENOTDIR):
+            err_str = str(exc).lower()
+            if "library" in err_str or "source" in err_str:
+                return "source_missing", "Source file not found in library"
+            return "host_path_error", "Host path not accessible"
+        if exc.errno in (errno.EACCES, errno.EROFS):
+            return "permission_denied", "Permission denied on host directory"
+        return "host_path_error", f"Host I/O error (errno {exc.errno})"
+    if isinstance(exc, ValueError):
+        msg = str(exc)
+        if "not found" in msg.lower():
+            if "host" in msg.lower():
+                return "host_path_error", "Host not accessible"
+            return "source_missing", "Source file not found in library"
+        return "validation_error", msg
+    return "unknown", "Unexpected error during sync"
+
+
+def validate_sync_readiness(
+    model_ids: list[str], host_id: str
+) -> list[dict]:
+    """Validate that each model can be synced to a host without actually copying.
+
+    Checks: source exists, destination directory is writable, destination path resolves.
+    Returns a list of per-model validation results.
+    """
+    validate_host_id(host_id)
+    host_path = safe_resolve(config.HOSTS_ROOT, host_id)
+    if not host_path.exists():
+        return [{"model_id": mid, "status": "error", "error_code": "host_path_error",
+                 "error": "Host not accessible"} for mid in model_ids]
+
+    results = []
+    for model_id in model_ids:
+        model = load_model(model_id)
+        if not model:
+            results.append({
+                "model_id": model_id, "name": model_id,
+                "status": "error", "error_code": "source_missing",
+                "error": "Model not found in library",
+            })
+            continue
+
+        src_path = safe_resolve(config.LIBRARY_PATH, model.relative_path)
+        if not src_path.exists():
+            results.append({
+                "model_id": model_id, "name": model.name,
+                "status": "error", "error_code": "source_missing",
+                "error": "Source file not found in library",
+            })
+            continue
+
+        # Resolve destination path
+        rel_parts = Path(model.relative_path).parts
+        host_model_dir = host_path / str(Path(*rel_parts[:-1]))
+        dest_file = host_model_dir / model.filename
+        dest_path_display = str(Path(*rel_parts))
+
+        # Check if already exists on host
+        if dest_file.exists():
+            results.append({
+                "model_id": model_id, "name": model.name,
+                "status": "exists", "dest_path": dest_path_display,
+                "size": src_path.stat().st_size,
+                "error": "Already exists on host (will overwrite)",
+            })
+            continue
+
+        # Check write access to destination directory
+        try:
+            host_model_dir.mkdir(parents=True, exist_ok=True)
+            # Test write by creating and removing a temp file
+            probe = host_model_dir / ".gaitor_validate_probe"
+            probe.write_text("ok")
+            probe.unlink()
+            results.append({
+                "model_id": model_id, "name": model.name,
+                "status": "ready", "dest_path": dest_path_display,
+                "size": src_path.stat().st_size,
+            })
+        except PermissionError:
+            results.append({
+                "model_id": model_id, "name": model.name,
+                "status": "error", "error_code": "permission_denied",
+                "error": "Permission denied on host directory",
+            })
+        except OSError as e:
+            code, msg = classify_sync_error(e)
+            results.append({
+                "model_id": model_id, "name": model.name,
+                "status": "error", "error_code": code, "error": msg,
+            })
+
+    return results
 
 
 def _load_sidecar(path: Path) -> Optional[dict]:
