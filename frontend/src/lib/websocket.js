@@ -100,12 +100,15 @@ function handleTaskUpdate(task) {
         ),
       } : undefined,
     });
+    // Notify views so per-item busy state is cleared on failure too.
+    window.dispatchEvent(new CustomEvent('gaitor:task-complete', { detail: task }));
   } else if (task.status === 'cancelled') {
     if (existingToastId) {
       removeToast(existingToastId);
       taskToastMap.delete(task.task_id);
     }
     addToast({ type: 'info', title: 'Cancelled', message: task.title, duration: 4000 });
+    window.dispatchEvent(new CustomEvent('gaitor:task-complete', { detail: task }));
   } else if (task.status === 'running') {
     if (existingToastId) {
       updateToast(existingToastId, {

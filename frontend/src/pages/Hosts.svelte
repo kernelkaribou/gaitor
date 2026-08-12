@@ -43,7 +43,7 @@
 
   function handleTaskComplete() {
     syncing = {};
-    if (selectedHost) selectHost(selectedHost);
+    refreshHost();
   }
 
   function handleSelectHostEvent(e) {
@@ -123,6 +123,18 @@
     api.getIgnorePatterns(host.id).then(r => { ignorePatterns = r.patterns || []; }).catch(() => {});
   }
 
+  // Reload the current host's sync status after an action, preserving the
+  // active category filter and search query (#10).
+  async function refreshHost() {
+    if (!selectedHost) return;
+    try {
+      const data = await api.getHostSyncStatus(selectedHost.id);
+      syncStatus = data.status || [];
+    } catch (err) {
+      error = err.message;
+    }
+  }
+
   async function syncModel(modelId) {
     syncing = { ...syncing, [modelId]: true };
     error = null;
@@ -138,7 +150,7 @@
     syncing = { ...syncing, [modelId]: true };
     try {
       await api.removeFromHost(selectedHost.id, modelId);
-      await selectHost(selectedHost);
+      await refreshHost();
     } catch (err) {
       error = err.message;
     }
@@ -149,7 +161,7 @@
     syncing = { ...syncing, [modelId]: true };
     try {
       await api.applyRenameOnHost(selectedHost.id, modelId);
-      await selectHost(selectedHost);
+      await refreshHost();
     } catch (err) {
       error = err.message;
     }
@@ -169,7 +181,7 @@
         name: item.model_name,
         category: item.category || 'other',
       });
-      await selectHost(selectedHost);
+      await refreshHost();
     } catch (err) {
       error = err.message;
     }
@@ -244,7 +256,7 @@
 
   function dismissScan() {
     scanResults = null;
-    if (selectedHost) selectHost(selectedHost);
+    refreshHost();
   }
 
   async function ignoreFile(item) {
@@ -296,7 +308,7 @@
   async function toggleIgnoreList() {
     if (showIgnoreList) {
       showIgnoreList = false;
-      if (selectedHost) selectHost(selectedHost);
+      refreshHost();
     } else {
       showIgnoreList = true;
       await loadIgnorePatterns();
@@ -313,7 +325,7 @@
   }
 
   function handleModelUpdated() {
-    if (selectedHost) selectHost(selectedHost);
+    refreshHost();
   }
 
   async function exportProfile() {
@@ -840,7 +852,7 @@
     {formatSize}
     onClose={() => { selectedModel = null; selectedHostItem = null; }}
     onUpdated={handleModelUpdated}
-    onDelete={() => { selectedModel = null; selectedHostItem = null; if (selectedHost) selectHost(selectedHost); }}
+    onDelete={() => { selectedModel = null; selectedHostItem = null; refreshHost(); }}
     onSelectModel={(id) => { api.getModel(id).then(m => { selectedModel = m; selectedHostItem = syncStatus.find(s => s.model_id === id) || selectedHostItem; }).catch(() => { error = 'Could not load model details.'; }); }}
     onViewInLibrary={(modelId) => {
       selectedModel = null;
