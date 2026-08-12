@@ -26,6 +26,7 @@ class TaskProgress:
     message: str = ""
     metadata: dict = field(default_factory=dict)
     started_at: float = field(default_factory=time.time)
+    finished_at: Optional[float] = field(default=None, repr=False)
     _last_update: float = field(default=0.0, repr=False)
     _last_bytes: int = field(default=0, repr=False)
     _cancel_event: asyncio.Event = field(default_factory=asyncio.Event, repr=False)
@@ -44,6 +45,12 @@ class TaskManager:
         self._tasks: dict[str, TaskProgress] = {}
         self._ws_clients: set[asyncio.Queue] = set()
         self._counter = 0
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+
+    def set_loop(self, loop: asyncio.AbstractEventLoop) -> None:
+        """Record the main event loop so broadcasts from worker threads can be
+        marshaled back onto it safely (asyncio.Queue is not thread-safe)."""
+        self._loop = loop
 
     def create_task(self, task_type: str, title: str) -> str:
         self.cleanup_old()
@@ -76,6 +83,7 @@ class TaskManager:
         task.message = "Cancelled by user"
         task.speed = 0
         task.eta = 0
+        task.finished_at = time.time()
         self._broadcast(task)
         return True
 
@@ -140,6 +148,7 @@ class TaskManager:
             task.message = message
             task.speed = 0
             task.eta = 0
+            task.finished_at = time.time()
             self._broadcast(task)
 
     def complete_task_partial(self, task_id: str, message: str = "", metadata: dict = None):
@@ -151,6 +160,7 @@ class TaskManager:
             task.message = message
             task.speed = 0
             task.eta = 0
+            task.finished_at = time.time()
             if metadata:
                 task.metadata = metadata
             self._broadcast(task)
@@ -162,6 +172,7 @@ class TaskManager:
             task.message = message
             task.speed = 0
             task.eta = 0
+            task.finished_at = time.time()
             if metadata:
                 task.metadata = metadata
             self._broadcast(task)
@@ -184,11 +195,35 @@ class TaskManager:
 
     def _broadcast(self, task: TaskProgress):
         msg = self._task_dict(task)
+        # Progress callbacks run inside asyncio.to_thread worker threads; asyncio
+        # queues are not thread-safe, so marshal delivery onto the main loop. (#4)
+        if self._loop is not None and not self._on_event_loop():
+            self._loop.call_soon_threadsafe(self._deliver, msg)
+        else:
+            self._deliver(msg)
+
+    def _on_event_loop(self) -> bool:
+        try:
+            return asyncio.get_running_loop() is self._loop
+        except RuntimeError:
+            return False
+
+    def _deliver(self, msg: dict):
         dead = set()
         for q in self._ws_clients:
             try:
                 q.put_nowait(msg)
             except asyncio.QueueFull:
+                # Client is too slow. Signal it to close (sentinel) instead of
+                # leaving its WebSocket blocked on get() forever. (#6)
+                try:
+                    q.get_nowait()
+                except Exception:
+                    pass
+                try:
+                    q.put_nowait(None)
+                except Exception:
+                    pass
                 dead.add(q)
         for q in dead:
             self._ws_clients.discard(q)
@@ -218,7 +253,7 @@ class TaskManager:
         terminal = ("completed", "completed_with_errors", "failed", "cancelled")
         to_remove = [
             tid for tid, t in self._tasks.items()
-            if t.status in terminal and (now - t.started_at) > max_age
+            if t.status in terminal and (now - (t.finished_at or t.started_at)) > max_age
         ]
         for tid in to_remove:
             del self._tasks[tid]

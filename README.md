@@ -89,7 +89,7 @@ The folder name after `/hosts/` becomes the host name in the UI. Names are forma
 ## Development
 
 ### Prerequisites
-- Python 3.12+
+- Python 3.13+
 - Node.js 22+
 - Docker (for container builds)
 
@@ -123,7 +123,7 @@ make test
 
 ## Architecture
 
-- **Backend**: Python 3.12 + FastAPI
+- **Backend**: Python 3.13 + FastAPI
 - **Frontend**: Svelte 5 + Vite + Tailwind CSS
 - **Metadata**: JSON files (no database - network share friendly)
 - **Transfers**: Server-side file copy between Docker volume mounts (browser only receives progress updates)

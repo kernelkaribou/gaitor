@@ -822,3 +822,66 @@ class TestTaskMetadata:
     def test_get_task_not_found(self, client):
         resp = client.get("/api/tasks/nonexistent-123")
         assert resp.status_code == 404
+
+
+class TestSyncIntegrity:
+    """Regression tests for hash-aware resync, safe relocate, and sidecar hardening."""
+
+    def test_resync_skips_when_content_unchanged(self, sample_model, host_path):
+        # First sync copies the file.
+        calls1 = []
+        sync_model_to_host(sample_model.id, "test-gpu",
+                           progress_callback=lambda c, t: calls1.append(c))
+        assert calls1, "first sync should copy"
+
+        # Second sync with identical content must NOT re-copy (no progress).
+        calls2 = []
+        sync_model_to_host(sample_model.id, "test-gpu",
+                           progress_callback=lambda c, t: calls2.append(c))
+        assert calls2 == [], "unchanged content should not be re-copied"
+
+    def test_resync_recopies_when_library_content_changes(self, sample_model, host_path):
+        from backend.services.library import compute_hash
+        # Give the model a real hash and sync it.
+        compute_hash(sample_model.id)
+        sync_model_to_host(sample_model.id, "test-gpu")
+
+        host_file = host_path / "checkpoints" / "sdxl.safetensors"
+        # Change the library file content (same length) and refresh the hash.
+        lib_file = config.LIBRARY_PATH / "checkpoints" / "sdxl.safetensors"
+        lib_file.write_bytes(b"CHANGED123" * 100)
+        compute_hash(sample_model.id)
+
+        calls = []
+        sync_model_to_host(sample_model.id, "test-gpu",
+                           progress_callback=lambda c, t: calls.append(c))
+        assert calls, "changed content should trigger a re-copy"
+        assert host_file.read_bytes() == b"CHANGED123" * 100
+
+        # Sidecar hash should now match the new library hash.
+        sidecar = host_file.parent / f".sdxl.safetensors{SIDECAR_SUFFIX}"
+        updated = load_model(sample_model.id)
+        with open(sidecar) as f:
+            data = json.load(f)
+        assert data["hash"] == f"sha256:{updated.hash['sha256']}"
+
+    def test_remove_ignores_traversal_sidecar(self, setup_library, host_path):
+        # A tampered sidecar pointing outside its own directory must not delete
+        # the referenced file, and the model should read as "not found".
+        secret = config.HOSTS_ROOT / "test-gpu" / "secret.bin"
+        secret.write_bytes(b"do-not-delete")
+        model_dir = host_path / "checkpoints"
+        model_dir.mkdir()
+        sidecar = {
+            "library_model_id": "abc-123",
+            "library_name": "Evil",
+            "current_filename": "../secret.bin",
+            "synced_at": "2025-01-01T00:00:00Z",
+            "hash": None,
+        }
+        with open(model_dir / f".evil.safetensors{SIDECAR_SUFFIX}", "w") as f:
+            json.dump(sidecar, f)
+
+        with pytest.raises(ValueError, match="not found"):
+            remove_from_host("abc-123", "test-gpu")
+        assert secret.exists(), "traversal sidecar must not delete files outside its dir"
