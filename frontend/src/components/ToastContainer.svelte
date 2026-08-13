@@ -36,12 +36,14 @@
   const typeStyles = {
     info: 'border-blue-700 bg-blue-900/80',
     success: 'border-green-700 bg-green-900/80',
+    warning: 'border-yellow-700 bg-yellow-900/80',
     error: 'border-red-700 bg-red-900/80',
     progress: 'border-green-700 bg-gray-800',
   };
   const typeText = {
     info: 'text-blue-300',
     success: 'text-green-300',
+    warning: 'text-yellow-300',
     error: 'text-red-300',
     progress: 'text-gray-200',
   };
@@ -58,6 +60,12 @@
             {/if}
             {#if toast.message}
               <p class="text-xs text-gray-400 mt-0.5">{toast.message}</p>
+            {/if}
+            {#if toast.action}
+              <button
+                class="text-xs font-medium mt-1 underline {typeText[toast.type] || typeText.info} hover:opacity-80"
+                onclick={() => { toast.action.callback(); removeToast(toast.id); }}
+              >{toast.action.label}</button>
             {/if}
             {#if toast.type === 'progress' && toast.progress !== null && toast.progress !== undefined}
               <div class="mt-2">

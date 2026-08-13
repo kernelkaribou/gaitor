@@ -686,3 +686,202 @@ class TestHostProfileImport:
             "ignore_patterns": [],
         })
         assert resp.status_code == 400
+
+
+class TestProfileValidation:
+    """Tests for the profile validation endpoint."""
+
+    def test_validate_ready(self, client, sample_model, host_path):
+        resp = client.post("/api/hosts/test-gpu/profile/validate", json={
+            "model_ids": [sample_model.id],
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["summary"]["ready"] == 1
+        assert data["summary"]["error"] == 0
+        assert data["results"][0]["status"] == "ready"
+        assert data["results"][0]["name"] == "SDXL Base"
+        assert "dest_path" in data["results"][0]
+
+    def test_validate_already_exists(self, client, sample_model, host_path):
+        sync_model_to_host(sample_model.id, "test-gpu")
+        resp = client.post("/api/hosts/test-gpu/profile/validate", json={
+            "model_ids": [sample_model.id],
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["summary"]["exists"] == 1
+        assert data["results"][0]["status"] == "exists"
+
+    def test_validate_source_missing(self, client, setup_library, host_path):
+        import uuid
+        fake_id = str(uuid.uuid4())
+        resp = client.post("/api/hosts/test-gpu/profile/validate", json={
+            "model_ids": [fake_id],
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["summary"]["error"] == 1
+        assert data["results"][0]["status"] == "error"
+        assert data["results"][0]["error_code"] == "source_missing"
+
+    def test_validate_permission_denied(self, client, sample_model, host_path):
+        import os
+        # Make host directory read-only
+        host_path.chmod(0o555)
+        try:
+            resp = client.post("/api/hosts/test-gpu/profile/validate", json={
+                "model_ids": [sample_model.id],
+            })
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["summary"]["error"] == 1
+            assert data["results"][0]["error_code"] == "permission_denied"
+        finally:
+            host_path.chmod(0o755)
+
+    def test_validate_empty_rejected(self, client, host_path, setup_library):
+        resp = client.post("/api/hosts/test-gpu/profile/validate", json={
+            "model_ids": [],
+        })
+        assert resp.status_code == 400
+
+    def test_validate_invalid_host(self, client, setup_library):
+        resp = client.post("/api/hosts/nonexistent/profile/validate", json={
+            "model_ids": ["some-id"],
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        # All models should show as errors since host path doesn't exist
+        assert data["summary"]["error"] == 1
+        assert data["results"][0]["error_code"] == "host_path_error"
+
+
+class TestErrorClassification:
+    """Tests for classify_sync_error."""
+
+    def test_permission_error(self):
+        from backend.services.sync import classify_sync_error
+        code, msg = classify_sync_error(PermissionError("access denied"))
+        assert code == "permission_denied"
+        assert "Permission" in msg
+
+    def test_disk_full(self):
+        import errno
+        from backend.services.sync import classify_sync_error
+        exc = OSError(errno.ENOSPC, "No space left on device")
+        code, msg = classify_sync_error(exc)
+        assert code == "disk_full"
+
+    def test_value_error_host(self):
+        from backend.services.sync import classify_sync_error
+        code, msg = classify_sync_error(ValueError("Host not found: gpu-1"))
+        assert code == "host_path_error"
+
+    def test_value_error_model(self):
+        from backend.services.sync import classify_sync_error
+        code, msg = classify_sync_error(ValueError("Model not found: abc"))
+        assert code == "source_missing"
+
+    def test_unknown_error(self):
+        from backend.services.sync import classify_sync_error
+        code, msg = classify_sync_error(RuntimeError("weird"))
+        assert code == "unknown"
+
+
+class TestTaskMetadata:
+    """Tests for TaskManager metadata and partial completion."""
+
+    def test_complete_task_partial(self):
+        from backend.services.tasks import task_manager
+        task_id = task_manager.create_task("sync", "test partial")
+        metadata = {"succeeded": [{"model_id": "a"}], "failed": [{"model_id": "b", "error": "x"}]}
+        task_manager.complete_task_partial(task_id, "1/2 synced", metadata)
+        task = task_manager.get_task(task_id)
+        assert task["status"] == "completed_with_errors"
+        assert task["metadata"] == metadata
+        assert task["message"] == "1/2 synced"
+
+    def test_fail_task_with_metadata(self):
+        from backend.services.tasks import task_manager
+        task_id = task_manager.create_task("sync", "test fail")
+        metadata = {"succeeded": [], "failed": [{"model_id": "a", "error": "perm"}]}
+        task_manager.fail_task(task_id, "all failed", metadata)
+        task = task_manager.get_task(task_id)
+        assert task["status"] == "failed"
+        assert task["metadata"] == metadata
+
+    def test_get_task_endpoint(self, client):
+        from backend.services.tasks import task_manager
+        task_id = task_manager.create_task("sync", "endpoint test")
+        task_manager.complete_task(task_id, "done")
+        resp = client.get(f"/api/tasks/{task_id}")
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "completed"
+
+    def test_get_task_not_found(self, client):
+        resp = client.get("/api/tasks/nonexistent-123")
+        assert resp.status_code == 404
+
+
+class TestSyncIntegrity:
+    """Regression tests for hash-aware resync, safe relocate, and sidecar hardening."""
+
+    def test_resync_skips_when_content_unchanged(self, sample_model, host_path):
+        # First sync copies the file.
+        calls1 = []
+        sync_model_to_host(sample_model.id, "test-gpu",
+                           progress_callback=lambda c, t: calls1.append(c))
+        assert calls1, "first sync should copy"
+
+        # Second sync with identical content must NOT re-copy (no progress).
+        calls2 = []
+        sync_model_to_host(sample_model.id, "test-gpu",
+                           progress_callback=lambda c, t: calls2.append(c))
+        assert calls2 == [], "unchanged content should not be re-copied"
+
+    def test_resync_recopies_when_library_content_changes(self, sample_model, host_path):
+        from backend.services.library import compute_hash
+        # Give the model a real hash and sync it.
+        compute_hash(sample_model.id)
+        sync_model_to_host(sample_model.id, "test-gpu")
+
+        host_file = host_path / "checkpoints" / "sdxl.safetensors"
+        # Change the library file content (same length) and refresh the hash.
+        lib_file = config.LIBRARY_PATH / "checkpoints" / "sdxl.safetensors"
+        lib_file.write_bytes(b"CHANGED123" * 100)
+        compute_hash(sample_model.id)
+
+        calls = []
+        sync_model_to_host(sample_model.id, "test-gpu",
+                           progress_callback=lambda c, t: calls.append(c))
+        assert calls, "changed content should trigger a re-copy"
+        assert host_file.read_bytes() == b"CHANGED123" * 100
+
+        # Sidecar hash should now match the new library hash.
+        sidecar = host_file.parent / f".sdxl.safetensors{SIDECAR_SUFFIX}"
+        updated = load_model(sample_model.id)
+        with open(sidecar) as f:
+            data = json.load(f)
+        assert data["hash"] == f"sha256:{updated.hash['sha256']}"
+
+    def test_remove_ignores_traversal_sidecar(self, setup_library, host_path):
+        # A tampered sidecar pointing outside its own directory must not delete
+        # the referenced file, and the model should read as "not found".
+        secret = config.HOSTS_ROOT / "test-gpu" / "secret.bin"
+        secret.write_bytes(b"do-not-delete")
+        model_dir = host_path / "checkpoints"
+        model_dir.mkdir()
+        sidecar = {
+            "library_model_id": "abc-123",
+            "library_name": "Evil",
+            "current_filename": "../secret.bin",
+            "synced_at": "2025-01-01T00:00:00Z",
+            "hash": None,
+        }
+        with open(model_dir / f".evil.safetensors{SIDECAR_SUFFIX}", "w") as f:
+            json.dump(sidecar, f)
+
+        with pytest.raises(ValueError, match="not found"):
+            remove_from_host("abc-123", "test-gpu")
+        assert secret.exists(), "traversal sidecar must not delete files outside its dir"

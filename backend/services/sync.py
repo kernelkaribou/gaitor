@@ -1,6 +1,7 @@
 """
 Sync service - file copy operations between library and hosts with progress tracking.
 """
+import errno
 import fnmatch
 import hashlib
 import json
@@ -15,12 +16,118 @@ from typing import Optional, Callable
 from .. import config
 from ..utils import get_now, to_iso, safe_resolve, validate_host_id, sanitize_filename
 from ..schemas.model import ModelMetadata, ModelSource, SyncMetadata
-from .metadata import load_model, save_model, rebuild_index, load_all_models, load_categories
+from .metadata import load_model, save_model, rebuild_index, load_all_models, load_categories, metadata_write_lock
 from .library import cleanup_empty_parents
 
 logger = logging.getLogger(__name__)
 
 SIDECAR_SUFFIX = ".gaitor.json"
+
+
+def classify_sync_error(exc: Exception) -> tuple[str, str]:
+    """Classify a sync exception into a safe user-facing code and message.
+
+    Returns (error_code, user_message) — never exposes raw filesystem paths.
+    """
+    if isinstance(exc, PermissionError):
+        return "permission_denied", "Permission denied on host directory"
+    if isinstance(exc, OSError):
+        if exc.errno == errno.ENOSPC:
+            return "disk_full", "Host disk is full"
+        if exc.errno in (errno.ENOENT, errno.ENOTDIR):
+            err_str = str(exc).lower()
+            if "library" in err_str or "source" in err_str:
+                return "source_missing", "Source file not found in library"
+            return "host_path_error", "Host path not accessible"
+        if exc.errno in (errno.EACCES, errno.EROFS):
+            return "permission_denied", "Permission denied on host directory"
+        return "host_path_error", f"Host I/O error (errno {exc.errno})"
+    if isinstance(exc, ValueError):
+        msg = str(exc)
+        if "not found" in msg.lower():
+            if "host" in msg.lower():
+                return "host_path_error", "Host not accessible"
+            return "source_missing", "Source file not found in library"
+        return "validation_error", msg
+    return "unknown", "Unexpected error during sync"
+
+
+def validate_sync_readiness(
+    model_ids: list[str], host_id: str
+) -> list[dict]:
+    """Validate that each model can be synced to a host without actually copying.
+
+    Checks: source exists, destination directory is writable, destination path resolves.
+    Returns a list of per-model validation results.
+    """
+    validate_host_id(host_id)
+    host_path = safe_resolve(config.HOSTS_ROOT, host_id)
+    if not host_path.exists():
+        return [{"model_id": mid, "status": "error", "error_code": "host_path_error",
+                 "error": "Host not accessible"} for mid in model_ids]
+
+    results = []
+    for model_id in model_ids:
+        model = load_model(model_id)
+        if not model:
+            results.append({
+                "model_id": model_id, "name": model_id,
+                "status": "error", "error_code": "source_missing",
+                "error": "Model not found in library",
+            })
+            continue
+
+        src_path = safe_resolve(config.LIBRARY_PATH, model.relative_path)
+        if not src_path.exists():
+            results.append({
+                "model_id": model_id, "name": model.name,
+                "status": "error", "error_code": "source_missing",
+                "error": "Source file not found in library",
+            })
+            continue
+
+        # Resolve destination path
+        rel_parts = Path(model.relative_path).parts
+        host_model_dir = host_path / str(Path(*rel_parts[:-1]))
+        dest_file = host_model_dir / model.filename
+        dest_path_display = str(Path(*rel_parts))
+
+        # Check if already exists on host
+        if dest_file.exists():
+            results.append({
+                "model_id": model_id, "name": model.name,
+                "status": "exists", "dest_path": dest_path_display,
+                "size": src_path.stat().st_size,
+                "error": "Already exists on host (will overwrite)",
+            })
+            continue
+
+        # Check write access to destination directory
+        try:
+            host_model_dir.mkdir(parents=True, exist_ok=True)
+            # Test write by creating and removing a temp file
+            probe = host_model_dir / ".gaitor_validate_probe"
+            probe.write_text("ok")
+            probe.unlink()
+            results.append({
+                "model_id": model_id, "name": model.name,
+                "status": "ready", "dest_path": dest_path_display,
+                "size": src_path.stat().st_size,
+            })
+        except PermissionError:
+            results.append({
+                "model_id": model_id, "name": model.name,
+                "status": "error", "error_code": "permission_denied",
+                "error": "Permission denied on host directory",
+            })
+        except OSError as e:
+            code, msg = classify_sync_error(e)
+            results.append({
+                "model_id": model_id, "name": model.name,
+                "status": "error", "error_code": code, "error": msg,
+            })
+
+    return results
 
 
 def _load_sidecar(path: Path) -> Optional[dict]:
@@ -51,6 +158,92 @@ def _atomic_write_sidecar(path: Path, data: dict) -> None:
             os.unlink(tmp_path)
         except OSError:
             pass
+        raise
+
+
+def _safe_sidecar_target(sidecar_dir: Path, filename: str, host_path: Path) -> Optional[Path]:
+    """Resolve the model file a sidecar points to.
+
+    Enforces that the referenced file is a plain basename sibling of the sidecar
+    (no path separators, no traversal) and stays within the host root. Returns
+    None if the sidecar reference is unsafe. (Hardening for tampered sidecars.)
+    """
+    if not filename or filename in (".", "..") or "/" in filename or "\\" in filename or os.sep in filename:
+        return None
+    target = (sidecar_dir / filename).resolve()
+    try:
+        if not target.is_relative_to(host_path.resolve()):
+            return None
+    except ValueError:
+        return None
+    return target
+
+
+def _content_is_current(sidecar_data: Optional[dict], lib_hash: Optional[str],
+                        candidate: Path, src_path: Path) -> bool:
+    """Decide whether an existing host file already holds the current library content.
+
+    Prefers the sidecar's recorded hash vs the library's current hash (cheap, no
+    re-hashing of large files). Falls back to a size comparison when no hash is
+    available. Used to avoid silently marking an outdated file as synced (#1).
+    """
+    if not candidate.exists():
+        return False
+    if lib_hash:
+        stored = (sidecar_data or {}).get("hash")
+        return stored == f"sha256:{lib_hash}"
+    try:
+        return candidate.stat().st_size == src_path.stat().st_size
+    except OSError:
+        return False
+
+
+def _safe_relocate(src_file: Path, dest_file: Path) -> None:
+    """Move src_file to dest_file, only copying across genuine device boundaries.
+
+    Unlike a blanket ``except OSError`` fallback, this treats *only* EXDEV as a
+    cross-device move and never deletes the source until a verified copy exists (#2).
+    """
+    try:
+        os.replace(str(src_file), str(dest_file))
+        return
+    except OSError as e:
+        if e.errno != errno.EXDEV:
+            raise
+    tmp = str(dest_file) + f".relocating-{uuid.uuid4().hex}"
+    try:
+        shutil.copyfile(str(src_file), tmp)
+        os.replace(tmp, str(dest_file))
+    except Exception:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
+    src_file.unlink()
+
+
+def _copy_with_progress(src_path: Path, dest_file: Path, total_size: int,
+                        progress_callback: Optional[Callable], suffix: str = "syncing") -> None:
+    """Copy src_path to dest_file via a uniquely-named temp file + atomic rename.
+
+    The unique temp suffix prevents concurrent copies to the same destination from
+    corrupting one another (#3).
+    """
+    copied_size = 0
+    temp_path = str(dest_file) + f".{suffix}-{uuid.uuid4().hex}"
+    try:
+        with open(src_path, "rb") as src, open(temp_path, "wb") as dst:
+            while True:
+                chunk = src.read(config.COPY_BUFFER_SIZE)
+                if not chunk:
+                    break
+                dst.write(chunk)
+                copied_size += len(chunk)
+                if progress_callback:
+                    progress_callback(copied_size, total_size)
+        os.replace(temp_path, str(dest_file))
+    except Exception:
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
         raise
 
 
@@ -364,9 +557,12 @@ def sync_model_to_host(
     dest_file = host_model_dir / model.filename
 
     total_size = src_path.stat().st_size
+    lib_hash = model.hash.get("sha256") if model.hash else None
 
-    # Check for existing copy at a different location and move instead of re-copying
-    moved_from_old = False
+    # Locate any existing managed copy of this model already on the host.
+    existing_file: Optional[Path] = None
+    existing_sidecar: Optional[Path] = None
+    existing_data: Optional[dict] = None
     for root, dirs, files in os.walk(host_path):
         for fname in files:
             if not fname.endswith(SIDECAR_SUFFIX):
@@ -375,53 +571,48 @@ def sync_model_to_host(
             sc_data = _load_sidecar(sc_path)
             if sc_data is None or sc_data.get("library_model_id") != model_id:
                 continue
-            old_filename = sc_data.get("current_filename", "")
-            old_model_file = (Path(root) / old_filename).resolve()
-            if not old_model_file.is_relative_to(host_path.resolve()):
-                continue
-            # Skip if already at the target location
-            if old_model_file == dest_file.resolve():
-                moved_from_old = True
-                sc_path.unlink()
-                break
-            # Move the existing file instead of re-copying from library
-            if old_model_file.exists():
-                try:
-                    os.replace(str(old_model_file), str(dest_file))
-                    moved_from_old = True
-                    logger.info(
-                        f"Moved {old_model_file.relative_to(host_path)} -> "
-                        f"{dest_file.relative_to(host_path)}"
-                    )
-                except OSError:
-                    # Cross-device move not supported, fall back to copy
-                    old_model_file.unlink()
-                    logger.info(f"Cleaned up old copy at {old_model_file.relative_to(host_path)}")
-            sc_path.unlink()
-            cleanup_empty_parents(old_model_file, host_path)
+            target = _safe_sidecar_target(Path(root), sc_data.get("current_filename", ""), host_path)
+            existing_sidecar = sc_path
+            existing_data = sc_data
+            existing_file = target
+            break
+        if existing_sidecar is not None:
             break
 
-    if not moved_from_old:
-        # Full copy from library only when no existing host file to relocate
-        copied_size = 0
+    dest_resolved = dest_file.resolve()
+    handled = False
+    if existing_sidecar is not None:
+        already_current = _content_is_current(existing_data, lib_hash, existing_file, src_path) \
+            if existing_file is not None else False
 
-        temp_path = str(dest_file) + ".syncing"
+        if existing_file is not None and existing_file == dest_resolved:
+            # Already at the target path: re-copy only if the content is stale (#1).
+            if not already_current:
+                _copy_with_progress(src_path, dest_file, total_size, progress_callback)
+            handled = True
+        elif existing_file is not None and already_current:
+            # Correct content living at a different path: relocate instead of re-copying.
+            _safe_relocate(existing_file, dest_file)
+            logger.info(f"Relocated existing copy to {dest_file.relative_to(host_path)}")
+            handled = True
+        else:
+            # Stale/missing/tampered old copy: remove it and copy fresh from library.
+            if existing_file is not None and existing_file.exists():
+                existing_file.unlink()
+            _copy_with_progress(src_path, dest_file, total_size, progress_callback)
+            handled = True
+
+        # Retire the old sidecar; a fresh one is written below.
         try:
-            with open(src_path, "rb") as src, open(temp_path, "wb") as dst:
-                while True:
-                    chunk = src.read(config.COPY_BUFFER_SIZE)
-                    if not chunk:
-                        break
-                    dst.write(chunk)
-                    copied_size += len(chunk)
-                    if progress_callback:
-                        progress_callback(copied_size, total_size)
-        except Exception:
-            if os.path.exists(temp_path):
-                os.unlink(temp_path)
-            raise
+            existing_sidecar.unlink()
+        except FileNotFoundError:
+            pass
+        if existing_file is not None and existing_file != dest_resolved:
+            cleanup_empty_parents(existing_file, host_path)
 
-        os.replace(temp_path, str(dest_file))
+    if not handled:
+        # No existing managed copy: straight copy from the library.
+        _copy_with_progress(src_path, dest_file, total_size, progress_callback)
 
     # Write sidecar metadata
     now = to_iso(get_now())
@@ -431,14 +622,18 @@ def sync_model_to_host(
         library_relative_path=model.relative_path,
         current_filename=model.filename,
         synced_at=now,
-        hash=f"sha256:{model.hash['sha256']}" if model.hash and model.hash.get("sha256") else None,
+        hash=f"sha256:{lib_hash}" if lib_hash else None,
     )
     sidecar_path = host_model_dir / f".{model.filename}{SIDECAR_SUFFIX}"
     _atomic_write_sidecar(sidecar_path, sidecar.model_dump())
 
-    model.updated_at = now
-    save_model(model)
-    rebuild_index()
+    # Bump updated_at under the metadata lock, re-reading to avoid clobbering a
+    # concurrent edit with the stale copy loaded at the start of this sync (#5).
+    with metadata_write_lock:
+        fresh = load_model(model.id) or model
+        fresh.updated_at = now
+        save_model(fresh)
+        rebuild_index()
 
     logger.info(f"Synced {model.name} to {host_id}")
     return {
@@ -469,9 +664,9 @@ def remove_from_host(model_id: str, host_id: str) -> dict:
             try:
                 if data.get("library_model_id") == model_id:
                     current_filename = data.get("current_filename", "")
-                    model_file = (Path(root) / current_filename).resolve()
-                    if not model_file.is_relative_to(host_path.resolve()):
-                        logger.warning(f"Sidecar references path outside host: {sidecar_path}")
+                    model_file = _safe_sidecar_target(Path(root), current_filename, host_path)
+                    if model_file is None:
+                        logger.warning(f"Sidecar references unsafe path, skipping: {sidecar_path}")
                         continue
                     result = {"model_id": model_id, "host": host_id, "file_deleted": False, "sidecar_deleted": False}
                     if model_file.exists():
@@ -513,12 +708,12 @@ def apply_rename_on_host(model_id: str, host_id: str) -> dict:
                     continue
 
                 old_filename = data["current_filename"]
-                old_path = (Path(root) / old_filename).resolve()
                 new_filename = model.filename
-                new_path = (Path(root) / new_filename).resolve()
+                old_path = _safe_sidecar_target(Path(root), old_filename, host_path)
+                new_path = _safe_sidecar_target(Path(root), new_filename, host_path)
 
-                if not old_path.is_relative_to(host_path.resolve()) or not new_path.is_relative_to(host_path.resolve()):
-                    logger.warning(f"Sidecar references path outside host: {sidecar_path}")
+                if old_path is None or new_path is None:
+                    logger.warning(f"Sidecar references unsafe path, skipping: {sidecar_path}")
                     continue
 
                 now = to_iso(get_now())
@@ -894,26 +1089,9 @@ def import_from_host(
     if dest_file.exists():
         raise ValueError(f"File already exists in library: {category}/{filename}")
 
-    # Copy with progress tracking
+    # Copy with progress tracking (unique temp name to avoid concurrent clobber)
     total_size = src_file.stat().st_size
-    copied_size = 0
-    temp_path = str(dest_file) + ".importing"
-    try:
-        with open(src_file, "rb") as src, open(temp_path, "wb") as dst:
-            while True:
-                chunk = src.read(config.COPY_BUFFER_SIZE)
-                if not chunk:
-                    break
-                dst.write(chunk)
-                copied_size += len(chunk)
-                if progress_callback:
-                    progress_callback(copied_size, total_size)
-    except Exception:
-        if os.path.exists(temp_path):
-            os.unlink(temp_path)
-        raise
-
-    os.replace(temp_path, str(dest_file))
+    _copy_with_progress(src_file, dest_file, total_size, progress_callback, suffix="importing")
 
     # Create library metadata
     now = to_iso(get_now())

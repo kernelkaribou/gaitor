@@ -65,6 +65,9 @@ uvicorn_access_logger.addFilter(AccessLogFilter())
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events."""
+    # Record the running loop so worker-thread progress callbacks can broadcast safely.
+    task_manager.set_loop(asyncio.get_running_loop())
+
     # Ensure library and hosts paths exist (they should be volume mounts)
     config.LIBRARY_PATH.mkdir(parents=True, exist_ok=True)
     config.HOSTS_ROOT.mkdir(parents=True, exist_ok=True)
@@ -146,6 +149,9 @@ async def websocket_tasks(websocket: WebSocket):
         # Stream updates
         while True:
             msg = await queue.get()
+            if msg is None:
+                # Sentinel: server dropped this slow client to avoid a stuck queue.
+                break
             await websocket.send_text(json.dumps({"type": "update", **msg}))
     except WebSocketDisconnect:
         pass
@@ -159,6 +165,15 @@ async def websocket_tasks(websocket: WebSocket):
 async def list_active_tasks():
     """List currently active background tasks."""
     return {"tasks": task_manager.get_active_tasks()}
+
+
+@app.get("/api/tasks/{task_id}")
+async def get_task(task_id: str):
+    """Get a specific task by ID, including metadata/results for completed tasks."""
+    task = task_manager.get_task(task_id)
+    if not task:
+        return JSONResponse(status_code=404, content={"detail": "Task not found"})
+    return task
 
 
 @app.post("/api/tasks/{task_id}/cancel")

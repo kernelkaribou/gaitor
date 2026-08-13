@@ -31,6 +31,10 @@
   let importSelections = $state({});
   let importIgnorePatterns = $state(true);
   let importing = $state(false);
+  let validating = $state(false);
+  let validationResults = $state(null);
+  let showResultsModal = $state(false);
+  let taskResults = $state(null);
 
   function usagePercent(total, free) {
     if (!total) return 0;
@@ -39,7 +43,7 @@
 
   function handleTaskComplete() {
     syncing = {};
-    if (selectedHost) selectHost(selectedHost);
+    refreshHost();
   }
 
   function handleSelectHostEvent(e) {
@@ -84,12 +88,22 @@
     loading = false;
     window.addEventListener('gaitor:task-complete', handleTaskComplete);
     window.addEventListener('gaitor:select-host', handleSelectHostEvent);
+    window.addEventListener('gaitor:task-results', handleTaskResults);
   });
 
   onDestroy(() => {
     window.removeEventListener('gaitor:task-complete', handleTaskComplete);
     window.removeEventListener('gaitor:select-host', handleSelectHostEvent);
+    window.removeEventListener('gaitor:task-results', handleTaskResults);
   });
+
+  function handleTaskResults(e) {
+    const task = e.detail;
+    if (task.metadata) {
+      taskResults = task.metadata;
+      showResultsModal = true;
+    }
+  }
 
   async function selectHost(host) {
     selectedHost = host;
@@ -109,6 +123,18 @@
     api.getIgnorePatterns(host.id).then(r => { ignorePatterns = r.patterns || []; }).catch(() => {});
   }
 
+  // Reload the current host's sync status after an action, preserving the
+  // active category filter and search query (#10).
+  async function refreshHost() {
+    if (!selectedHost) return;
+    try {
+      const data = await api.getHostSyncStatus(selectedHost.id);
+      syncStatus = data.status || [];
+    } catch (err) {
+      error = err.message;
+    }
+  }
+
   async function syncModel(modelId) {
     syncing = { ...syncing, [modelId]: true };
     error = null;
@@ -124,7 +150,7 @@
     syncing = { ...syncing, [modelId]: true };
     try {
       await api.removeFromHost(selectedHost.id, modelId);
-      await selectHost(selectedHost);
+      await refreshHost();
     } catch (err) {
       error = err.message;
     }
@@ -135,7 +161,7 @@
     syncing = { ...syncing, [modelId]: true };
     try {
       await api.applyRenameOnHost(selectedHost.id, modelId);
-      await selectHost(selectedHost);
+      await refreshHost();
     } catch (err) {
       error = err.message;
     }
@@ -155,7 +181,7 @@
         name: item.model_name,
         category: item.category || 'other',
       });
-      await selectHost(selectedHost);
+      await refreshHost();
     } catch (err) {
       error = err.message;
     }
@@ -230,7 +256,7 @@
 
   function dismissScan() {
     scanResults = null;
-    if (selectedHost) selectHost(selectedHost);
+    refreshHost();
   }
 
   async function ignoreFile(item) {
@@ -282,7 +308,7 @@
   async function toggleIgnoreList() {
     if (showIgnoreList) {
       showIgnoreList = false;
-      if (selectedHost) selectHost(selectedHost);
+      refreshHost();
     } else {
       showIgnoreList = true;
       await loadIgnorePatterns();
@@ -299,7 +325,7 @@
   }
 
   function handleModelUpdated() {
-    if (selectedHost) selectHost(selectedHost);
+    refreshHost();
   }
 
   async function exportProfile() {
@@ -358,17 +384,47 @@
     input.click();
   }
 
-  async function executeImport() {
+  async function validateImport() {
     if (!importPreview || !selectedHost) return;
-    importing = true;
+    validating = true;
     try {
       const modelIds = Object.entries(importSelections)
         .filter(([, checked]) => checked)
         .map(([id]) => id);
-      const patterns = importIgnorePatterns ? (importPreview.ignore_patterns || []) : [];
+      if (modelIds.length === 0) {
+        error = 'No models selected to validate';
+        validating = false;
+        return;
+      }
+      const result = await api.validateProfileImport(selectedHost.id, modelIds);
+      validationResults = result;
+    } catch (err) {
+      error = err.message;
+    } finally {
+      validating = false;
+    }
+  }
+
+  async function executeImport() {
+    if (!selectedHost) return;
+    importing = true;
+    try {
+      // Use validated ready/exists models, or fall back to selections
+      let modelIds;
+      if (validationResults) {
+        modelIds = validationResults.results
+          .filter(r => r.status === 'ready' || r.status === 'exists')
+          .map(r => r.model_id);
+      } else {
+        modelIds = Object.entries(importSelections)
+          .filter(([, checked]) => checked)
+          .map(([id]) => id);
+      }
+      const patterns = importIgnorePatterns ? (importPreview?.ignore_patterns || []) : [];
       await api.importHostProfile(selectedHost.id, modelIds, patterns);
       showImportModal = false;
       importPreview = null;
+      validationResults = null;
     } catch (err) {
       error = err.message;
     } finally {
@@ -796,7 +852,7 @@
     {formatSize}
     onClose={() => { selectedModel = null; selectedHostItem = null; }}
     onUpdated={handleModelUpdated}
-    onDelete={() => { selectedModel = null; selectedHostItem = null; if (selectedHost) selectHost(selectedHost); }}
+    onDelete={() => { selectedModel = null; selectedHostItem = null; refreshHost(); }}
     onSelectModel={(id) => { api.getModel(id).then(m => { selectedModel = m; selectedHostItem = syncStatus.find(s => s.model_id === id) || selectedHostItem; }).catch(() => { error = 'Could not load model details.'; }); }}
     onViewInLibrary={(modelId) => {
       selectedModel = null;
@@ -832,56 +888,103 @@
 
 {#if showImportModal && importPreview}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onclick={(e) => { if (e.target === e.currentTarget) { showImportModal = false; } }}>
+  <div class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onclick={(e) => { if (e.target === e.currentTarget) { showImportModal = false; validationResults = null; } }}>
     <div class="bg-gray-800 rounded-lg border border-gray-700 max-w-2xl w-full max-h-[80vh] flex flex-col">
       <div class="p-4 border-b border-gray-700">
-        <h3 class="text-lg font-semibold text-gray-200">Import Host Profile</h3>
+        <h3 class="text-lg font-semibold text-gray-200">
+          {validationResults ? 'Validation Results' : 'Import Host Profile'}
+        </h3>
         <p class="text-sm text-gray-400 mt-1">
           {#if importPreview.profile_host_id && importPreview.profile_host_id !== selectedHost?.id}
             From: <span class="text-gray-300">{importPreview.profile_host_id}</span> &rarr;
           {/if}
           {importPreview.exported_at ? new Date(importPreview.exported_at).toLocaleString() : ''}
         </p>
-        <div class="flex gap-4 mt-2 text-xs">
-          {#if importPreview.available_count > 0}
-            <span class="text-yellow-400">{importPreview.available_count} needs sync</span>
-          {/if}
-          {#if importPreview.synced_count > 0}
-            <span class="text-green-400">{importPreview.synced_count} already synced</span>
-          {/if}
-          {#if importPreview.missing_count > 0}
-            <span class="text-red-400">{importPreview.missing_count} missing from library</span>
-          {/if}
-          {#if importPreview.ignore_patterns?.length > 0}
-            <span class="text-gray-400">{importPreview.ignore_patterns.length} ignore pattern{importPreview.ignore_patterns.length !== 1 ? 's' : ''}</span>
-          {/if}
-        </div>
+        {#if validationResults}
+          <div class="flex gap-4 mt-2 text-xs">
+            {#if validationResults.summary.ready > 0}
+              <span class="text-green-400">✓ {validationResults.summary.ready} ready</span>
+            {/if}
+            {#if validationResults.summary.exists > 0}
+              <span class="text-yellow-400">⚠ {validationResults.summary.exists} already exist</span>
+            {/if}
+            {#if validationResults.summary.error > 0}
+              <span class="text-red-400">✗ {validationResults.summary.error} errors</span>
+            {/if}
+          </div>
+        {:else}
+          <div class="flex gap-4 mt-2 text-xs">
+            {#if importPreview.available_count > 0}
+              <span class="text-yellow-400">{importPreview.available_count} needs sync</span>
+            {/if}
+            {#if importPreview.synced_count > 0}
+              <span class="text-green-400">{importPreview.synced_count} already synced</span>
+            {/if}
+            {#if importPreview.missing_count > 0}
+              <span class="text-red-400">{importPreview.missing_count} missing from library</span>
+            {/if}
+            {#if importPreview.ignore_patterns?.length > 0}
+              <span class="text-gray-400">{importPreview.ignore_patterns.length} ignore pattern{importPreview.ignore_patterns.length !== 1 ? 's' : ''}</span>
+            {/if}
+          </div>
+        {/if}
       </div>
 
       <div class="flex-1 overflow-y-auto p-4 space-y-1">
-        {#each importPreview.items as item}
-          <label class="flex items-center gap-3 px-3 py-2 rounded-md {item.status === 'missing' ? 'opacity-50' : 'hover:bg-gray-700/50 cursor-pointer'}">
-            <input
-              type="checkbox"
-              bind:checked={importSelections[item.library_model_id]}
-              disabled={item.status === 'missing'}
-              class="rounded border-gray-600 bg-gray-900 text-green-500 focus:ring-green-500 focus:ring-offset-0 shrink-0"
-            />
-            <div class="flex-1 min-w-0">
-              <p class="text-sm text-gray-200 truncate">{item.current_name || item.profile_name}</p>
-              <p class="text-xs text-gray-500 truncate">{item.profile_path}</p>
+        {#if validationResults}
+          <!-- Validation results view -->
+          {#each validationResults.results as item}
+            <div class="flex items-center gap-3 px-3 py-2 rounded-md {item.status === 'error' ? 'bg-red-900/20' : item.status === 'exists' ? 'bg-yellow-900/20' : 'bg-green-900/20'}">
+              <span class="shrink-0 text-sm">
+                {#if item.status === 'ready'}
+                  <span class="text-green-400">✓</span>
+                {:else if item.status === 'exists'}
+                  <span class="text-yellow-400">⚠</span>
+                {:else}
+                  <span class="text-red-400">✗</span>
+                {/if}
+              </span>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm text-gray-200 truncate">{item.name}</p>
+                {#if item.dest_path}
+                  <p class="text-xs text-gray-500 truncate">{item.dest_path}</p>
+                {/if}
+              </div>
+              {#if item.status === 'ready'}
+                <span class="text-xs text-green-400 shrink-0">Ready{item.size ? ` (${formatSize(item.size)})` : ''}</span>
+              {:else if item.status === 'exists'}
+                <span class="text-xs text-yellow-400 shrink-0">Will overwrite{item.size ? ` (${formatSize(item.size)})` : ''}</span>
+              {:else}
+                <span class="text-xs text-red-400 shrink-0">{item.error}</span>
+              {/if}
             </div>
-            {#if item.status === 'missing'}
-              <span class="text-xs text-red-400 shrink-0">Missing from library</span>
-            {:else if item.status === 'synced'}
-              <span class="text-xs text-green-400 shrink-0">Already synced</span>
-            {:else}
-              <span class="text-xs text-yellow-400 shrink-0">Needs sync{item.size ? ` (${formatSize(item.size)})` : ''}</span>
-            {/if}
-          </label>
-        {/each}
+          {/each}
+        {:else}
+          <!-- Preview selection view -->
+          {#each importPreview.items as item}
+            <label class="flex items-center gap-3 px-3 py-2 rounded-md {item.status === 'missing' ? 'opacity-50' : 'hover:bg-gray-700/50 cursor-pointer'}">
+              <input
+                type="checkbox"
+                bind:checked={importSelections[item.library_model_id]}
+                disabled={item.status === 'missing'}
+                class="rounded border-gray-600 bg-gray-900 text-green-500 focus:ring-green-500 focus:ring-offset-0 shrink-0"
+              />
+              <div class="flex-1 min-w-0">
+                <p class="text-sm text-gray-200 truncate">{item.current_name || item.profile_name}</p>
+                <p class="text-xs text-gray-500 truncate">{item.profile_path}</p>
+              </div>
+              {#if item.status === 'missing'}
+                <span class="text-xs text-red-400 shrink-0">Missing from library</span>
+              {:else if item.status === 'synced'}
+                <span class="text-xs text-green-400 shrink-0">Already synced</span>
+              {:else}
+                <span class="text-xs text-yellow-400 shrink-0">Needs sync{item.size ? ` (${formatSize(item.size)})` : ''}</span>
+              {/if}
+            </label>
+          {/each}
+        {/if}
 
-        {#if importPreview.ignore_patterns?.length > 0}
+        {#if !validationResults && importPreview.ignore_patterns?.length > 0}
           <div class="border-t border-gray-700 mt-3 pt-3">
             <label class="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-gray-700/50 cursor-pointer">
               <input
@@ -899,29 +1002,117 @@
       </div>
 
       <div class="p-4 border-t border-gray-700 flex items-center justify-between">
-        <div class="flex gap-2">
+        {#if !validationResults}
+          <div class="flex gap-2">
+            <button
+              class="text-xs text-gray-400 hover:text-gray-200"
+              onclick={() => {
+                const selectable = importPreview.items.filter(i => i.status !== 'missing');
+                const allChecked = selectable.every(i => importSelections[i.library_model_id]);
+                selectable.forEach(i => { importSelections[i.library_model_id] = !allChecked; });
+              }}
+            >{importPreview.items.filter(i => i.status !== 'missing').every(i => importSelections[i.library_model_id]) ? 'Deselect all' : 'Select all'}</button>
+          </div>
+        {:else}
           <button
             class="text-xs text-gray-400 hover:text-gray-200"
-            onclick={() => {
-              const selectable = importPreview.items.filter(i => i.status !== 'missing');
-              const allChecked = selectable.every(i => importSelections[i.library_model_id]);
-              selectable.forEach(i => { importSelections[i.library_model_id] = !allChecked; });
-            }}
-          >{importPreview.items.filter(i => i.status !== 'missing').every(i => importSelections[i.library_model_id]) ? 'Deselect all' : 'Select all'}</button>
-        </div>
+            onclick={() => { validationResults = null; }}
+          >← Back to selection</button>
+        {/if}
         <div class="flex gap-2">
           <button
             class="px-4 py-2 text-sm rounded-md bg-gray-700 hover:bg-gray-600 text-gray-300"
-            onclick={() => { showImportModal = false; }}
+            onclick={() => { showImportModal = false; validationResults = null; }}
           >Cancel</button>
-          <button
-            class="px-4 py-2 text-sm rounded-md bg-green-600 hover:bg-green-500 text-white disabled:opacity-50"
-            onclick={executeImport}
-            disabled={importing || Object.values(importSelections).filter(Boolean).length === 0}
-          >
-            {importing ? 'Importing...' : `Import ${Object.values(importSelections).filter(Boolean).length} models`}
-          </button>
+          {#if validationResults}
+            {@const importableCount = validationResults.results.filter(r => r.status === 'ready' || r.status === 'exists').length}
+            <button
+              class="px-4 py-2 text-sm rounded-md bg-green-600 hover:bg-green-500 text-white disabled:opacity-50"
+              onclick={executeImport}
+              disabled={importing || importableCount === 0}
+            >
+              {importing ? 'Importing...' : `Import ${importableCount} models`}
+            </button>
+          {:else}
+            <button
+              class="px-4 py-2 text-sm rounded-md bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50"
+              onclick={validateImport}
+              disabled={validating || Object.values(importSelections).filter(Boolean).length === 0}
+            >
+              {validating ? 'Validating...' : `Validate ${Object.values(importSelections).filter(Boolean).length} models`}
+            </button>
+          {/if}
         </div>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if showResultsModal && taskResults}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onclick={(e) => { if (e.target === e.currentTarget) { showResultsModal = false; taskResults = null; } }}>
+    <div class="bg-gray-800 rounded-lg border border-gray-700 max-w-2xl w-full max-h-[80vh] flex flex-col">
+      <div class="p-4 border-b border-gray-700">
+        <h3 class="text-lg font-semibold text-gray-200">Sync Results</h3>
+        <div class="flex gap-4 mt-2 text-xs">
+          {#if taskResults.succeeded?.length > 0}
+            <span class="text-green-400">✓ {taskResults.succeeded.length} synced</span>
+          {/if}
+          {#if taskResults.failed?.length > 0}
+            <span class="text-red-400">✗ {taskResults.failed.length} failed</span>
+          {/if}
+        </div>
+      </div>
+
+      <div class="flex-1 overflow-y-auto p-4 space-y-1">
+        {#if taskResults.failed?.length > 0}
+          {@const grouped = Object.entries(taskResults.failed.reduce((acc, f) => {
+            const key = f.error || 'Unknown error';
+            if (!acc[key]) acc[key] = [];
+            acc[key].push(f);
+            return acc;
+          }, {}))}
+          {#if grouped.length === 1 && taskResults.failed.length > 3}
+            <!-- All failures share same error — show grouped -->
+            <div class="bg-red-900/20 rounded-md px-3 py-2">
+              <p class="text-sm text-red-400 font-medium">{taskResults.failed.length} models failed: {grouped[0][0]}</p>
+              <p class="text-xs text-gray-500 mt-1">{taskResults.failed.map(f => f.name).join(', ')}</p>
+            </div>
+          {:else}
+            <!-- Show individual failures -->
+            {#each taskResults.failed as item}
+              <div class="flex items-center gap-3 px-3 py-2 rounded-md bg-red-900/20">
+                <span class="text-red-400 text-sm shrink-0">✗</span>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm text-gray-200 truncate">{item.name}</p>
+                </div>
+                <span class="text-xs text-red-400 shrink-0">{item.error}</span>
+              </div>
+            {/each}
+          {/if}
+        {/if}
+
+        {#if taskResults.succeeded?.length > 0}
+          {#if taskResults.failed?.length > 0}
+            <div class="border-t border-gray-700 my-2"></div>
+          {/if}
+          {#each taskResults.succeeded as item}
+            <div class="flex items-center gap-3 px-3 py-2 rounded-md bg-green-900/20">
+              <span class="text-green-400 text-sm shrink-0">✓</span>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm text-gray-200 truncate">{item.name}</p>
+              </div>
+              <span class="text-xs text-green-400 shrink-0">Synced</span>
+            </div>
+          {/each}
+        {/if}
+      </div>
+
+      <div class="p-4 border-t border-gray-700 flex justify-end">
+        <button
+          class="px-4 py-2 text-sm rounded-md bg-gray-700 hover:bg-gray-600 text-gray-300"
+          onclick={() => { showResultsModal = false; taskResults = null; }}
+        >Close</button>
       </div>
     </div>
   </div>

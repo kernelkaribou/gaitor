@@ -23,6 +23,8 @@ from ..services.sync import (
     get_ignore_patterns,
     remove_ignore_pattern,
     delete_unmanaged_file,
+    validate_sync_readiness,
+    classify_sync_error,
 )
 from ..services.metadata import load_model, load_all_models
 from ..services.tasks import task_manager
@@ -159,24 +161,43 @@ async def bulk_sync(host_id: str, req: BulkSyncRequest):
     task_id = task_manager.create_task("sync", f"Bulk sync {len(req.model_ids)} models to {host_id}")
 
     async def _do_bulk_sync():
-        results = []
-        errors = []
+        succeeded = []
+        failed = []
         total_models = len(req.model_ids)
         try:
             for i, model_id in enumerate(req.model_ids):
+                model = load_model(model_id)
+                model_name = model.name if model else model_id
                 try:
                     def progress_cb(copied, total, idx=i):
                         overall = int(((idx + copied / max(total, 1)) / total_models) * 100)
-                        task_manager.update_percent(task_id, overall)
+                        task_manager.update_percent(task_id, overall,
+                                                   f"Syncing {idx + 1}/{total_models}: {model_name}")
                     result = await asyncio.to_thread(
                         sync_model_to_host, model_id, host_id, progress_cb
                     )
-                    results.append(result)
+                    succeeded.append({"model_id": model_id, "name": model_name})
                 except Exception as e:
-                    errors.append({"model_id": model_id, "error": str(e)})
-            task_manager.complete_task(task_id, f"Synced {len(results)}/{total_models} models")
+                    error_code, error_msg = classify_sync_error(e)
+                    failed.append({
+                        "model_id": model_id, "name": model_name,
+                        "error_code": error_code, "error": error_msg,
+                    })
+                    logger.warning(f"Bulk sync failed for {model_id}: {e}")
+
+            metadata = {"succeeded": succeeded, "failed": failed}
+            msg = f"Synced {len(succeeded)}/{total_models} models"
+
+            if not succeeded and failed:
+                msg += " — all failed"
+                task_manager.fail_task(task_id, msg, metadata)
+            elif failed:
+                msg += f" ({len(failed)} failed)"
+                task_manager.complete_task_partial(task_id, msg, metadata)
+            else:
+                task_manager.complete_task(task_id, msg)
         except Exception as e:
-            task_manager.fail_task(task_id, str(e))
+            task_manager.fail_task(task_id, f"Bulk sync error: {e}")
 
     atask = asyncio.create_task(_do_bulk_sync())
     task_manager.set_asyncio_task(task_id, atask)
@@ -454,6 +475,38 @@ async def preview_profile_import(host_id: str, profile: dict):
     }
 
 
+class ProfileValidateRequest(BaseModel):
+    """Validate models before import — list of model IDs to check."""
+    model_ids: list[str] = []
+
+    def model_post_init(self, __context):
+        if len(self.model_ids) > 500:
+            raise ValueError("Validation limited to 500 models")
+
+
+@router.post("/{host_id}/profile/validate")
+async def validate_profile_import(host_id: str, req: ProfileValidateRequest):
+    """Validate that selected models can be synced to a host.
+
+    Checks source file existence, destination directory writability,
+    and whether files already exist. Does not copy any data.
+    """
+    host_id = _check_host_id(host_id)
+
+    if not req.model_ids:
+        raise HTTPException(status_code=400, detail="No model IDs to validate")
+
+    results = await asyncio.to_thread(validate_sync_readiness, req.model_ids, host_id)
+
+    summary = {
+        "ready": sum(1 for r in results if r["status"] == "ready"),
+        "exists": sum(1 for r in results if r["status"] == "exists"),
+        "error": sum(1 for r in results if r["status"] == "error"),
+    }
+
+    return {"results": results, "summary": summary}
+
+
 @router.post("/{host_id}/profile/import")
 async def import_host_profile(host_id: str, req: ProfileImportRequest):
     """Import a profile: bulk sync selected models and restore ignore patterns."""
@@ -500,27 +553,43 @@ async def import_host_profile(host_id: str, req: ProfileImportRequest):
     )
 
     async def _do_profile_sync():
-        results = []
-        errors = []
+        succeeded = []
+        failed = []
         total = len(valid_ids)
         try:
             for i, model_id in enumerate(valid_ids):
+                model = load_model(model_id)
+                model_name = model.name if model else model_id
                 try:
                     def progress_cb(copied, file_total, idx=i):
                         overall = int(((idx + copied / max(file_total, 1)) / total) * 100)
-                        task_manager.update_percent(task_id, overall)
+                        task_manager.update_percent(task_id, overall,
+                                                   f"Syncing {idx + 1}/{total}: {model_name}")
                     result = await asyncio.to_thread(
                         sync_model_to_host, model_id, host_id, progress_cb
                     )
-                    results.append(result)
+                    succeeded.append({"model_id": model_id, "name": model_name})
                 except Exception as e:
-                    errors.append({"model_id": model_id, "error": str(e)})
-            msg = f"Synced {len(results)}/{total} models"
-            if errors:
-                msg += f" ({len(errors)} failed)"
-            task_manager.complete_task(task_id, msg)
+                    error_code, error_msg = classify_sync_error(e)
+                    failed.append({
+                        "model_id": model_id, "name": model_name,
+                        "error_code": error_code, "error": error_msg,
+                    })
+                    logger.warning(f"Profile import sync failed for {model_id}: {e}")
+
+            metadata = {"succeeded": succeeded, "failed": failed}
+            msg = f"Synced {len(succeeded)}/{total} models"
+
+            if not succeeded and failed:
+                msg += f" — all failed"
+                task_manager.fail_task(task_id, msg, metadata)
+            elif failed:
+                msg += f" ({len(failed)} failed)"
+                task_manager.complete_task_partial(task_id, msg, metadata)
+            else:
+                task_manager.complete_task(task_id, msg)
         except Exception as e:
-            task_manager.fail_task(task_id, str(e))
+            task_manager.fail_task(task_id, f"Import error: {e}")
 
     atask = asyncio.create_task(_do_profile_sync())
     task_manager.set_asyncio_task(task_id, atask)

@@ -10,6 +10,7 @@ Strategy:
 import json
 import os
 import tempfile
+import threading
 import logging
 from pathlib import Path
 from typing import Optional
@@ -20,6 +21,10 @@ from ..utils import validate_model_id
 from .. import config
 
 logger = logging.getLogger(__name__)
+
+# Serializes metadata writes and index rebuilds so concurrent syncs/edits don't
+# publish a stale index snapshot or lose an update (reentrant for compound ops). (#5)
+metadata_write_lock = threading.RLock()
 
 METADATA_DIR = config.LIBRARY_PATH / config.METADATA_DIR_NAME
 MODELS_DIR = METADATA_DIR / "models"
@@ -207,7 +212,8 @@ def rename_category(old_id: str, new_id: str, new_label: str) -> list[CategoryDe
 def save_model(model: ModelMetadata) -> None:
     """Save a single model's metadata."""
     model_file = MODELS_DIR / f"{model.id}.json"
-    _atomic_write_json(model_file, model.model_dump())
+    with metadata_write_lock:
+        _atomic_write_json(model_file, model.model_dump())
 
 
 def load_model(model_id: str) -> Optional[ModelMetadata]:
@@ -225,7 +231,8 @@ def delete_model_metadata(model_id: str) -> bool:
     validate_model_id(model_id)
     model_file = MODELS_DIR / f"{model_id}.json"
     try:
-        model_file.unlink()
+        with metadata_write_lock:
+            model_file.unlink()
         return True
     except FileNotFoundError:
         return False
@@ -250,9 +257,10 @@ def load_all_models() -> list[ModelMetadata]:
 
 def rebuild_index() -> list[dict]:
     """Rebuild index.json from individual model files."""
-    models = load_all_models()
-    index_data = [m.model_dump() for m in models]
-    _atomic_write_json(INDEX_FILE, index_data)
+    with metadata_write_lock:
+        models = load_all_models()
+        index_data = [m.model_dump() for m in models]
+        _atomic_write_json(INDEX_FILE, index_data)
     logger.info(f"Index rebuilt with {len(index_data)} models")
     return index_data
 

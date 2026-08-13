@@ -66,18 +66,49 @@ function handleTaskUpdate(task) {
     }
     addToast({ type: 'success', title: task.message || task.title, duration: 6000 });
     window.dispatchEvent(new CustomEvent('gaitor:task-complete', { detail: task }));
+  } else if (task.status === 'completed_with_errors') {
+    if (existingToastId) {
+      removeToast(existingToastId);
+      taskToastMap.delete(task.task_id);
+    }
+    addToast({
+      type: 'warning',
+      title: task.message || task.title,
+      duration: 15000,
+      action: {
+        label: 'View details',
+        callback: () => window.dispatchEvent(
+          new CustomEvent('gaitor:task-results', { detail: task })
+        ),
+      },
+    });
+    window.dispatchEvent(new CustomEvent('gaitor:task-complete', { detail: task }));
   } else if (task.status === 'failed') {
     if (existingToastId) {
       removeToast(existingToastId);
       taskToastMap.delete(task.task_id);
     }
-    addToast({ type: 'error', title: task.title, message: task.message, duration: 10000 });
+    addToast({
+      type: 'error',
+      title: task.title,
+      message: task.message,
+      duration: 15000,
+      action: task.metadata ? {
+        label: 'View details',
+        callback: () => window.dispatchEvent(
+          new CustomEvent('gaitor:task-results', { detail: task })
+        ),
+      } : undefined,
+    });
+    // Notify views so per-item busy state is cleared on failure too.
+    window.dispatchEvent(new CustomEvent('gaitor:task-complete', { detail: task }));
   } else if (task.status === 'cancelled') {
     if (existingToastId) {
       removeToast(existingToastId);
       taskToastMap.delete(task.task_id);
     }
     addToast({ type: 'info', title: 'Cancelled', message: task.title, duration: 4000 });
+    window.dispatchEvent(new CustomEvent('gaitor:task-complete', { detail: task }));
   } else if (task.status === 'running') {
     if (existingToastId) {
       updateToast(existingToastId, {
