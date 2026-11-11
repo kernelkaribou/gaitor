@@ -7,7 +7,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # Stage 2: Production image
-FROM python:3.13-slim
+FROM python:3.15-slim
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends gosu curl ca-certificates && \
